@@ -332,8 +332,8 @@ impl PersistenceDiagram {
     fn unreorder_idxs(&mut self, mapping: &impl IndexMapping) {
         self.unpaired = self
             .unpaired
-            .clone()
-            .into_iter()
+            .iter()
+            .cloned()
             .map(|idx| mapping.inverse_map(idx))
             .collect();
         for (b_idx, d_idx) in self.paired.iter_mut() {
