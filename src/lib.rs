@@ -1,4 +1,7 @@
-use std::{cmp::Ordering, collections::HashMap};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+};
 
 use pyo3::prelude::*;
 
@@ -7,6 +10,7 @@ pub trait IndexMapping {
     fn inverse_map(&self, index: usize) -> usize;
 }
 
+#[derive(Debug)]
 struct VectorMapping {
     internal: Vec<usize>,
     internal_inverse: Vec<usize>,
@@ -30,18 +34,18 @@ pub trait Column: Send {
 }
 
 #[derive(Debug, Default, Clone)]
-struct VecColumn {
+pub struct VecColumn {
     internal: Vec<usize>,
 }
 
 #[derive(Debug, Default, Clone)]
-struct AnnotatedVecColumn {
+pub struct AnnotatedVecColumn {
     col: VecColumn,
     in_g: bool,
 }
 
 #[derive(Debug, Default)]
-struct RVDecomposition {
+pub struct RVDecomposition {
     r: Vec<VecColumn>,
     v: Vec<VecColumn>,
     low_inverse: HashMap<usize, usize>,
@@ -134,7 +138,7 @@ impl RVDecomposition {
     }
 }
 
-fn rv_decompose(matrix: Vec<VecColumn>) -> RVDecomposition {
+pub fn rv_decompose(matrix: Vec<VecColumn>) -> RVDecomposition {
     matrix
         .into_iter()
         .fold(RVDecomposition::default(), |mut accum, next_col| {
@@ -144,12 +148,14 @@ fn rv_decompose(matrix: Vec<VecColumn>) -> RVDecomposition {
 }
 
 #[derive(Debug)]
-struct DecompositionEnsemble {
+pub struct DecompositionEnsemble {
     f: RVDecomposition,
     g: RVDecomposition,
     im: RVDecomposition,
     ker: RVDecomposition,
     cok: RVDecomposition,
+    l_first_mapping: VectorMapping,
+    g_elements: Vec<bool>,
 }
 
 fn compute_l_first_mapping(matrix: &Vec<AnnotatedVecColumn>) -> VectorMapping {
@@ -258,7 +264,7 @@ fn build_dcok(
     new_matrix
 }
 
-fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsemble {
+pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsemble {
     let l_first_mapping = compute_l_first_mapping(&matrix);
     let g_elements: Vec<bool> = matrix.iter().map(|anncol| anncol.in_g).collect();
     let df: Vec<VecColumn> = matrix.into_iter().map(|anncol| anncol.col).collect();
@@ -282,6 +288,8 @@ fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsemble 
         im: decompose_dim,
         ker: decompose_dker,
         cok: decompose_dcok,
+        l_first_mapping,
+        g_elements,
     }
 }
 
@@ -291,14 +299,14 @@ fn print_matrix(matrix: &Vec<VecColumn>) {
     }
 }
 
-fn print_decomp(decomp: &RVDecomposition) {
+pub fn print_decomp(decomp: &RVDecomposition) {
     println!("R:");
     print_matrix(&decomp.r);
     println!("V:");
     print_matrix(&decomp.v);
 }
 
-fn print_ensemble(ensemble: &DecompositionEnsemble) {
+pub fn print_ensemble(ensemble: &DecompositionEnsemble) {
     println!("Df:");
     print_decomp(&ensemble.f);
     println!("Dg:");
@@ -309,6 +317,43 @@ fn print_ensemble(ensemble: &DecompositionEnsemble) {
     print_decomp(&ensemble.ker);
     println!("Dcok:");
     print_decomp(&ensemble.cok);
+}
+
+struct PersistenceDiagram {
+    unpaired: HashSet<usize>,
+    paired: Vec<(usize, usize)>,
+}
+
+impl RVDecomposition {
+    fn diagram(&self) -> PersistenceDiagram {
+        todo!()
+    }
+}
+
+struct DiagramEnsemble {
+    f: PersistenceDiagram,
+    g: PersistenceDiagram,
+    im: PersistenceDiagram,
+    ker: PersistenceDiagram,
+    cok: PersistenceDiagram,
+}
+
+impl DecompositionEnsemble {
+    fn kernel_diagram(&self) -> PersistenceDiagram {
+        todo!()
+    }
+
+    fn image_diagram(&self) -> PersistenceDiagram {
+        todo!()
+    }
+
+    fn cokernel_diagram(&self) -> PersistenceDiagram {
+        todo!()
+    }
+
+    fn all_diagrams(&self) -> DiagramEnsemble {
+        todo!()
+    }
 }
 
 /// Formats the sum of two numbers as string.
