@@ -157,6 +157,7 @@ pub struct DecompositionEnsemble {
     l_first_mapping: VectorMapping,
     g_elements: Vec<bool>,
     size_of_l: usize,
+    size_of_k: usize,
 }
 
 fn compute_l_first_mapping(matrix: &Vec<AnnotatedVecColumn>) -> VectorMapping {
@@ -269,6 +270,7 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
     let l_first_mapping = compute_l_first_mapping(&matrix);
     let g_elements: Vec<bool> = matrix.iter().map(|anncol| anncol.in_g).collect();
     let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
+    let size_of_k = matrix.len();
     let df: Vec<VecColumn> = matrix.into_iter().map(|anncol| anncol.col).collect();
     // Decompose Df
     let decomp_df = rv_decompose(df.clone());
@@ -293,6 +295,7 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
         l_first_mapping,
         g_elements,
         size_of_l,
+        size_of_k,
     }
 }
 
