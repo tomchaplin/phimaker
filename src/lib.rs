@@ -25,8 +25,8 @@ impl IndexMapping for VectorMapping {
 pub trait Column: Send {
     fn pivot(&self) -> Option<usize>;
     fn add_col(&mut self, other: &Self);
-    fn reoder_rows(&mut self, mapping: &impl IndexMapping);
-    fn unreoder_rows(&mut self, mapping: &impl IndexMapping);
+    fn reorder_rows(&mut self, mapping: &impl IndexMapping);
+    fn unreorder_rows(&mut self, mapping: &impl IndexMapping);
 }
 
 #[derive(Debug, Default, Clone)]
@@ -42,8 +42,8 @@ struct AnnotatedVecColumn {
 
 #[derive(Debug, Default)]
 struct RVDecomposition {
-    R: Vec<VecColumn>,
-    V: Vec<VecColumn>,
+    r: Vec<VecColumn>,
+    v: Vec<VecColumn>,
     low_inverse: HashMap<usize, usize>,
 }
 
@@ -85,7 +85,7 @@ impl Column for VecColumn {
         }
     }
 
-    fn reoder_rows(&mut self, mapping: &impl IndexMapping) {
+    fn reorder_rows(&mut self, mapping: &impl IndexMapping) {
         // Map row idxs to new row idxs
         for row_idx in self.internal.iter_mut() {
             *row_idx = mapping.map(*row_idx);
@@ -94,7 +94,7 @@ impl Column for VecColumn {
         self.internal.sort();
     }
 
-    fn unreoder_rows(&mut self, mapping: &impl IndexMapping) {
+    fn unreorder_rows(&mut self, mapping: &impl IndexMapping) {
         // Map row idxs to new row idxs
         for row_idx in self.internal.iter_mut() {
             *row_idx = mapping.inverse_map(*row_idx);
@@ -115,22 +115,22 @@ impl RVDecomposition {
         // v_col tracks how the final reduced column is built up
         // Currently column contains 1 lot of the latest column in D
         let mut v_col = VecColumn {
-            internal: vec![self.R.len()],
+            internal: vec![self.r.len()],
         };
         // Reduce the column, keeping track of how we do this in V
         while let Some(col_idx) = self.col_idx_with_same_low(&column) {
-            column.add_col(&self.R[col_idx]);
-            v_col.add_col(&self.V[col_idx]);
+            column.add_col(&self.r[col_idx]);
+            v_col.add_col(&self.v[col_idx]);
         }
         // Update low inverse
         let final_pivot = column.pivot();
         if let Some(final_pivot) = final_pivot {
             // This column has a lowest 1 and is being inserted at the end of R
-            self.low_inverse.insert(final_pivot, self.R.len());
+            self.low_inverse.insert(final_pivot, self.r.len());
         }
         // Push to decomposition
-        self.R.push(column);
-        self.V.push(v_col);
+        self.r.push(column);
+        self.v.push(v_col);
     }
 }
 
@@ -152,7 +152,7 @@ struct DecompositionEnsemble {
     cok: RVDecomposition,
 }
 
-fn compute_L_first_mapping(matrix: &Vec<AnnotatedVecColumn>) -> VectorMapping {
+fn compute_l_first_mapping(matrix: &Vec<AnnotatedVecColumn>) -> VectorMapping {
     let total_size = matrix.len();
     let num_in_g = matrix.iter().filter(|col| col.in_g).count();
     let mut next_g_index = 0;
@@ -176,28 +176,6 @@ fn compute_L_first_mapping(matrix: &Vec<AnnotatedVecColumn>) -> VectorMapping {
     }
 }
 
-fn reoder_rows(matrix: Vec<VecColumn>, mapping: impl IndexMapping) -> Vec<VecColumn> {
-    matrix
-        .into_iter()
-        .map(|mut col| {
-            col.reoder_rows(&mapping);
-            col
-        })
-        .collect()
-}
-
-fn clone_reordering_columns(
-    matrix: &Vec<VecColumn>,
-    mapping: &impl IndexMapping,
-) -> Vec<VecColumn> {
-    let mut new_matrix = Vec::with_capacity(matrix.len());
-    for idx in 0..matrix.len() {
-        let new_idx = mapping.map(idx);
-        new_matrix[new_idx] = matrix[idx].clone();
-    }
-    new_matrix
-}
-
 fn extract_columns(matrix: &Vec<VecColumn>, extract: &Vec<bool>) -> Vec<VecColumn> {
     matrix
         .iter()
@@ -215,7 +193,7 @@ fn build_dg(
     extract_columns(df, g_elements)
         .into_iter()
         .map(|mut col| {
-            col.reoder_rows(l_first_mapping);
+            col.reorder_rows(l_first_mapping);
             col
         })
         .collect()
@@ -225,23 +203,23 @@ fn build_dim(df: &Vec<VecColumn>, mapping: &impl IndexMapping) -> Vec<VecColumn>
     df.clone()
         .into_iter()
         .map(|mut col| {
-            col.reoder_rows(mapping);
+            col.reorder_rows(mapping);
             col
         })
         .collect()
 }
 
 fn build_dker(dim_decomposition: &RVDecomposition, mapping: &impl IndexMapping) -> Vec<VecColumn> {
-    let Rim_cols = dim_decomposition.R.iter();
-    let Vim_cols = dim_decomposition.V.iter();
-    let paired_cols = Rim_cols.zip(Vim_cols);
+    let rim_cols = dim_decomposition.r.iter();
+    let vim_cols = dim_decomposition.v.iter();
+    let paired_cols = rim_cols.zip(vim_cols);
     paired_cols
         .filter_map(|(r_col, v_col)| {
             if r_col.pivot().is_none() {
                 // If r_col is zero then v_col stores a cycle
                 // We should add it to dker with the elements of L appearing first
                 let mut new_col = v_col.clone();
-                new_col.reoder_rows(mapping);
+                new_col.reorder_rows(mapping);
                 Some(new_col)
             } else {
                 // Filter this column out
@@ -262,11 +240,11 @@ fn build_dcok(
         let col_in_g = g_elements[col_idx];
         if col_in_g {
             let idx_in_dg = mapping.map(col_idx);
-            let dg_rcol = &dg_decomposition.R[idx_in_dg];
+            let dg_rcol = &dg_decomposition.r[idx_in_dg];
             if dg_rcol.pivot().is_none() {
-                let mut next_col = dg_decomposition.V[idx_in_dg].clone();
+                let mut next_col = dg_decomposition.v[idx_in_dg].clone();
                 // Convert from L simplices first back to default order
-                next_col.unreoder_rows(mapping);
+                next_col.unreorder_rows(mapping);
                 new_matrix.push(next_col);
             } else {
                 let next_col = df[col_idx].clone();
@@ -281,7 +259,7 @@ fn build_dcok(
 }
 
 fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsemble {
-    let l_first_mapping = compute_L_first_mapping(&matrix);
+    let l_first_mapping = compute_l_first_mapping(&matrix);
     let g_elements: Vec<bool> = matrix.iter().map(|anncol| anncol.in_g).collect();
     let df: Vec<VecColumn> = matrix.into_iter().map(|anncol| anncol.col).collect();
     // Decompose Df
@@ -315,9 +293,9 @@ fn print_matrix(matrix: &Vec<VecColumn>) {
 
 fn print_decomp(decomp: &RVDecomposition) {
     println!("R:");
-    print_matrix(&decomp.R);
+    print_matrix(&decomp.r);
     println!("V:");
-    print_matrix(&decomp.V);
+    print_matrix(&decomp.v);
 }
 
 fn print_ensemble(ensemble: &DecompositionEnsemble) {
