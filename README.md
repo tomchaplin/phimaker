@@ -4,6 +4,7 @@
 
 <b>P</b>ersitent <b>h</b>omology of <b>im</b>ages <b>a</b>nd (co)<b>ker</b>nels.
 
+</div>
 
 ## Overview
 
