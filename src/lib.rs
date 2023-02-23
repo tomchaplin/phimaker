@@ -156,6 +156,7 @@ pub struct DecompositionEnsemble {
     cok: RVDecomposition,
     l_first_mapping: VectorMapping,
     g_elements: Vec<bool>,
+    size_of_l: usize,
 }
 
 fn compute_l_first_mapping(matrix: &Vec<AnnotatedVecColumn>) -> VectorMapping {
@@ -267,6 +268,7 @@ fn build_dcok(
 pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsemble {
     let l_first_mapping = compute_l_first_mapping(&matrix);
     let g_elements: Vec<bool> = matrix.iter().map(|anncol| anncol.in_g).collect();
+    let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
     let df: Vec<VecColumn> = matrix.into_iter().map(|anncol| anncol.col).collect();
     // Decompose Df
     let decomp_df = rv_decompose(df.clone());
@@ -290,6 +292,7 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
         cok: decompose_dcok,
         l_first_mapping,
         g_elements,
+        size_of_l,
     }
 }
 
@@ -319,17 +322,45 @@ pub fn print_ensemble(ensemble: &DecompositionEnsemble) {
     print_decomp(&ensemble.cok);
 }
 
+#[derive(Default, Debug)]
 struct PersistenceDiagram {
     unpaired: HashSet<usize>,
     paired: Vec<(usize, usize)>,
 }
 
-impl RVDecomposition {
-    fn diagram(&self) -> PersistenceDiagram {
-        todo!()
+impl PersistenceDiagram {
+    fn unreorder_idxs(&mut self, mapping: &impl IndexMapping) {
+        self.unpaired = self
+            .unpaired
+            .clone()
+            .into_iter()
+            .map(|idx| mapping.inverse_map(idx))
+            .collect();
+        for (b_idx, d_idx) in self.paired.iter_mut() {
+            *b_idx = mapping.inverse_map(*b_idx);
+            *d_idx = mapping.inverse_map(*d_idx);
+        }
     }
 }
 
+impl RVDecomposition {
+    fn diagram(&self) -> PersistenceDiagram {
+        let mut diagram = PersistenceDiagram::default();
+        for (idx, col) in self.r.iter().enumerate() {
+            if let Some(lowest_idx) = col.pivot() {
+                // Negative column
+                diagram.unpaired.remove(&lowest_idx);
+                diagram.paired.push((lowest_idx, idx))
+            } else {
+                // Positive column
+                diagram.unpaired.insert(idx);
+            }
+        }
+        diagram
+    }
+}
+
+#[derive(Debug)]
 struct DiagramEnsemble {
     f: PersistenceDiagram,
     g: PersistenceDiagram,
@@ -340,19 +371,29 @@ struct DiagramEnsemble {
 
 impl DecompositionEnsemble {
     fn kernel_diagram(&self) -> PersistenceDiagram {
-        todo!()
+        PersistenceDiagram::default()
     }
 
     fn image_diagram(&self) -> PersistenceDiagram {
-        todo!()
+        PersistenceDiagram::default()
     }
 
     fn cokernel_diagram(&self) -> PersistenceDiagram {
-        todo!()
+        PersistenceDiagram::default()
     }
 
     fn all_diagrams(&self) -> DiagramEnsemble {
-        todo!()
+        DiagramEnsemble {
+            f: self.f.diagram(),
+            g: {
+                let mut dgm = self.g.diagram();
+                dgm.unreorder_idxs(&self.l_first_mapping);
+                dgm
+            },
+            im: self.image_diagram(),
+            ker: self.kernel_diagram(),
+            cok: self.cokernel_diagram(),
+        }
     }
 }
 
@@ -392,6 +433,7 @@ mod tests {
             .collect();
         let decomposition = rv_decompose(boundary_matrix);
         print_decomp(&decomposition);
+        println!("{:?}", decomposition.diagram());
         assert_eq!(true, true)
     }
 
@@ -414,6 +456,7 @@ mod tests {
             .collect();
         let ensemble = all_decompositions(boundary_matrix);
         print_ensemble(&ensemble);
+        println!("{:?}", ensemble.all_diagrams());
         assert_eq!(true, true)
     }
 }
