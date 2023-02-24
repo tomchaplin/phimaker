@@ -286,6 +286,7 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
     let decompose_dker = rv_decompose(dker);
     // Decompose dcok
     let dcok = build_dcok(&df, &decomp_dg, &g_elements, &l_first_mapping);
+    print_matrix(&dcok);
     let decompose_dcok = rv_decompose(dcok);
     DecompositionEnsemble {
         f: decomp_df,
@@ -434,6 +435,7 @@ impl DecompositionEnsemble {
                 let pos_in_g = self.g.r[g_idx].pivot().is_none();
                 if pos_in_g {
                     dgm.unpaired.insert(idx);
+                    continue;
                 }
             }
             let neg_in_f = self.f.r[idx].pivot().is_some();
@@ -452,7 +454,29 @@ impl DecompositionEnsemble {
     }
 
     fn cokernel_diagram(&self) -> PersistenceDiagram {
-        PersistenceDiagram::default()
+        let mut dgm = PersistenceDiagram::default();
+        return dgm;
+        for idx in 0..self.size_of_k {
+            let pos_in_f = self.f.r[idx].pivot().is_none();
+            let not_in_l_or_neg_in_g = (!self.g_elements[idx]) || self.g.r[idx].pivot().is_some();
+            if pos_in_f && not_in_l_or_neg_in_g {
+                dgm.unpaired.insert(idx);
+                continue;
+            }
+            let neg_in_f = self.f.r[idx].pivot().is_some();
+            if !neg_in_f {
+                continue;
+            }
+            // TODO: This unwrap fails on example, why?
+            let lowest_rim_in_l = self.im.r[idx].pivot().unwrap() < self.size_of_l;
+            if lowest_rim_in_l {
+                println!("{}", idx);
+                let lowest_in_rcok = self.cok.r[idx].pivot().unwrap();
+                dgm.unpaired.remove(&lowest_in_rcok);
+                dgm.paired.push((lowest_in_rcok, idx));
+            }
+        }
+        dgm
     }
 
     fn all_diagrams(&self) -> DiagramEnsemble {
