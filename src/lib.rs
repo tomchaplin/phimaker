@@ -281,6 +281,7 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
     let dim = build_dim(&df, &l_first_mapping);
     let decompose_dim = rv_decompose(dim);
     // Decompose dker
+    // TODO: Also need to return mapping from columns of Df to columns of Dker
     let dker = build_dker(&decompose_dim, &l_first_mapping);
     let decompose_dker = rv_decompose(dker);
     // Decompose dcok
@@ -373,12 +374,81 @@ struct DiagramEnsemble {
 }
 
 impl DecompositionEnsemble {
+    fn is_kernel_birth(&self, idx: usize) -> bool {
+        let in_l = self.g_elements[idx];
+        if in_l {
+            return false;
+        }
+        let negative_in_f = self.f.r[idx].pivot().is_some();
+        if !negative_in_f {
+            return false;
+        }
+        let lowest_rim_in_l = self.im.r[idx].pivot().unwrap() < self.size_of_l;
+        if !lowest_rim_in_l {
+            return false;
+        }
+        return true;
+    }
+
+    fn is_kernel_death(&self, idx: usize) -> bool {
+        let in_l = self.g_elements[idx];
+        if !in_l {
+            return false;
+        }
+        let g_index = self.l_first_mapping.map(idx);
+        let negative_in_g = self.g.r[g_index].pivot().is_some();
+        if !negative_in_g {
+            return false;
+        }
+        let negative_in_f = self.f.r[idx].pivot().is_some();
+        if negative_in_f {
+            return false;
+        }
+        return true;
+    }
+
     fn kernel_diagram(&self) -> PersistenceDiagram {
-        PersistenceDiagram::default()
+        let mut dgm = PersistenceDiagram::default();
+        return dgm;
+        for idx in 0..self.size_of_k {
+            if self.is_kernel_birth(idx) {
+                dgm.unpaired.insert(idx);
+                continue;
+            }
+            if self.is_kernel_death(idx) {
+                // TODO: Problem kernel columns have different indexing to f
+                let g_birth_index = self.ker.r[idx].pivot().unwrap();
+                let birth_index = self.l_first_mapping.inverse_map(g_birth_index);
+                dgm.unpaired.remove(&birth_index);
+                dgm.paired.push((birth_index, idx));
+            }
+        }
+        dgm
     }
 
     fn image_diagram(&self) -> PersistenceDiagram {
-        PersistenceDiagram::default()
+        let mut dgm = PersistenceDiagram::default();
+        for idx in 0..self.size_of_k {
+            if self.g_elements[idx] {
+                let g_idx = self.l_first_mapping.map(idx);
+                let pos_in_g = self.g.r[g_idx].pivot().is_none();
+                if pos_in_g {
+                    dgm.unpaired.insert(idx);
+                }
+            }
+            let neg_in_f = self.f.r[idx].pivot().is_some();
+            if neg_in_f {
+                let lowest_in_rim = self.im.r[idx].pivot().unwrap();
+                let lowest_rim_in_l = lowest_in_rim < self.size_of_l;
+                if !lowest_rim_in_l {
+                    continue;
+                }
+                let birth_idx = self.l_first_mapping.inverse_map(lowest_in_rim);
+                dgm.unpaired.remove(&birth_idx);
+                dgm.paired.push((birth_idx, idx));
+            }
+        }
+        dgm
     }
 
     fn cokernel_diagram(&self) -> PersistenceDiagram {
