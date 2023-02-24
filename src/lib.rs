@@ -222,10 +222,7 @@ fn build_dim(df: &Vec<VecColumn>, mapping: &impl IndexMapping) -> Vec<VecColumn>
 fn build_kernel_mapping(dim_decomposition: &RVDecomposition) -> VectorMapping {
     let mut counter = 0;
     let mut idx_list: Vec<Option<usize>> = vec![];
-    let rim_cols = dim_decomposition.r.iter();
-    let vim_cols = dim_decomposition.v.iter();
-    let paired_cols = rim_cols.zip(vim_cols);
-    for (r_col, v_col) in paired_cols {
+    for r_col in dim_decomposition.r.iter() {
         if r_col.pivot().is_none() {
             idx_list.push(Some(counter));
             counter += 1;
@@ -309,7 +306,6 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
     let kernel_mapping = build_kernel_mapping(&decompose_dim);
     // Decompose dcok
     let dcok = build_dcok(&df, &decomp_dg, &g_elements, &l_first_mapping);
-    print_matrix(&dcok);
     let decompose_dcok = rv_decompose(dcok);
     DecompositionEnsemble {
         f: decomp_df,
@@ -351,9 +347,12 @@ pub fn print_ensemble(ensemble: &DecompositionEnsemble) {
     print_decomp(&ensemble.cok);
 }
 
-#[derive(Default, Debug)]
+#[pyclass]
+#[derive(Default, Debug, Clone)]
 struct PersistenceDiagram {
+    #[pyo3(get)]
     unpaired: HashSet<usize>,
+    #[pyo3(get)]
     paired: Vec<(usize, usize)>,
 }
 
@@ -389,12 +388,18 @@ impl RVDecomposition {
     }
 }
 
-#[derive(Debug)]
+#[pyclass]
+#[derive(Debug, Clone)]
 struct DiagramEnsemble {
+    #[pyo3(get)]
     f: PersistenceDiagram,
+    #[pyo3(get)]
     g: PersistenceDiagram,
+    #[pyo3(get)]
     im: PersistenceDiagram,
+    #[pyo3(get)]
     ker: PersistenceDiagram,
+    #[pyo3(get)]
     cok: PersistenceDiagram,
 }
 
@@ -493,7 +498,6 @@ impl DecompositionEnsemble {
             }
             let lowest_rim_in_l = self.im.r[idx].pivot().unwrap() < self.size_of_l;
             if !lowest_rim_in_l {
-                println!("{}", idx);
                 let lowest_in_rcok = self.cok.r[idx].pivot().unwrap();
                 dgm.unpaired.remove(&lowest_in_rcok);
                 dgm.paired.push((lowest_in_rcok, idx));
@@ -517,16 +521,23 @@ impl DecompositionEnsemble {
     }
 }
 
-/// Formats the sum of two numbers as string.
 #[pyfunction]
-fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b).to_string())
+fn compute_ensemble(matrix: Vec<(bool, Vec<usize>)>) -> DiagramEnsemble {
+    let annotated_matrix = matrix
+        .into_iter()
+        .map(|(in_g, bdry)| AnnotatedVecColumn {
+            in_g,
+            col: VecColumn { internal: bdry },
+        })
+        .collect();
+    let decomps = all_decompositions(annotated_matrix);
+    decomps.all_diagrams()
 }
 
 /// A Python module implemented in Rust.
 #[pymodule]
 fn phimaker(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_ensemble, m)?)?;
     Ok(())
 }
 
