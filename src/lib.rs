@@ -12,17 +12,18 @@ pub trait IndexMapping {
 
 #[derive(Debug)]
 struct VectorMapping {
-    internal: Vec<usize>,
-    internal_inverse: Vec<usize>,
+    internal: Vec<Option<usize>>,
+    internal_inverse: Option<Vec<usize>>,
 }
 
 impl IndexMapping for VectorMapping {
     fn map(&self, index: usize) -> usize {
-        self.internal[index]
+        self.internal[index].unwrap()
     }
 
     fn inverse_map(&self, index: usize) -> usize {
-        self.internal_inverse[index]
+        let inv = self.internal_inverse.as_ref().unwrap();
+        inv[index]
     }
 }
 
@@ -155,6 +156,7 @@ pub struct DecompositionEnsemble {
     ker: RVDecomposition,
     cok: RVDecomposition,
     l_first_mapping: VectorMapping,
+    kernel_mapping: VectorMapping,
     g_elements: Vec<bool>,
     size_of_l: usize,
     size_of_k: usize,
@@ -170,17 +172,17 @@ fn compute_l_first_mapping(matrix: &Vec<AnnotatedVecColumn>) -> VectorMapping {
     for col in matrix {
         if col.in_g {
             inverse_mapping[next_g_index] = mapping.len();
-            mapping.push(next_g_index);
+            mapping.push(Some(next_g_index));
             next_g_index += 1;
         } else {
             inverse_mapping[next_f_index] = mapping.len();
-            mapping.push(next_f_index);
+            mapping.push(Some(next_f_index));
             next_f_index += 1
         }
     }
     VectorMapping {
         internal: mapping,
-        internal_inverse: inverse_mapping,
+        internal_inverse: Some(inverse_mapping),
     }
 }
 
@@ -215,6 +217,26 @@ fn build_dim(df: &Vec<VecColumn>, mapping: &impl IndexMapping) -> Vec<VecColumn>
             col
         })
         .collect()
+}
+
+fn build_kernel_mapping(dim_decomposition: &RVDecomposition) -> VectorMapping {
+    let mut counter = 0;
+    let mut idx_list: Vec<Option<usize>> = vec![];
+    let rim_cols = dim_decomposition.r.iter();
+    let vim_cols = dim_decomposition.v.iter();
+    let paired_cols = rim_cols.zip(vim_cols);
+    for (r_col, v_col) in paired_cols {
+        if r_col.pivot().is_none() {
+            idx_list.push(Some(counter));
+            counter += 1;
+        } else {
+            idx_list.push(None);
+        }
+    }
+    VectorMapping {
+        internal: idx_list,
+        internal_inverse: None,
+    }
 }
 
 fn build_dker(dim_decomposition: &RVDecomposition, mapping: &impl IndexMapping) -> Vec<VecColumn> {
@@ -284,6 +306,7 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
     // TODO: Also need to return mapping from columns of Df to columns of Dker
     let dker = build_dker(&decompose_dim, &l_first_mapping);
     let decompose_dker = rv_decompose(dker);
+    let kernel_mapping = build_kernel_mapping(&decompose_dim);
     // Decompose dcok
     let dcok = build_dcok(&df, &decomp_dg, &g_elements, &l_first_mapping);
     print_matrix(&dcok);
@@ -295,6 +318,7 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
         ker: decompose_dker,
         cok: decompose_dcok,
         l_first_mapping,
+        kernel_mapping,
         g_elements,
         size_of_l,
         size_of_k,
@@ -410,7 +434,6 @@ impl DecompositionEnsemble {
 
     fn kernel_diagram(&self) -> PersistenceDiagram {
         let mut dgm = PersistenceDiagram::default();
-        return dgm;
         for idx in 0..self.size_of_k {
             if self.is_kernel_birth(idx) {
                 dgm.unpaired.insert(idx);
@@ -418,7 +441,8 @@ impl DecompositionEnsemble {
             }
             if self.is_kernel_death(idx) {
                 // TODO: Problem kernel columns have different indexing to f
-                let g_birth_index = self.ker.r[idx].pivot().unwrap();
+                let ker_idx = self.kernel_mapping.map(idx);
+                let g_birth_index = self.ker.r[ker_idx].pivot().unwrap();
                 let birth_index = self.l_first_mapping.inverse_map(g_birth_index);
                 dgm.unpaired.remove(&birth_index);
                 dgm.paired.push((birth_index, idx));
@@ -455,10 +479,10 @@ impl DecompositionEnsemble {
 
     fn cokernel_diagram(&self) -> PersistenceDiagram {
         let mut dgm = PersistenceDiagram::default();
-        return dgm;
         for idx in 0..self.size_of_k {
             let pos_in_f = self.f.r[idx].pivot().is_none();
-            let not_in_l_or_neg_in_g = (!self.g_elements[idx]) || self.g.r[idx].pivot().is_some();
+            let g_idx = self.l_first_mapping.map(idx);
+            let not_in_l_or_neg_in_g = (!self.g_elements[idx]) || self.g.r[g_idx].pivot().is_some();
             if pos_in_f && not_in_l_or_neg_in_g {
                 dgm.unpaired.insert(idx);
                 continue;
@@ -467,9 +491,8 @@ impl DecompositionEnsemble {
             if !neg_in_f {
                 continue;
             }
-            // TODO: This unwrap fails on example, why?
             let lowest_rim_in_l = self.im.r[idx].pivot().unwrap() < self.size_of_l;
-            if lowest_rim_in_l {
+            if !lowest_rim_in_l {
                 println!("{}", idx);
                 let lowest_in_rcok = self.cok.r[idx].pivot().unwrap();
                 dgm.unpaired.remove(&lowest_in_rcok);
