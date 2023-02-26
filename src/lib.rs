@@ -1,6 +1,7 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
+    thread,
 };
 
 use pyo3::prelude::*;
@@ -291,31 +292,51 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
     let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
     let size_of_k = matrix.len();
     let df: Vec<VecColumn> = matrix.into_iter().map(|anncol| anncol.col).collect();
-    // Decompose Df
-    let decomp_df = rv_decompose(df.clone());
-    // Decompose Dg
-    let dg = build_dg(&df, &g_elements, &l_first_mapping);
-    let decomp_dg = rv_decompose(dg);
-    // Decompose dim
-    let dim = build_dim(&df, &l_first_mapping);
-    let decompose_dim = rv_decompose(dim);
-    // Decompose dker
-    // TODO: Also need to return mapping from columns of Df to columns of Dker
-    let dker = build_dker(&decompose_dim, &l_first_mapping);
-    let decompose_dker = rv_decompose(dker);
-    let kernel_mapping = build_kernel_mapping(&decompose_dim);
-    // Decompose dcok
-    let dcok = build_dcok(&df, &decomp_dg, &g_elements, &l_first_mapping);
-    let decompose_dcok = rv_decompose(dcok);
+    let (f, g, im, ker, cok, kernel_mapping) = thread::scope(|s| {
+        let thread1 = s.spawn(|| {
+            // Decompose Df
+            let out = rv_decompose(df.clone());
+            println!("Decomposed f");
+            out
+        });
+        let thread2 = s.spawn(|| {
+            // Decompose Dg
+            let dg = build_dg(&df, &g_elements, &l_first_mapping);
+            let decomp_dg = rv_decompose(dg);
+            println!("Decomposed g");
+            // Decompose dcok
+            let dcok = build_dcok(&df, &decomp_dg, &g_elements, &l_first_mapping);
+            let decompose_dcok = rv_decompose(dcok);
+            println!("Decomposed cok");
+            (decomp_dg, decompose_dcok)
+        });
+        let thread3 = s.spawn(|| {
+            // Decompose dim
+            let dim = build_dim(&df, &l_first_mapping);
+            let decompose_dim = rv_decompose(dim);
+            println!("Decomposed im");
+            // Decompose dker
+            // TODO: Also need to return mapping from columns of Df to columns of Dker
+            let dker = build_dker(&decompose_dim, &l_first_mapping);
+            let decompose_dker = rv_decompose(dker);
+            println!("Decomposed ker");
+            let kernel_mapping = build_kernel_mapping(&decompose_dim);
+            (decompose_dim, decompose_dker, kernel_mapping)
+        });
+        let f = thread1.join().unwrap();
+        let (g, cok) = thread2.join().unwrap();
+        let (im, ker, kernel_mapping) = thread3.join().unwrap();
+        (f, g, im, ker, cok, kernel_mapping)
+    });
     DecompositionEnsemble {
-        f: decomp_df,
-        g: decomp_dg,
-        im: decompose_dim,
-        ker: decompose_dker,
-        cok: decompose_dcok,
+        f,
+        g,
+        im,
+        ker,
+        cok,
+        g_elements,
         l_first_mapping,
         kernel_mapping,
-        g_elements,
         size_of_l,
         size_of_k,
     }
