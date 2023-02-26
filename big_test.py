@@ -3,6 +3,8 @@ import numpy as np
 from phimaker import compute_ensemble
 import math
 
+N = 100
+
 nice_points = np.array(
     [
         [0.5, 0],
@@ -16,6 +18,8 @@ nice_points = np.array(
     ]
 )
 
+pts = np.vstack((nice_points, np.random.rand(N, 2) * 2 - 1))
+
 
 def is_nice_point(idx):
     return idx < len(nice_points)
@@ -26,7 +30,7 @@ def is_nice_smplx(smplx):
 
 
 rcomp = RipsComplex(
-    points=np.vstack((nice_points, np.random.rand(30, 2) * 2 - 1)),
+    points=pts,
     max_edge_length=math.sqrt(2),
 )
 simplex_tree = rcomp.create_simplex_tree(max_dimension=2)
@@ -39,29 +43,30 @@ matrix = []
 for idx, f_val in enumerate(s_tree2.get_filtration()):
     smplx = f_val[0]
     sparse_bdry = [int(face_idx) for _, face_idx in s_tree2.get_boundaries(smplx)]
-    annotated_col = (is_nice_smplx(smplx), sparse_bdry)
+    annotated_col = (is_nice_smplx(smplx), sorted(sparse_bdry))
     matrix.append(annotated_col)
 
 print("Got matrix")
 print(len(matrix))
 
 dgms = compute_ensemble(matrix)
-print("f:")
-print(dgms.f.unpaired)
-print(dgms.f.paired)
-
-print("g:")
-print(dgms.g.unpaired)
-print(dgms.g.paired)
-
-print("im:")
-print(dgms.im.unpaired)
-print(dgms.im.paired)
-
-print("ker:")
-print(dgms.ker.unpaired)
-print(dgms.ker.paired)
-
-print("cok:")
-print(dgms.cok.unpaired)
-print(dgms.cok.paired)
+print("Done")
+#print("f:")
+#print(dgms.f.unpaired)
+#print(dgms.f.paired)
+#
+#print("g:")
+#print(dgms.g.unpaired)
+#print(dgms.g.paired)
+#
+#print("im:")
+#print(dgms.im.unpaired)
+#print(dgms.im.paired)
+#
+#print("ker:")
+#print(dgms.ker.unpaired)
+#print(dgms.ker.paired)
+#
+#print("cok:")
+#print(dgms.cok.unpaired)
+#print(dgms.cok.paired)
