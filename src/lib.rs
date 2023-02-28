@@ -292,7 +292,7 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
     let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
     let size_of_k = matrix.len();
     let df: Vec<VecColumn> = matrix.into_iter().map(|anncol| anncol.col).collect();
-    let (f, (g, im), (ker, cok, kernel_mapping)) = thread::scope(|s| {
+    let (f, (g, cok), (im, ker, kernel_mapping)) = thread::scope(|s| {
         let thread1 = s.spawn(|| {
             // Decompose Df
             let out = rv_decompose(df.clone());
