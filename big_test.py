@@ -1,24 +1,28 @@
 from gudhi import RipsComplex
 import numpy as np
-from numpy.random import random, random_sample
 from phimaker import compute_ensemble
 import math
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import random
 
 N = 150
 N_nice = 20
 max_diagram_dim = 1
+jitter_strength = 0.05
+
+
+def get_jitterer_circle_point(phase, jit):
+    random_phase = random.random() * jit
+    return [
+        0.7 * math.cos(2 * math.pi * (phase + random_phase)),
+        0.7 * math.sin(2 * math.pi * (phase + random_phase)),
+    ]
+
 
 nice_points = np.array(
-    [
-        [
-            0.7 * math.cos(2 * math.pi * i / N_nice),
-            0.7 * math.sin(2 * math.pi * i / N_nice),
-        ]
-        for i in range(N_nice)
-    ]
+    [get_jitterer_circle_point(i / N_nice, jitter_strength) for i in range(N_nice)]
 )
 
 random_points = np.random.rand(N, 2) * 2 - 1
@@ -111,10 +115,16 @@ def plot_diagram(
     ret_ax.set(title=title)
     sns.move_legend(ret_ax, "lower right")
     handle = ax if ax is not None else plt
-    handle.plot([0, truncation * 1.05], [0, truncation * 1.05], "--")
+    handle.plot([0, truncation * 1.05], [0, truncation * 1.05], "m", alpha=0.4)
+    handle.plot(
+        [0, 0, truncation * 1.05],
+        [0, truncation * 1.05, truncation * 1.05],
+        "m--",
+        alpha=0.4,
+    )
 
 
-fig, axes = plt.subplots(nrows=2, ncols=3, figsize=[6.4 * 3, 4.8 * 2])
+fig, axes = plt.subplots(nrows=2, ncols=3, figsize=[3.5 * 3, 3.5 * 2])
 plot_diagram(
     dgms.ker,
     entrance_times,
