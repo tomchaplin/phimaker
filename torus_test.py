@@ -159,10 +159,19 @@ plot_diagram(
     entrance_times,
     dimensions,
     truncation,
-    ax=axes[1][1],
+    ax=axes[0][0],
     title="Kernel",
     dim_shift=1,
     max_dim=max_diagram_dim,
+)
+plot_diagram(
+    dgms.rel,
+    entrance_times,
+    dimensions,
+    truncation,
+    ax=axes[0][1],
+    title="Relative",
+    max_dim=max_diagram_dim + 1,
 )
 plot_diagram(
     dgms.cok,
@@ -187,7 +196,7 @@ plot_diagram(
     entrance_times,
     dimensions,
     truncation,
-    ax=axes[0][0],
+    ax=axes[1][1],
     title="Image",
     max_dim=max_diagram_dim,
 )
@@ -201,5 +210,4 @@ plot_diagram(
     legend=True,
     max_dim=max_diagram_dim,
 )
-fig.delaxes(axes[0][1])
 plt.savefig("5pack_torus.png")
