@@ -8,13 +8,13 @@ import pandas as pd
 import random
 
 N = 10
-aN_nice = 10
+aN_nice = 20
 bN_nice = 20
 max_diagram_dim = 2
 jitter_strength = 0.05
-a = 0.25
+a = 0.3
 b = 0.8
-truncation = math.sqrt(3)
+truncation = 1.1
 
 
 def get_jitter_torus_point(phase1, phase2, jit):
@@ -159,7 +159,7 @@ plot_diagram(
     entrance_times,
     dimensions,
     truncation,
-    ax=axes[0][0],
+    ax=axes[1][1],
     title="Kernel",
     dim_shift=1,
     max_dim=max_diagram_dim,
@@ -187,7 +187,7 @@ plot_diagram(
     entrance_times,
     dimensions,
     truncation,
-    ax=axes[1][1],
+    ax=axes[0][0],
     title="Image",
     max_dim=max_diagram_dim,
 )
