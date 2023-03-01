@@ -160,10 +160,10 @@ pub struct DecompositionEnsemble {
     im: RVDecomposition,
     ker: RVDecomposition,
     cok: RVDecomposition,
-    quo: RVDecomposition,
+    rel: RVDecomposition,
     l_first_mapping: VectorMapping,
     kernel_mapping: VectorMapping,
-    quo_mapping: VectorMapping,
+    rel_mapping: VectorMapping,
     g_elements: Vec<bool>,
     size_of_l: usize,
     size_of_k: usize,
@@ -245,7 +245,7 @@ fn build_kernel_mapping(dim_decomposition: &RVDecomposition) -> VectorMapping {
 
 // WARNING: This functions makes the following assumption:
 // The 0-cells are precisely the cells with empty boundaries
-fn build_quo_mapping(
+fn build_rel_mapping(
     matrix: &Vec<VecColumn>,
     g_elements: &Vec<bool>,
     size_of_l: usize,
@@ -292,11 +292,11 @@ fn build_quo_mapping(
 // If the boundary of a cell is entirely contained in L then that cell is in L
 // This ensures that a 1-cell not in L can have at most 1 vertex in L
 // This makes it easier to map the boundary
-// Also inherits assumption from build_quo_mapping
-fn build_dquo(
+// Also inherits assumption from build_rel_mapping
+fn build_drel(
     matrix: &Vec<VecColumn>,
     g_elements: &Vec<bool>,
-    quo_mapping: &VectorMapping,
+    rel_mapping: &VectorMapping,
     l_index: usize,
     size_of_l: usize,
     size_of_k: usize,
@@ -308,7 +308,7 @@ fn build_dquo(
             continue;
         }
         let mut new_col = col.clone();
-        new_col.reorder_rows(quo_mapping);
+        new_col.reorder_rows(rel_mapping);
         new_matrix.push(new_col);
     }
     new_matrix
@@ -369,7 +369,7 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
     let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
     let size_of_k = matrix.len();
     let df: Vec<VecColumn> = matrix.into_iter().map(|anncol| anncol.col).collect();
-    let (f, (g, cok), (im, ker, kernel_mapping), (quo, quo_mapping)) = thread::scope(|s| {
+    let (f, (g, cok), (im, ker, kernel_mapping), (rel, rel_mapping)) = thread::scope(|s| {
         let thread1 = s.spawn(|| {
             // Decompose Df
             let out = rv_decompose(df.clone());
@@ -401,18 +401,18 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
             (decompose_dim, decompose_dker, kernel_mapping)
         });
         let thread4 = s.spawn(|| {
-            let (quo_mapping, l_index) = build_quo_mapping(&df, &g_elements, size_of_l, size_of_k);
-            let dquo = build_dquo(
+            let (rel_mapping, l_index) = build_rel_mapping(&df, &g_elements, size_of_l, size_of_k);
+            let drel = build_drel(
                 &df,
                 &g_elements,
-                &quo_mapping,
+                &rel_mapping,
                 l_index,
                 size_of_l,
                 size_of_k,
             );
-            let decompose_dquo = rv_decompose(dquo);
-            println!("Decomposed quo");
-            (decompose_dquo, quo_mapping)
+            let decompose_drel = rv_decompose(drel);
+            println!("Decomposed rel");
+            (decompose_drel, rel_mapping)
         });
         (
             thread1.join().unwrap(),
@@ -427,11 +427,11 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
         im,
         ker,
         cok,
-        quo,
+        rel,
         g_elements,
         l_first_mapping,
         kernel_mapping,
-        quo_mapping,
+        rel_mapping,
         size_of_l,
         size_of_k,
     }
@@ -518,7 +518,7 @@ struct DiagramEnsemble {
     #[pyo3(get)]
     cok: PersistenceDiagram,
     #[pyo3(get)]
-    quo: PersistenceDiagram,
+    rel: PersistenceDiagram,
 }
 
 impl DecompositionEnsemble {
@@ -632,9 +632,9 @@ impl DecompositionEnsemble {
                 dgm.unreorder_idxs(&self.l_first_mapping);
                 dgm
             },
-            quo: {
-                let mut dgm = self.quo.diagram();
-                dgm.unreorder_idxs(&self.quo_mapping);
+            rel: {
+                let mut dgm = self.rel.diagram();
+                dgm.unreorder_idxs(&self.rel_mapping);
                 dgm
             },
             im: self.image_diagram(),

@@ -7,7 +7,7 @@ import seaborn as sns
 import pandas as pd
 import random
 
-N = 150
+N = 50
 N_nice = 20
 max_diagram_dim = 1
 jitter_strength = 0.05
@@ -136,12 +136,12 @@ plot_diagram(
     max_dim=max_diagram_dim,
 )
 plot_diagram(
-    dgms.quo,
+    dgms.rel,
     entrance_times,
     dimensions,
     truncation,
     ax=axes[0][1],
-    title="Quotient",
+    title="Relative",
     max_dim=max_diagram_dim + 1,
 )
 plot_diagram(
