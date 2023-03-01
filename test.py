@@ -37,3 +37,7 @@ print(dgms.ker.paired)
 print("cok:")
 print(dgms.cok.unpaired)
 print(dgms.cok.paired)
+
+print("quo:")
+print(dgms.quo.unpaired)
+print(dgms.quo.paired)

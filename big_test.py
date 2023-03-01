@@ -136,6 +136,15 @@ plot_diagram(
     max_dim=max_diagram_dim,
 )
 plot_diagram(
+    dgms.quo,
+    entrance_times,
+    dimensions,
+    truncation,
+    ax=axes[0][1],
+    title="Quotient",
+    max_dim=max_diagram_dim + 1,
+)
+plot_diagram(
     dgms.cok,
     entrance_times,
     dimensions,
@@ -172,5 +181,4 @@ plot_diagram(
     legend=True,
     max_dim=max_diagram_dim,
 )
-fig.delaxes(axes[0][1])
 plt.savefig("5pack.png")

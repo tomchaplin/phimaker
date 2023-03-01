@@ -7,8 +7,8 @@ use std::{
 use pyo3::prelude::*;
 
 pub trait IndexMapping {
-    fn map(&self, index: usize) -> usize;
-    fn inverse_map(&self, index: usize) -> usize;
+    fn map(&self, index: usize) -> Option<usize>;
+    fn inverse_map(&self, index: usize) -> Option<usize>;
 }
 
 #[derive(Debug)]
@@ -18,13 +18,13 @@ struct VectorMapping {
 }
 
 impl IndexMapping for VectorMapping {
-    fn map(&self, index: usize) -> usize {
-        self.internal[index].unwrap()
+    fn map(&self, index: usize) -> Option<usize> {
+        self.internal[index]
     }
 
-    fn inverse_map(&self, index: usize) -> usize {
+    fn inverse_map(&self, index: usize) -> Option<usize> {
         let inv = self.internal_inverse.as_ref().unwrap();
-        inv[index]
+        Some(inv[index])
     }
 }
 
@@ -91,22 +91,26 @@ impl Column for VecColumn {
         }
     }
 
+    // TODO: Reimplement so that this happens in-place?
     fn reorder_rows(&mut self, mapping: &impl IndexMapping) {
-        // Map row idxs to new row idxs
-        for row_idx in self.internal.iter_mut() {
-            *row_idx = mapping.map(*row_idx);
-        }
-        // Make sure idxs still appear smallest to largest
-        self.internal.sort();
+        let mut new_col: Vec<usize> = self
+            .internal
+            .iter()
+            .filter_map(|&row_idx| mapping.map(row_idx))
+            .collect();
+        new_col.sort();
+        self.internal = new_col;
     }
 
+    // TODO: Reimplement so that this happens in-place?
     fn unreorder_rows(&mut self, mapping: &impl IndexMapping) {
-        // Map row idxs to new row idxs
-        for row_idx in self.internal.iter_mut() {
-            *row_idx = mapping.inverse_map(*row_idx);
-        }
-        // Make sure idxs still appear smallest to largest
-        self.internal.sort();
+        let mut new_col: Vec<usize> = self
+            .internal
+            .iter()
+            .filter_map(|&row_idx| mapping.inverse_map(row_idx))
+            .collect();
+        new_col.sort();
+        self.internal = new_col;
     }
 }
 
@@ -156,8 +160,10 @@ pub struct DecompositionEnsemble {
     im: RVDecomposition,
     ker: RVDecomposition,
     cok: RVDecomposition,
+    quo: RVDecomposition,
     l_first_mapping: VectorMapping,
     kernel_mapping: VectorMapping,
+    quo_mapping: VectorMapping,
     g_elements: Vec<bool>,
     size_of_l: usize,
     size_of_k: usize,
@@ -237,6 +243,77 @@ fn build_kernel_mapping(dim_decomposition: &RVDecomposition) -> VectorMapping {
     }
 }
 
+// WARNING: This functions makes the following assumption:
+// The 0-cells are precisely the cells with empty boundaries
+fn build_quo_mapping(
+    matrix: &Vec<VecColumn>,
+    g_elements: &Vec<bool>,
+    size_of_l: usize,
+    size_of_k: usize,
+) -> (VectorMapping, usize) {
+    let mut l_index: Option<usize> = None;
+    // Keeps track of next index in new ordering
+    // We only increment counter when we encounter a cell not in L or the first L-cell
+    let mut counter = 0;
+    let size_of_quo = size_of_k - size_of_l + 1;
+    let mut idx_list: Vec<Option<usize>> = vec![];
+    let mut inverse_mapping = vec![0; size_of_quo];
+    for (idx, (r_col, &in_g)) in matrix.iter().zip(g_elements.iter()).enumerate() {
+        if in_g {
+            if l_index.is_none() {
+                l_index = Some(counter);
+                // Counter should idx up to now
+                inverse_mapping[counter] = idx;
+                counter += 1;
+            }
+            if r_col.internal.len() == 0 {
+                // This is a vertex in L, should get_mapped to l_index
+                idx_list.push(l_index)
+            } else {
+                // This is a higher-dimensional cell
+                idx_list.push(None)
+            }
+        } else {
+            idx_list.push(Some(counter));
+            inverse_mapping[counter] = idx;
+            counter += 1;
+        }
+    }
+    (
+        VectorMapping {
+            internal: idx_list,
+            internal_inverse: Some(inverse_mapping),
+        },
+        l_index.unwrap(),
+    )
+}
+
+// WARNING: This functions makes the following assumption:
+// If the boundary of a cell is entirely contained in L then that cell is in L
+// This ensures that a 1-cell not in L can have at most 1 vertex in L
+// This makes it easier to map the boundary
+// Also inherits assumption from build_quo_mapping
+fn build_dquo(
+    matrix: &Vec<VecColumn>,
+    g_elements: &Vec<bool>,
+    quo_mapping: &VectorMapping,
+    l_index: usize,
+    size_of_l: usize,
+    size_of_k: usize,
+) -> Vec<VecColumn> {
+    let mut new_matrix = Vec::with_capacity(size_of_k - size_of_l + 1);
+    for (idx, (col, &in_g)) in matrix.iter().zip(g_elements.iter()).enumerate() {
+        if in_g && idx != l_index {
+            // Don't add elements of L, unless its the first one
+            continue;
+        }
+        let mut new_col = col.clone();
+        new_col.reorder_rows(quo_mapping);
+        new_matrix.push(new_col);
+    }
+    new_matrix
+}
+
 fn build_dker(dim_decomposition: &RVDecomposition, mapping: &impl IndexMapping) -> Vec<VecColumn> {
     let rim_cols = dim_decomposition.r.iter();
     let vim_cols = dim_decomposition.v.iter();
@@ -267,7 +344,7 @@ fn build_dcok(
     for col_idx in 0..df.len() {
         let col_in_g = g_elements[col_idx];
         if col_in_g {
-            let idx_in_dg = mapping.map(col_idx);
+            let idx_in_dg = mapping.map(col_idx).unwrap();
             let dg_rcol = &dg_decomposition.r[idx_in_dg];
             if dg_rcol.pivot().is_none() {
                 let mut next_col = dg_decomposition.v[idx_in_dg].clone();
@@ -292,7 +369,7 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
     let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
     let size_of_k = matrix.len();
     let df: Vec<VecColumn> = matrix.into_iter().map(|anncol| anncol.col).collect();
-    let (f, (g, cok), (im, ker, kernel_mapping)) = thread::scope(|s| {
+    let (f, (g, cok), (im, ker, kernel_mapping), (quo, quo_mapping)) = thread::scope(|s| {
         let thread1 = s.spawn(|| {
             // Decompose Df
             let out = rv_decompose(df.clone());
@@ -323,10 +400,25 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
             let kernel_mapping = build_kernel_mapping(&decompose_dim);
             (decompose_dim, decompose_dker, kernel_mapping)
         });
+        let thread4 = s.spawn(|| {
+            let (quo_mapping, l_index) = build_quo_mapping(&df, &g_elements, size_of_l, size_of_k);
+            let dquo = build_dquo(
+                &df,
+                &g_elements,
+                &quo_mapping,
+                l_index,
+                size_of_l,
+                size_of_k,
+            );
+            let decompose_dquo = rv_decompose(dquo);
+            println!("Decomposed quo");
+            (decompose_dquo, quo_mapping)
+        });
         (
             thread1.join().unwrap(),
             thread2.join().unwrap(),
             thread3.join().unwrap(),
+            thread4.join().unwrap(),
         )
     });
     DecompositionEnsemble {
@@ -335,9 +427,11 @@ pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsem
         im,
         ker,
         cok,
+        quo,
         g_elements,
         l_first_mapping,
         kernel_mapping,
+        quo_mapping,
         size_of_l,
         size_of_k,
     }
@@ -384,11 +478,11 @@ impl PersistenceDiagram {
             .unpaired
             .iter()
             .cloned()
-            .map(|idx| mapping.inverse_map(idx))
+            .map(|idx| mapping.inverse_map(idx).unwrap())
             .collect();
         for (b_idx, d_idx) in self.paired.iter_mut() {
-            *b_idx = mapping.inverse_map(*b_idx);
-            *d_idx = mapping.inverse_map(*d_idx);
+            *b_idx = mapping.inverse_map(*b_idx).unwrap();
+            *d_idx = mapping.inverse_map(*d_idx).unwrap();
         }
     }
 }
@@ -423,6 +517,8 @@ struct DiagramEnsemble {
     ker: PersistenceDiagram,
     #[pyo3(get)]
     cok: PersistenceDiagram,
+    #[pyo3(get)]
+    quo: PersistenceDiagram,
 }
 
 impl DecompositionEnsemble {
@@ -447,7 +543,7 @@ impl DecompositionEnsemble {
         if !in_l {
             return false;
         }
-        let g_index = self.l_first_mapping.map(idx);
+        let g_index = self.l_first_mapping.map(idx).unwrap();
         let negative_in_g = self.g.r[g_index].pivot().is_some();
         if !negative_in_g {
             return false;
@@ -468,9 +564,9 @@ impl DecompositionEnsemble {
             }
             if self.is_kernel_death(idx) {
                 // TODO: Problem kernel columns have different indexing to f
-                let ker_idx = self.kernel_mapping.map(idx);
+                let ker_idx = self.kernel_mapping.map(idx).unwrap();
                 let g_birth_index = self.ker.r[ker_idx].pivot().unwrap();
-                let birth_index = self.l_first_mapping.inverse_map(g_birth_index);
+                let birth_index = self.l_first_mapping.inverse_map(g_birth_index).unwrap();
                 dgm.unpaired.remove(&birth_index);
                 dgm.paired.push((birth_index, idx));
             }
@@ -482,7 +578,7 @@ impl DecompositionEnsemble {
         let mut dgm = PersistenceDiagram::default();
         for idx in 0..self.size_of_k {
             if self.g_elements[idx] {
-                let g_idx = self.l_first_mapping.map(idx);
+                let g_idx = self.l_first_mapping.map(idx).unwrap();
                 let pos_in_g = self.g.r[g_idx].pivot().is_none();
                 if pos_in_g {
                     dgm.unpaired.insert(idx);
@@ -496,7 +592,7 @@ impl DecompositionEnsemble {
                 if !lowest_rim_in_l {
                     continue;
                 }
-                let birth_idx = self.l_first_mapping.inverse_map(lowest_in_rim);
+                let birth_idx = self.l_first_mapping.inverse_map(lowest_in_rim).unwrap();
                 dgm.unpaired.remove(&birth_idx);
                 dgm.paired.push((birth_idx, idx));
             }
@@ -508,7 +604,7 @@ impl DecompositionEnsemble {
         let mut dgm = PersistenceDiagram::default();
         for idx in 0..self.size_of_k {
             let pos_in_f = self.f.r[idx].pivot().is_none();
-            let g_idx = self.l_first_mapping.map(idx);
+            let g_idx = self.l_first_mapping.map(idx).unwrap();
             let not_in_l_or_neg_in_g = (!self.g_elements[idx]) || self.g.r[g_idx].pivot().is_some();
             if pos_in_f && not_in_l_or_neg_in_g {
                 dgm.unpaired.insert(idx);
@@ -534,6 +630,11 @@ impl DecompositionEnsemble {
             g: {
                 let mut dgm = self.g.diagram();
                 dgm.unreorder_idxs(&self.l_first_mapping);
+                dgm
+            },
+            quo: {
+                let mut dgm = self.quo.diagram();
+                dgm.unreorder_idxs(&self.quo_mapping);
                 dgm
             },
             im: self.image_diagram(),
