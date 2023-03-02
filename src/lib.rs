@@ -672,7 +672,7 @@ mod tests {
 
     #[test]
     fn rv_works() {
-        let file = File::open("test.mat").unwrap();
+        let file = File::open("examples/test.mat").unwrap();
         let boundary_matrix: Vec<VecColumn> = BufReader::new(file)
             .lines()
             .map(|l| {
@@ -693,7 +693,7 @@ mod tests {
 
     #[test]
     fn ensemble_works() {
-        let file = File::open("test_annotated.mat").unwrap();
+        let file = File::open("examples/test_annotated.mat").unwrap();
         let boundary_matrix: Vec<AnnotatedVecColumn> = BufReader::new(file)
             .lines()
             .map(|l| {

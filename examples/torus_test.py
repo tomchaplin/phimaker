@@ -1,3 +1,8 @@
+import sys
+import os
+
+sys.path.append(os.getcwd())
+
 from gudhi import RipsComplex
 import numpy as np
 from phimaker import compute_ensemble
@@ -62,7 +67,7 @@ ax.scatter(filling_points[:, 0], filling_points[:, 1], filling_points[:, 2])
 ax.scatter(nice_points[:, 0], nice_points[:, 1], nice_points[:, 2])
 ax.set_aspect("equal", adjustable="box")
 plt.legend(["Filling points", "Torus points"], loc="lower right")
-plt.savefig("pointcloud_torus.png")
+plt.savefig("fig/pointcloud_torus.png")
 plt.show()
 
 
@@ -210,4 +215,4 @@ plot_diagram(
     legend=True,
     max_dim=max_diagram_dim,
 )
-plt.savefig("5pack_torus.png")
+plt.savefig("fig/5pack_torus.png")

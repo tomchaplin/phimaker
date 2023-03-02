@@ -1,3 +1,8 @@
+import sys
+import os
+
+sys.path.append(os.getcwd())
+
 from gudhi import RipsComplex
 import numpy as np
 from phimaker import compute_ensemble
@@ -70,7 +75,7 @@ print("Done")
 plt.scatter(random_points[:, 0], random_points[:, 1])
 plt.scatter(nice_points[:, 0], nice_points[:, 1])
 plt.legend(["Random points", "Even points"], loc="lower right")
-plt.savefig("pointcloud.png")
+plt.savefig("fig/pointcloud.png")
 # Plot diagrams
 
 
@@ -181,4 +186,4 @@ plot_diagram(
     legend=True,
     max_dim=max_diagram_dim,
 )
-plt.savefig("5pack.png")
+plt.savefig("fig/5pack.png")
