@@ -1,8 +1,10 @@
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-    thread,
-};
+pub mod columns;
+pub mod decompositions;
+
+use std::{collections::HashSet, thread};
+
+use columns::{AnnotatedColumn, Column, VecColumn};
+use decompositions::rv_decomposition::{rv_decompose, RVDecomposition};
 
 use pyo3::prelude::*;
 
@@ -28,139 +30,14 @@ impl IndexMapping for VectorMapping {
     }
 }
 
-pub trait Column: Send {
-    fn pivot(&self) -> Option<usize>;
-    fn add_col(&mut self, other: &Self);
-    fn reorder_rows(&mut self, mapping: &impl IndexMapping);
-    fn unreorder_rows(&mut self, mapping: &impl IndexMapping);
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct VecColumn {
-    internal: Vec<usize>,
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct AnnotatedVecColumn {
-    col: VecColumn,
-    in_g: bool,
-}
-
-#[derive(Debug, Default)]
-pub struct RVDecomposition {
-    r: Vec<VecColumn>,
-    v: Vec<VecColumn>,
-    low_inverse: HashMap<usize, usize>,
-}
-
-impl VecColumn {
-    // Returns the index where we should try to insert next entry
-    fn add_entry(&mut self, entry: usize, starting_idx: usize) -> usize {
-        let mut working_idx = starting_idx;
-        while let Some(value_at_idx) = self.internal.iter().nth(working_idx) {
-            match value_at_idx.cmp(&entry) {
-                Ordering::Less => {
-                    working_idx += 1;
-                    continue;
-                }
-                Ordering::Equal => {
-                    self.internal.remove(working_idx);
-                    return working_idx;
-                }
-                Ordering::Greater => {
-                    self.internal.insert(working_idx, entry);
-                    return working_idx + 1;
-                }
-            }
-        }
-        // Bigger than all idxs in col - add to end
-        self.internal.push(entry);
-        return self.internal.len() - 1;
-    }
-}
-
-impl Column for VecColumn {
-    fn pivot(&self) -> Option<usize> {
-        Some(*(self.internal.iter().last()?))
-    }
-
-    fn add_col(&mut self, other: &Self) {
-        let mut working_idx = 0;
-        for entry in other.internal.iter() {
-            working_idx = self.add_entry(*entry, working_idx);
-        }
-    }
-
-    // TODO: Reimplement so that this happens in-place?
-    fn reorder_rows(&mut self, mapping: &impl IndexMapping) {
-        let mut new_col: Vec<usize> = self
-            .internal
-            .iter()
-            .filter_map(|&row_idx| mapping.map(row_idx))
-            .collect();
-        new_col.sort();
-        self.internal = new_col;
-    }
-
-    // TODO: Reimplement so that this happens in-place?
-    fn unreorder_rows(&mut self, mapping: &impl IndexMapping) {
-        let mut new_col: Vec<usize> = self
-            .internal
-            .iter()
-            .filter_map(|&row_idx| mapping.inverse_map(row_idx))
-            .collect();
-        new_col.sort();
-        self.internal = new_col;
-    }
-}
-
-impl RVDecomposition {
-    fn col_idx_with_same_low(&self, col: &VecColumn) -> Option<usize> {
-        let pivot = col.pivot()?;
-        self.low_inverse.get(&pivot).copied()
-    }
-    // Receives column, reduces it with left-to-right addition from R
-    // Adds reduction to self
-    fn reduce_column(&mut self, mut column: VecColumn) {
-        // v_col tracks how the final reduced column is built up
-        // Currently column contains 1 lot of the latest column in D
-        let mut v_col = VecColumn {
-            internal: vec![self.r.len()],
-        };
-        // Reduce the column, keeping track of how we do this in V
-        while let Some(col_idx) = self.col_idx_with_same_low(&column) {
-            column.add_col(&self.r[col_idx]);
-            v_col.add_col(&self.v[col_idx]);
-        }
-        // Update low inverse
-        let final_pivot = column.pivot();
-        if let Some(final_pivot) = final_pivot {
-            // This column has a lowest 1 and is being inserted at the end of R
-            self.low_inverse.insert(final_pivot, self.r.len());
-        }
-        // Push to decomposition
-        self.r.push(column);
-        self.v.push(v_col);
-    }
-}
-
-pub fn rv_decompose(matrix: Vec<VecColumn>) -> RVDecomposition {
-    matrix
-        .into_iter()
-        .fold(RVDecomposition::default(), |mut accum, next_col| {
-            accum.reduce_column(next_col);
-            accum
-        })
-}
-
 #[derive(Debug)]
 pub struct DecompositionEnsemble {
-    f: RVDecomposition,
-    g: RVDecomposition,
-    im: RVDecomposition,
-    ker: RVDecomposition,
-    cok: RVDecomposition,
-    rel: RVDecomposition,
+    f: RVDecomposition<VecColumn>,
+    g: RVDecomposition<VecColumn>,
+    im: RVDecomposition<VecColumn>,
+    ker: RVDecomposition<VecColumn>,
+    cok: RVDecomposition<VecColumn>,
+    rel: RVDecomposition<VecColumn>,
     l_first_mapping: VectorMapping,
     kernel_mapping: VectorMapping,
     rel_mapping: VectorMapping,
@@ -169,7 +46,7 @@ pub struct DecompositionEnsemble {
     size_of_k: usize,
 }
 
-fn compute_l_first_mapping(matrix: &Vec<AnnotatedVecColumn>) -> VectorMapping {
+fn compute_l_first_mapping(matrix: &Vec<AnnotatedColumn<VecColumn>>) -> VectorMapping {
     let total_size = matrix.len();
     let num_in_g = matrix.iter().filter(|col| col.in_g).count();
     let mut next_g_index = 0;
@@ -226,7 +103,7 @@ fn build_dim(df: &Vec<VecColumn>, mapping: &impl IndexMapping) -> Vec<VecColumn>
         .collect()
 }
 
-fn build_kernel_mapping(dim_decomposition: &RVDecomposition) -> VectorMapping {
+fn build_kernel_mapping(dim_decomposition: &RVDecomposition<VecColumn>) -> VectorMapping {
     let mut counter = 0;
     let mut idx_list: Vec<Option<usize>> = vec![];
     for r_col in dim_decomposition.r.iter() {
@@ -314,7 +191,10 @@ fn build_drel(
     new_matrix
 }
 
-fn build_dker(dim_decomposition: &RVDecomposition, mapping: &impl IndexMapping) -> Vec<VecColumn> {
+fn build_dker(
+    dim_decomposition: &RVDecomposition<VecColumn>,
+    mapping: &impl IndexMapping,
+) -> Vec<VecColumn> {
     let rim_cols = dim_decomposition.r.iter();
     let vim_cols = dim_decomposition.v.iter();
     let paired_cols = rim_cols.zip(vim_cols);
@@ -336,7 +216,7 @@ fn build_dker(dim_decomposition: &RVDecomposition, mapping: &impl IndexMapping) 
 
 fn build_dcok(
     df: &Vec<VecColumn>,
-    dg_decomposition: &RVDecomposition,
+    dg_decomposition: &RVDecomposition<VecColumn>,
     g_elements: &Vec<bool>,
     mapping: &impl IndexMapping,
 ) -> Vec<VecColumn> {
@@ -363,7 +243,7 @@ fn build_dcok(
     new_matrix
 }
 
-pub fn all_decompositions(matrix: Vec<AnnotatedVecColumn>) -> DecompositionEnsemble {
+pub fn all_decompositions(matrix: Vec<AnnotatedColumn<VecColumn>>) -> DecompositionEnsemble {
     let l_first_mapping = compute_l_first_mapping(&matrix);
     let g_elements: Vec<bool> = matrix.iter().map(|anncol| anncol.in_g).collect();
     let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
@@ -443,7 +323,7 @@ fn print_matrix(matrix: &Vec<VecColumn>) {
     }
 }
 
-pub fn print_decomp(decomp: &RVDecomposition) {
+pub fn print_decomp(decomp: &RVDecomposition<VecColumn>) {
     println!("R:");
     print_matrix(&decomp.r);
     println!("V:");
@@ -465,7 +345,7 @@ pub fn print_ensemble(ensemble: &DecompositionEnsemble) {
 
 #[pyclass]
 #[derive(Default, Debug, Clone)]
-struct PersistenceDiagram {
+pub struct PersistenceDiagram {
     #[pyo3(get)]
     unpaired: HashSet<usize>,
     #[pyo3(get)]
@@ -484,23 +364,6 @@ impl PersistenceDiagram {
             *b_idx = mapping.inverse_map(*b_idx).unwrap();
             *d_idx = mapping.inverse_map(*d_idx).unwrap();
         }
-    }
-}
-
-impl RVDecomposition {
-    fn diagram(&self) -> PersistenceDiagram {
-        let mut diagram = PersistenceDiagram::default();
-        for (idx, col) in self.r.iter().enumerate() {
-            if let Some(lowest_idx) = col.pivot() {
-                // Negative column
-                diagram.unpaired.remove(&lowest_idx);
-                diagram.paired.push((lowest_idx, idx))
-            } else {
-                // Positive column
-                diagram.unpaired.insert(idx);
-            }
-        }
-        diagram
     }
 }
 
@@ -648,7 +511,7 @@ impl DecompositionEnsemble {
 fn compute_ensemble(matrix: Vec<(bool, Vec<usize>)>) -> DiagramEnsemble {
     let annotated_matrix = matrix
         .into_iter()
-        .map(|(in_g, bdry)| AnnotatedVecColumn {
+        .map(|(in_g, bdry)| AnnotatedColumn {
             in_g,
             col: VecColumn { internal: bdry },
         })
@@ -694,14 +557,14 @@ mod tests {
     #[test]
     fn ensemble_works() {
         let file = File::open("examples/test_annotated.mat").unwrap();
-        let boundary_matrix: Vec<AnnotatedVecColumn> = BufReader::new(file)
+        let boundary_matrix: Vec<AnnotatedColumn<VecColumn>> = BufReader::new(file)
             .lines()
             .map(|l| {
                 let l = l.unwrap();
                 let l_vec: Vec<usize> = l.split(",").map(|c| c.parse().unwrap()).collect();
                 (l_vec[0] == 1, l_vec)
             })
-            .map(|(in_g, l_vec)| AnnotatedVecColumn {
+            .map(|(in_g, l_vec)| AnnotatedColumn {
                 col: VecColumn {
                     internal: l_vec[1..].to_owned(),
                 },
