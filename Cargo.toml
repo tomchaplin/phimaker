@@ -9,4 +9,8 @@ name = "phimaker"
 crate-type = ["cdylib"]
 
 [dependencies]
+atomic_refcell = "0.1.9"
+crossbeam = "0.8.2"
+pinboard = "2.1.0"
 pyo3 = { version = "0.18.0", features = ["extension-module"] }
+rayon = "1.7.0"

@@ -20,6 +20,8 @@ pub struct AnnotatedColumn<T> {
     pub in_g: bool,
 }
 
+unsafe impl Sync for VecColumn {}
+
 impl VecColumn {
     // Returns the index where we should try to insert next entry
     fn add_entry_starting_at(&mut self, entry: usize, starting_idx: usize) -> usize {
