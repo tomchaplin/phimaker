@@ -4,6 +4,7 @@ pub mod decompositions;
 use std::{collections::HashSet, thread};
 
 use columns::{AnnotatedColumn, Column, VecColumn};
+use decompositions::lock_free::rv_decompose_lock_free;
 use decompositions::rv_decomposition::{rv_decompose, RVDecomposition};
 
 use pyo3::prelude::*;
@@ -549,6 +550,27 @@ mod tests {
             .map(|l| VecColumn { internal: l })
             .collect();
         let decomposition = rv_decompose(boundary_matrix);
+        print_decomp(&decomposition);
+        println!("{:?}", decomposition.diagram());
+        assert_eq!(true, true)
+    }
+
+    #[test]
+    fn rv_lockfree_works() {
+        let file = File::open("examples/test.mat").unwrap();
+        let boundary_matrix: Vec<VecColumn> = BufReader::new(file)
+            .lines()
+            .map(|l| {
+                let l = l.unwrap();
+                if l.is_empty() {
+                    vec![]
+                } else {
+                    l.split(",").map(|c| c.parse().unwrap()).collect()
+                }
+            })
+            .map(|l| VecColumn { internal: l })
+            .collect();
+        let decomposition = rv_decompose_lock_free(boundary_matrix);
         print_decomp(&decomposition);
         println!("{:?}", decomposition.diagram());
         assert_eq!(true, true)
