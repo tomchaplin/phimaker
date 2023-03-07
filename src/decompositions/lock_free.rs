@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use crate::Column;
 
@@ -39,7 +39,6 @@ fn reduce_column<C: Column + Clone>(
     let mut working_j = j;
     'outer: loop {
         let mut curr_column = matrix[working_j].read();
-        // TODO: Implement inner loop of Algorithm 3
         while let Some(l) = (&curr_column).0.pivot() {
             let piv_with_column_opt = get_col_with_pivot(l, &matrix, &pivots);
             if let Some((piv, piv_column)) = piv_with_column_opt {
@@ -97,7 +96,6 @@ pub fn rv_decompose_lock_free<C: Column + Clone + Sync + 'static + std::fmt::Deb
     // Wrap matrix and pivots in Arc so they can be shared across threads
     let matrix = Arc::new(matrix);
     let pivots = Arc::new(pivots);
-    println!("{:?}", matrix);
     // Reduce matrix
     // TODO: Can we advice rayon to split work in chunks?
     (0..matrix_len)
@@ -112,15 +110,5 @@ pub fn rv_decompose_lock_free<C: Column + Clone + Sync + 'static + std::fmt::Deb
         r_mat.push(r_col);
         v_mat.push(v_col);
     }
-    let mut low_inverse = HashMap::new();
-    for (idx, pivot) in pivots.iter().enumerate() {
-        if let Some(pivot) = pivot.take() {
-            low_inverse.insert(idx, pivot);
-        }
-    }
-    RVDecomposition {
-        r: r_mat,
-        v: v_mat,
-        low_inverse,
-    }
+    RVDecomposition { r: r_mat, v: v_mat }
 }
