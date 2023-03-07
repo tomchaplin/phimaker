@@ -76,11 +76,8 @@ fn reduce_column<C: Column>(
     }
 }
 pub fn rv_decompose_lock_free<C: Column + Debug + 'static>(
-    matrix: impl ExactSizeIterator<Item = C>,
+    matrix: impl Iterator<Item = C>,
 ) -> RVDecomposition<C> {
-    let matrix_len = matrix.len();
-    // Step 0: Setup storage for pivots vector
-    let pivots: Vec<_> = (0..matrix_len).map(|_| AtomicCell::new(None)).collect();
     // Step 1: Setup a vector of atomic pointers to (r_col, v_col) pairs
     let matrix: Vec<_> = matrix
         .enumerate()
@@ -90,9 +87,10 @@ pub fn rv_decompose_lock_free<C: Column + Debug + 'static>(
             NonEmptyPinboard::new((r_col, v_col))
         })
         .collect();
+    let pivots: Vec<_> = (0..matrix.len()).map(|_| AtomicCell::new(None)).collect();
     // Reduce matrix
     // TODO: Can we advice rayon to split work in chunks?
-    (0..matrix_len)
+    (0..matrix.len())
         .into_par_iter()
         .for_each(|j| reduce_column(j, &matrix, &pivots));
     // Wrap into RV decomposition

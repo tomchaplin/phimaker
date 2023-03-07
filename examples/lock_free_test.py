@@ -75,3 +75,6 @@ tics.append(time.time())
 
 print(tics[1] - tics[0])
 print(tics[2] - tics[1])
+
+assert dgm1.unpaired == dgm2.unpaired
+assert dgm1.paired == dgm2.paired
