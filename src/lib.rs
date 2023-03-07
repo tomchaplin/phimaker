@@ -527,7 +527,7 @@ fn py_rv(matrix: Vec<Vec<usize>>) -> PersistenceDiagram {
         matrix
             .into_iter()
             .map(|col| VecColumn { internal: col })
-            .collect(),
+            .collect::<Vec<_>>(),
     );
     decomp.diagram()
 }
@@ -538,7 +538,8 @@ fn py_rv_lockfree(matrix: Vec<Vec<usize>>) -> PersistenceDiagram {
         matrix
             .into_iter()
             .map(|col| VecColumn { internal: col })
-            .collect(),
+            .collect::<Vec<_>>()
+            .into_iter(),
     );
     decomp.diagram()
 }
@@ -594,7 +595,7 @@ mod tests {
             })
             .map(|l| VecColumn { internal: l })
             .collect();
-        let decomposition = rv_decompose_lock_free(boundary_matrix);
+        let decomposition = rv_decompose_lock_free(boundary_matrix.into_iter());
         print_decomp(&decomposition);
         println!("{:?}", decomposition.diagram());
         assert_eq!(true, true)

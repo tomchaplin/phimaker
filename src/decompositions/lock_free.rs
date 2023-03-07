@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use crate::Column;
@@ -31,7 +32,7 @@ fn get_col_with_pivot<C: Column + Clone>(
     }
 }
 
-fn reduce_column<C: Column + Clone>(
+fn reduce_column<C: Column>(
     j: usize,
     matrix: Arc<Vec<NonEmptyPinboard<(C, C)>>>,
     pivots: Arc<Vec<AtomicCell<Option<usize>>>>,
@@ -75,17 +76,14 @@ fn reduce_column<C: Column + Clone>(
         }
     }
 }
-
-pub fn rv_decompose_lock_free<C: Column + Clone + Sync + 'static + std::fmt::Debug>(
-    matrix: Vec<C>,
+pub fn rv_decompose_lock_free<C: Column + Debug + 'static>(
+    matrix: impl ExactSizeIterator<Item = C>,
 ) -> RVDecomposition<C> {
     let matrix_len = matrix.len();
     // Step 0: Setup storage for pivots vector
-    let pivots: Vec<AtomicCell<Option<usize>>> =
-        (0..matrix_len).map(|_| AtomicCell::new(None)).collect();
+    let pivots: Vec<_> = (0..matrix_len).map(|_| AtomicCell::new(None)).collect();
     // Step 1: Setup a vector of atomic pointers to (r_col, v_col) pairs
-    let matrix: Vec<NonEmptyPinboard<(C, C)>> = matrix
-        .into_iter()
+    let matrix: Vec<_> = matrix
         .enumerate()
         .map(|(idx, r_col)| {
             let mut v_col = C::default();
@@ -102,13 +100,10 @@ pub fn rv_decompose_lock_free<C: Column + Clone + Sync + 'static + std::fmt::Deb
         .into_par_iter()
         .for_each(|j| reduce_column(j, Arc::clone(&matrix), Arc::clone(&pivots)));
     // Wrap into RV decomposition
-    // TODO: Clean up to avoid copying as much as possible
-    let mut r_mat = vec![];
-    let mut v_mat = vec![];
-    for col_pair in matrix.iter() {
-        let (r_col, v_col) = col_pair.read();
-        r_mat.push(r_col);
-        v_mat.push(v_col);
-    }
-    RVDecomposition { r: r_mat, v: v_mat }
+    let (r, v) = Arc::try_unwrap(matrix)
+        .expect("No dangling references to matrix")
+        .into_iter()
+        .map(|pinboard| pinboard.read())
+        .unzip();
+    RVDecomposition { r, v }
 }

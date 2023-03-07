@@ -53,7 +53,7 @@ impl<C: Column> RVDecomposition<C> {
     }
 }
 
-pub fn rv_decompose<C: Column>(matrix: Vec<C>) -> RVDecomposition<C> {
+pub fn rv_decompose<C: Column>(matrix: impl IntoIterator<Item = C>) -> RVDecomposition<C> {
     let mut low_inverse = HashMap::new();
     matrix
         .into_iter()

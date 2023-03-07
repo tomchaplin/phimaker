@@ -1,7 +1,7 @@
 use super::IndexMapping;
 use std::cmp::Ordering;
 
-pub trait Column: Send + Default {
+pub trait Column: Send + Sync + Clone + Default {
     fn pivot(&self) -> Option<usize>;
     fn add_col(&mut self, other: &Self);
     fn add_entry(&mut self, entry: usize);
@@ -19,8 +19,6 @@ pub struct AnnotatedColumn<T> {
     pub col: T,
     pub in_g: bool,
 }
-
-unsafe impl Sync for VecColumn {}
 
 impl VecColumn {
     // Returns the index where we should try to insert next entry
