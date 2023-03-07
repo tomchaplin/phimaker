@@ -521,10 +521,34 @@ fn compute_ensemble(matrix: Vec<(bool, Vec<usize>)>) -> DiagramEnsemble {
     decomps.all_diagrams()
 }
 
+#[pyfunction]
+fn py_rv(matrix: Vec<Vec<usize>>) -> PersistenceDiagram {
+    let decomp = rv_decompose(
+        matrix
+            .into_iter()
+            .map(|col| VecColumn { internal: col })
+            .collect(),
+    );
+    decomp.diagram()
+}
+
+#[pyfunction]
+fn py_rv_lockfree(matrix: Vec<Vec<usize>>) -> PersistenceDiagram {
+    let decomp = rv_decompose_lock_free(
+        matrix
+            .into_iter()
+            .map(|col| VecColumn { internal: col })
+            .collect(),
+    );
+    decomp.diagram()
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn phimaker(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compute_ensemble, m)?)?;
+    m.add_function(wrap_pyfunction!(py_rv, m)?)?;
+    m.add_function(wrap_pyfunction!(py_rv_lockfree, m)?)?;
     Ok(())
 }
 
