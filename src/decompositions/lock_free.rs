@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::sync::Arc;
 
 use crate::Column;
 
@@ -12,8 +11,8 @@ use rayon::prelude::*;
 // Implements do while loop lines 6-9
 fn get_col_with_pivot<C: Column + Clone>(
     l: usize,
-    matrix: &Arc<Vec<NonEmptyPinboard<(C, C)>>>,
-    pivots: &Arc<Vec<AtomicCell<Option<usize>>>>,
+    matrix: &Vec<NonEmptyPinboard<(C, C)>>,
+    pivots: &Vec<AtomicCell<Option<usize>>>,
 ) -> Option<(usize, (C, C))> {
     loop {
         let piv = pivots[l].load();
@@ -34,8 +33,8 @@ fn get_col_with_pivot<C: Column + Clone>(
 
 fn reduce_column<C: Column>(
     j: usize,
-    matrix: Arc<Vec<NonEmptyPinboard<(C, C)>>>,
-    pivots: Arc<Vec<AtomicCell<Option<usize>>>>,
+    matrix: &Vec<NonEmptyPinboard<(C, C)>>,
+    pivots: &Vec<AtomicCell<Option<usize>>>,
 ) {
     let mut working_j = j;
     'outer: loop {
@@ -91,19 +90,12 @@ pub fn rv_decompose_lock_free<C: Column + Debug + 'static>(
             NonEmptyPinboard::new((r_col, v_col))
         })
         .collect();
-    // Wrap matrix and pivots in Arc so they can be shared across threads
-    let matrix = Arc::new(matrix);
-    let pivots = Arc::new(pivots);
     // Reduce matrix
     // TODO: Can we advice rayon to split work in chunks?
     (0..matrix_len)
         .into_par_iter()
-        .for_each(|j| reduce_column(j, Arc::clone(&matrix), Arc::clone(&pivots)));
+        .for_each(|j| reduce_column(j, &matrix, &pivots));
     // Wrap into RV decomposition
-    let (r, v) = Arc::try_unwrap(matrix)
-        .expect("No dangling references to matrix")
-        .into_iter()
-        .map(|pinboard| pinboard.read())
-        .unzip();
+    let (r, v) = matrix.into_iter().map(|pinboard| pinboard.read()).unzip();
     RVDecomposition { r, v }
 }
