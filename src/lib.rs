@@ -1,13 +1,42 @@
-pub mod columns;
-pub mod decompositions;
+use std::thread;
 
-use std::{collections::HashSet, thread};
-
-use columns::{AnnotatedColumn, Column, VecColumn};
-use decompositions::lock_free::rv_decompose_lock_free;
-use decompositions::rv_decomposition::{rv_decompose, RVDecomposition};
+use lophat::*;
 
 use pyo3::prelude::*;
+
+pub trait ReordorableColumn: Send + Sync + Clone + Default {
+    fn reorder_rows(&mut self, mapping: &impl IndexMapping);
+    fn unreorder_rows(&mut self, mapping: &impl IndexMapping);
+}
+#[derive(Debug, Default, Clone)]
+pub struct AnnotatedColumn<T> {
+    pub col: T,
+    pub in_g: bool,
+}
+
+impl ReordorableColumn for VecColumn {
+    // TODO: Reimplement so that this happens in-place?
+    fn reorder_rows(&mut self, mapping: &impl IndexMapping) {
+        let mut new_col: Vec<usize> = self
+            .internal
+            .iter()
+            .filter_map(|&row_idx| mapping.map(row_idx))
+            .collect();
+        new_col.sort();
+        self.internal = new_col;
+    }
+
+    // TODO: Reimplement so that this happens in-place?
+    fn unreorder_rows(&mut self, mapping: &impl IndexMapping) {
+        let mut new_col: Vec<usize> = self
+            .internal
+            .iter()
+            .filter_map(|&row_idx| mapping.inverse_map(row_idx))
+            .collect();
+        new_col.sort();
+        self.internal = new_col;
+    }
+}
 
 pub trait IndexMapping {
     fn map(&self, index: usize) -> Option<usize>;
@@ -253,30 +282,30 @@ pub fn all_decompositions(matrix: Vec<AnnotatedColumn<VecColumn>>) -> Decomposit
     let (f, (g, cok), (im, ker, kernel_mapping), (rel, rel_mapping)) = thread::scope(|s| {
         let thread1 = s.spawn(|| {
             // Decompose Df
-            let out = rv_decompose(df.clone());
+            let out = rv_decompose(df.iter().cloned());
             println!("Decomposed f");
             out
         });
         let thread2 = s.spawn(|| {
             // Decompose Dg
             let dg = build_dg(&df, &g_elements, &l_first_mapping);
-            let decomp_dg = rv_decompose(dg);
+            let decomp_dg = rv_decompose(dg.into_iter());
             println!("Decomposed g");
             // Decompose dcok
             let dcok = build_dcok(&df, &decomp_dg, &g_elements, &l_first_mapping);
-            let decompose_dcok = rv_decompose(dcok);
+            let decompose_dcok = rv_decompose(dcok.into_iter());
             println!("Decomposed cok");
             (decomp_dg, decompose_dcok)
         });
         let thread3 = s.spawn(|| {
             // Decompose dim
             let dim = build_dim(&df, &l_first_mapping);
-            let decompose_dim = rv_decompose(dim);
+            let decompose_dim = rv_decompose(dim.into_iter());
             println!("Decomposed im");
             // Decompose dker
             // TODO: Also need to return mapping from columns of Df to columns of Dker
             let dker = build_dker(&decompose_dim, &l_first_mapping);
-            let decompose_dker = rv_decompose(dker);
+            let decompose_dker = rv_decompose(dker.into_iter());
             println!("Decomposed ker");
             let kernel_mapping = build_kernel_mapping(&decompose_dim);
             (decompose_dim, decompose_dker, kernel_mapping)
@@ -291,7 +320,7 @@ pub fn all_decompositions(matrix: Vec<AnnotatedColumn<VecColumn>>) -> Decomposit
                 size_of_l,
                 size_of_k,
             );
-            let decompose_drel = rv_decompose(drel);
+            let decompose_drel = rv_decompose(drel.into_iter());
             println!("Decomposed rel");
             (decompose_drel, rel_mapping)
         });
@@ -344,28 +373,24 @@ pub fn print_ensemble(ensemble: &DecompositionEnsemble) {
     print_decomp(&ensemble.cok);
 }
 
-#[pyclass]
-#[derive(Default, Debug, Clone)]
-pub struct PersistenceDiagram {
-    #[pyo3(get)]
-    unpaired: HashSet<usize>,
-    #[pyo3(get)]
-    paired: Vec<(usize, usize)>,
-}
-
-impl PersistenceDiagram {
-    fn unreorder_idxs(&mut self, mapping: &impl IndexMapping) {
-        self.unpaired = self
-            .unpaired
-            .iter()
-            .cloned()
-            .map(|idx| mapping.inverse_map(idx).unwrap())
-            .collect();
-        for (b_idx, d_idx) in self.paired.iter_mut() {
-            *b_idx = mapping.inverse_map(*b_idx).unwrap();
-            *d_idx = mapping.inverse_map(*d_idx).unwrap();
-        }
-    }
+fn unreorder_idxs(diagram: &mut PersistenceDiagram, mapping: &impl IndexMapping) {
+    diagram.unpaired = diagram
+        .unpaired
+        .iter()
+        .cloned()
+        .map(|idx| mapping.inverse_map(idx).unwrap())
+        .collect();
+    diagram.paired = diagram
+        .paired
+        .iter()
+        .cloned()
+        .map(|(b_idx, d_idx)| {
+            (
+                mapping.inverse_map(b_idx).unwrap(),
+                mapping.inverse_map(d_idx).unwrap(),
+            )
+        })
+        .collect();
 }
 
 #[pyclass]
@@ -432,7 +457,7 @@ impl DecompositionEnsemble {
                 let g_birth_index = self.ker.r[ker_idx].pivot().unwrap();
                 let birth_index = self.l_first_mapping.inverse_map(g_birth_index).unwrap();
                 dgm.unpaired.remove(&birth_index);
-                dgm.paired.push((birth_index, idx));
+                dgm.paired.insert((birth_index, idx));
             }
         }
         dgm
@@ -458,7 +483,7 @@ impl DecompositionEnsemble {
                 }
                 let birth_idx = self.l_first_mapping.inverse_map(lowest_in_rim).unwrap();
                 dgm.unpaired.remove(&birth_idx);
-                dgm.paired.push((birth_idx, idx));
+                dgm.paired.insert((birth_idx, idx));
             }
         }
         dgm
@@ -482,7 +507,7 @@ impl DecompositionEnsemble {
             if !lowest_rim_in_l {
                 let lowest_in_rcok = self.cok.r[idx].pivot().unwrap();
                 dgm.unpaired.remove(&lowest_in_rcok);
-                dgm.paired.push((lowest_in_rcok, idx));
+                dgm.paired.insert((lowest_in_rcok, idx));
             }
         }
         dgm
@@ -493,12 +518,12 @@ impl DecompositionEnsemble {
             f: self.f.diagram(),
             g: {
                 let mut dgm = self.g.diagram();
-                dgm.unreorder_idxs(&self.l_first_mapping);
+                unreorder_idxs(&mut dgm, &self.l_first_mapping);
                 dgm
             },
             rel: {
                 let mut dgm = self.rel.diagram();
-                dgm.unreorder_idxs(&self.rel_mapping);
+                unreorder_idxs(&mut dgm, &self.rel_mapping);
                 dgm
             },
             im: self.image_diagram(),
@@ -523,12 +548,7 @@ fn compute_ensemble(matrix: Vec<(bool, Vec<usize>)>) -> DiagramEnsemble {
 
 #[pyfunction]
 fn py_rv(matrix: Vec<Vec<usize>>) -> PersistenceDiagram {
-    let decomp = rv_decompose(
-        matrix
-            .into_iter()
-            .map(|col| VecColumn { internal: col })
-            .collect::<Vec<_>>(),
-    );
+    let decomp = rv_decompose(matrix.into_iter().map(|col| VecColumn { internal: col }));
     decomp.diagram()
 }
 
@@ -558,48 +578,6 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::{BufRead, BufReader};
-
-    #[test]
-    fn rv_works() {
-        let file = File::open("examples/test.mat").unwrap();
-        let boundary_matrix: Vec<VecColumn> = BufReader::new(file)
-            .lines()
-            .map(|l| {
-                let l = l.unwrap();
-                if l.is_empty() {
-                    vec![]
-                } else {
-                    l.split(",").map(|c| c.parse().unwrap()).collect()
-                }
-            })
-            .map(|l| VecColumn { internal: l })
-            .collect();
-        let decomposition = rv_decompose(boundary_matrix);
-        print_decomp(&decomposition);
-        println!("{:?}", decomposition.diagram());
-        assert_eq!(true, true)
-    }
-
-    #[test]
-    fn rv_lockfree_works() {
-        let file = File::open("examples/test.mat").unwrap();
-        let boundary_matrix: Vec<VecColumn> = BufReader::new(file)
-            .lines()
-            .map(|l| {
-                let l = l.unwrap();
-                if l.is_empty() {
-                    vec![]
-                } else {
-                    l.split(",").map(|c| c.parse().unwrap()).collect()
-                }
-            })
-            .map(|l| VecColumn { internal: l })
-            .collect();
-        let decomposition = rv_decompose_lock_free(boundary_matrix.into_iter());
-        print_decomp(&decomposition);
-        println!("{:?}", decomposition.diagram());
-        assert_eq!(true, true)
-    }
 
     #[test]
     fn ensemble_works() {
