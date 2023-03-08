@@ -100,37 +100,36 @@ fn compute_l_first_mapping(matrix: &Vec<AnnotatedColumn<VecColumn>>) -> VectorMa
     }
 }
 
-fn extract_columns(matrix: &Vec<VecColumn>, extract: &Vec<bool>) -> Vec<VecColumn> {
+fn extract_columns<'a>(
+    matrix: &'a Vec<VecColumn>,
+    extract: &'a Vec<bool>,
+) -> impl Iterator<Item = VecColumn> + 'a {
     matrix
         .iter()
         .zip(extract.iter())
         .filter(|(_, in_g)| **in_g)
         .map(|(col, _)| col.clone())
-        .collect()
 }
 
-fn build_dg(
-    df: &Vec<VecColumn>,
-    g_elements: &Vec<bool>,
-    l_first_mapping: &VectorMapping,
-) -> Vec<VecColumn> {
-    extract_columns(df, g_elements)
-        .into_iter()
-        .map(|mut col| {
-            col.reorder_rows(l_first_mapping);
-            col
-        })
-        .collect()
+fn build_dg<'a>(
+    df: &'a Vec<VecColumn>,
+    g_elements: &'a Vec<bool>,
+    l_first_mapping: &'a VectorMapping,
+) -> impl Iterator<Item = VecColumn> + 'a {
+    extract_columns(df, g_elements).into_iter().map(|mut col| {
+        col.reorder_rows(l_first_mapping);
+        col
+    })
 }
 
-fn build_dim(df: &Vec<VecColumn>, mapping: &impl IndexMapping) -> Vec<VecColumn> {
-    df.clone()
-        .into_iter()
-        .map(|mut col| {
-            col.reorder_rows(mapping);
-            col
-        })
-        .collect()
+fn build_dim<'a>(
+    df: &'a Vec<VecColumn>,
+    mapping: &'a impl IndexMapping,
+) -> impl Iterator<Item = VecColumn> + 'a {
+    df.iter().cloned().map(|mut col| {
+        col.reorder_rows(mapping);
+        col
+    })
 }
 
 fn build_kernel_mapping(dim_decomposition: &RVDecomposition<VecColumn>) -> VectorMapping {
@@ -200,58 +199,54 @@ fn build_rel_mapping(
 // This ensures that a 1-cell not in L can have at most 1 vertex in L
 // This makes it easier to map the boundary
 // Also inherits assumption from build_rel_mapping
-fn build_drel(
-    matrix: &Vec<VecColumn>,
-    g_elements: &Vec<bool>,
-    rel_mapping: &VectorMapping,
+fn build_drel<'a>(
+    df: &'a Vec<VecColumn>,
+    g_elements: &'a Vec<bool>,
+    rel_mapping: &'a VectorMapping,
     l_index: usize,
-    size_of_l: usize,
-    size_of_k: usize,
-) -> Vec<VecColumn> {
-    let mut new_matrix = Vec::with_capacity(size_of_k - size_of_l + 1);
-    for (idx, (col, &in_g)) in matrix.iter().zip(g_elements.iter()).enumerate() {
-        if in_g && idx != l_index {
-            // Don't add elements of L, unless its the first one
-            continue;
-        }
-        let mut new_col = col.clone();
-        new_col.reorder_rows(rel_mapping);
-        new_matrix.push(new_col);
-    }
-    new_matrix
+) -> impl Iterator<Item = VecColumn> + 'a {
+    df.iter()
+        .zip(g_elements.iter())
+        .enumerate()
+        .filter_map(move |(idx, (col, &in_g))| {
+            if in_g && idx != l_index {
+                None
+            } else {
+                let mut new_col = col.clone();
+                new_col.reorder_rows(rel_mapping);
+                Some(new_col)
+            }
+        })
 }
 
-fn build_dker(
-    dim_decomposition: &RVDecomposition<VecColumn>,
-    mapping: &impl IndexMapping,
-) -> Vec<VecColumn> {
+fn build_dker<'a>(
+    dim_decomposition: &'a RVDecomposition<VecColumn>,
+    mapping: &'a impl IndexMapping,
+) -> impl Iterator<Item = VecColumn> + 'a {
     let rim_cols = dim_decomposition.r.iter();
     let vim_cols = dim_decomposition.v.iter();
     let paired_cols = rim_cols.zip(vim_cols);
-    paired_cols
-        .filter_map(|(r_col, v_col)| {
-            if r_col.pivot().is_none() {
-                // If r_col is zero then v_col stores a cycle
-                // We should add it to dker with the elements of L appearing first
-                let mut new_col = v_col.clone();
-                new_col.reorder_rows(mapping);
-                Some(new_col)
-            } else {
-                // Filter this column out
-                None
-            }
-        })
-        .collect()
+    paired_cols.filter_map(|(r_col, v_col)| {
+        if r_col.pivot().is_none() {
+            // If r_col is zero then v_col stores a cycle
+            // We should add it to dker with the elements of L appearing first
+            let mut new_col = v_col.clone();
+            new_col.reorder_rows(mapping);
+            Some(new_col)
+        } else {
+            // Filter this column out
+            None
+        }
+    })
 }
 
-fn build_dcok(
-    df: &Vec<VecColumn>,
-    dg_decomposition: &RVDecomposition<VecColumn>,
-    g_elements: &Vec<bool>,
-    mapping: &impl IndexMapping,
-) -> Vec<VecColumn> {
-    let mut new_matrix: Vec<VecColumn> = Vec::with_capacity(df.len());
-    for col_idx in 0..df.len() {
+fn build_dcok<'a>(
+    df: &'a Vec<VecColumn>,
+    dg_decomposition: &'a RVDecomposition<VecColumn>,
+    g_elements: &'a Vec<bool>,
+    mapping: &'a impl IndexMapping,
+) -> impl Iterator<Item = VecColumn> + 'a {
+    (0..df.len()).map(|col_idx| {
         let col_in_g = g_elements[col_idx];
         if col_in_g {
             let idx_in_dg = mapping.map(col_idx).unwrap();
@@ -260,17 +255,14 @@ fn build_dcok(
                 let mut next_col = dg_decomposition.v[idx_in_dg].clone();
                 // Convert from L simplices first back to default order
                 next_col.unreorder_rows(mapping);
-                new_matrix.push(next_col);
+                next_col
             } else {
-                let next_col = df[col_idx].clone();
-                new_matrix.push(next_col);
+                df[col_idx].clone()
             }
         } else {
-            let next_col = df[col_idx].clone();
-            new_matrix.push(next_col);
+            df[col_idx].clone()
         }
-    }
-    new_matrix
+    })
 }
 
 pub fn all_decompositions(matrix: Vec<AnnotatedColumn<VecColumn>>) -> DecompositionEnsemble {
@@ -289,39 +281,31 @@ pub fn all_decompositions(matrix: Vec<AnnotatedColumn<VecColumn>>) -> Decomposit
         let thread2 = s.spawn(|| {
             // Decompose Dg
             let dg = build_dg(&df, &g_elements, &l_first_mapping);
-            let decomp_dg = rv_decompose_lock_free(dg.into_iter(), Some(size_of_l));
+            let decomp_dg = rv_decompose_lock_free(dg, Some(size_of_l));
             println!("Decomposed g");
             // Decompose dcok
             let dcok = build_dcok(&df, &decomp_dg, &g_elements, &l_first_mapping);
-            let decompose_dcok = rv_decompose_lock_free(dcok.into_iter(), Some(size_of_k));
+            let decompose_dcok = rv_decompose_lock_free(dcok, Some(size_of_k));
             println!("Decomposed cok");
             (decomp_dg, decompose_dcok)
         });
         let thread3 = s.spawn(|| {
             // Decompose dim
             let dim = build_dim(&df, &l_first_mapping);
-            let decompose_dim = rv_decompose_lock_free(dim.into_iter(), Some(size_of_k));
+            let decompose_dim = rv_decompose_lock_free(dim, Some(size_of_k));
             println!("Decomposed im");
             // Decompose dker
             // TODO: Also need to return mapping from columns of Df to columns of Dker
             let dker = build_dker(&decompose_dim, &l_first_mapping);
-            let decompose_dker = rv_decompose_lock_free(dker.into_iter(), Some(size_of_k));
+            let decompose_dker = rv_decompose_lock_free(dker, Some(size_of_k));
             println!("Decomposed ker");
             let kernel_mapping = build_kernel_mapping(&decompose_dim);
             (decompose_dim, decompose_dker, kernel_mapping)
         });
         let thread4 = s.spawn(|| {
             let (rel_mapping, l_index) = build_rel_mapping(&df, &g_elements, size_of_l, size_of_k);
-            let drel = build_drel(
-                &df,
-                &g_elements,
-                &rel_mapping,
-                l_index,
-                size_of_l,
-                size_of_k,
-            );
-            let decompose_drel =
-                rv_decompose_lock_free(drel.into_iter(), Some(size_of_k - size_of_l + 1));
+            let drel = build_drel(&df, &g_elements, &rel_mapping, l_index);
+            let decompose_drel = rv_decompose_lock_free(drel, Some(size_of_k - size_of_l + 1));
             println!("Decomposed rel");
             (decompose_drel, rel_mapping)
         });
