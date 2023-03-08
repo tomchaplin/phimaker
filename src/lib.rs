@@ -282,30 +282,30 @@ pub fn all_decompositions(matrix: Vec<AnnotatedColumn<VecColumn>>) -> Decomposit
     let (f, (g, cok), (im, ker, kernel_mapping), (rel, rel_mapping)) = thread::scope(|s| {
         let thread1 = s.spawn(|| {
             // Decompose Df
-            let out = rv_decompose(df.iter().cloned());
+            let out = rv_decompose_lock_free(df.iter().cloned(), Some(size_of_k));
             println!("Decomposed f");
             out
         });
         let thread2 = s.spawn(|| {
             // Decompose Dg
             let dg = build_dg(&df, &g_elements, &l_first_mapping);
-            let decomp_dg = rv_decompose(dg.into_iter());
+            let decomp_dg = rv_decompose_lock_free(dg.into_iter(), Some(size_of_l));
             println!("Decomposed g");
             // Decompose dcok
             let dcok = build_dcok(&df, &decomp_dg, &g_elements, &l_first_mapping);
-            let decompose_dcok = rv_decompose(dcok.into_iter());
+            let decompose_dcok = rv_decompose_lock_free(dcok.into_iter(), Some(size_of_k));
             println!("Decomposed cok");
             (decomp_dg, decompose_dcok)
         });
         let thread3 = s.spawn(|| {
             // Decompose dim
             let dim = build_dim(&df, &l_first_mapping);
-            let decompose_dim = rv_decompose(dim.into_iter());
+            let decompose_dim = rv_decompose_lock_free(dim.into_iter(), Some(size_of_k));
             println!("Decomposed im");
             // Decompose dker
             // TODO: Also need to return mapping from columns of Df to columns of Dker
             let dker = build_dker(&decompose_dim, &l_first_mapping);
-            let decompose_dker = rv_decompose(dker.into_iter());
+            let decompose_dker = rv_decompose_lock_free(dker.into_iter(), Some(size_of_k));
             println!("Decomposed ker");
             let kernel_mapping = build_kernel_mapping(&decompose_dim);
             (decompose_dim, decompose_dker, kernel_mapping)
@@ -320,7 +320,8 @@ pub fn all_decompositions(matrix: Vec<AnnotatedColumn<VecColumn>>) -> Decomposit
                 size_of_l,
                 size_of_k,
             );
-            let decompose_drel = rv_decompose(drel.into_iter());
+            let decompose_drel =
+                rv_decompose_lock_free(drel.into_iter(), Some(size_of_k - size_of_l + 1));
             println!("Decomposed rel");
             (decompose_drel, rel_mapping)
         });
@@ -545,31 +546,10 @@ fn compute_ensemble(matrix: Vec<(bool, Vec<usize>)>) -> DiagramEnsemble {
     let decomps = all_decompositions(annotated_matrix);
     decomps.all_diagrams()
 }
-
-#[pyfunction]
-fn py_rv(matrix: Vec<Vec<usize>>) -> PersistenceDiagram {
-    let decomp = rv_decompose(matrix.into_iter().map(|col| VecColumn { internal: col }));
-    decomp.diagram()
-}
-
-#[pyfunction]
-fn py_rv_lockfree(matrix: Vec<Vec<usize>>) -> PersistenceDiagram {
-    let decomp = rv_decompose_lock_free(
-        matrix
-            .into_iter()
-            .map(|col| VecColumn { internal: col })
-            .collect::<Vec<_>>()
-            .into_iter(),
-    );
-    decomp.diagram()
-}
-
 /// A Python module implemented in Rust.
 #[pymodule]
 fn phimaker(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compute_ensemble, m)?)?;
-    m.add_function(wrap_pyfunction!(py_rv, m)?)?;
-    m.add_function(wrap_pyfunction!(py_rv_lockfree, m)?)?;
     Ok(())
 }
 

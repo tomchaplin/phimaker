@@ -12,7 +12,7 @@ import seaborn as sns
 import pandas as pd
 import random
 
-N = 50
+N = 200
 N_nice = 20
 max_diagram_dim = 1
 jitter_strength = 0.05
