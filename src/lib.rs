@@ -108,7 +108,8 @@ fn extract_columns<'a>(
         .iter()
         .zip(extract.iter())
         .filter(|(_, in_g)| **in_g)
-        .map(|(col, _)| col.clone())
+        .map(|(col, _)| col)
+        .cloned()
 }
 
 fn build_dg<'a>(
@@ -116,7 +117,7 @@ fn build_dg<'a>(
     g_elements: &'a Vec<bool>,
     l_first_mapping: &'a VectorMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
-    extract_columns(df, g_elements).into_iter().map(|mut col| {
+    extract_columns(df, g_elements).map(|mut col| {
         col.reorder_rows(l_first_mapping);
         col
     })
