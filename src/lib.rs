@@ -266,6 +266,7 @@ fn build_dcok<'a>(
 }
 
 pub fn all_decompositions(matrix: Vec<AnnotatedColumn<VecColumn>>) -> DecompositionEnsemble {
+    // TODO: Clean this up so we aren't collecting the matrix again.
     let l_first_mapping = compute_l_first_mapping(&matrix);
     let g_elements: Vec<bool> = matrix.iter().map(|anncol| anncol.in_g).collect();
     let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
