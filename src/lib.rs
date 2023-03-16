@@ -268,13 +268,14 @@ fn build_dcok<'a>(
 
 fn run_decomposition(
     matrix: impl Iterator<Item = VecColumn>,
-    column_height: Option<usize>,
-    options: LoPhatOptions,
+    new_column_height: Option<usize>,
+    mut options: LoPhatOptions,
 ) -> RVDecomposition<VecColumn> {
+    options.column_height = new_column_height;
     if options.num_threads == 1 {
         rv_decompose(matrix, options)
     } else {
-        rv_decompose_lock_free(matrix, column_height, options)
+        rv_decompose_lock_free(matrix, options)
     }
 }
 
@@ -284,6 +285,7 @@ pub fn all_decompositions(
 ) -> DecompositionEnsemble {
     let options = LoPhatOptions {
         maintain_v: true,
+        column_height: None,
         num_threads,
     };
     // TODO: Clean this up so we aren't collecting the matrix again.
