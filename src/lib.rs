@@ -1,6 +1,9 @@
 use std::thread;
 
-use lophat::*;
+use lophat::{
+    rv_decompose, Column, DiagramReadOff, LoPhatOptions, PersistenceDiagram, RVDecomposition,
+    VecColumn,
+};
 
 use pyo3::prelude::*;
 
@@ -272,11 +275,7 @@ fn run_decomposition(
     mut options: LoPhatOptions,
 ) -> RVDecomposition<VecColumn> {
     options.column_height = new_column_height;
-    if options.num_threads == 1 {
-        rv_decompose(matrix, options)
-    } else {
-        rv_decompose_lock_free(matrix, options)
-    }
+    rv_decompose(matrix, options)
 }
 
 pub fn all_decompositions(
@@ -287,6 +286,7 @@ pub fn all_decompositions(
         maintain_v: true,
         column_height: None,
         num_threads,
+        min_chunk_len: 1000,
     };
     // TODO: Clean this up so we aren't collecting the matrix again.
     let l_first_mapping = compute_l_first_mapping(&matrix);
