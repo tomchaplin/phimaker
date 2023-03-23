@@ -286,7 +286,7 @@ pub fn all_decompositions(
         maintain_v: true,
         column_height: None,
         num_threads,
-        min_chunk_len: 1000,
+        max_chunk_len: 1000,
     };
     // TODO: Clean this up so we aren't collecting the matrix again.
     let l_first_mapping = compute_l_first_mapping(&matrix);
