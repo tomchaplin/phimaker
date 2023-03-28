@@ -361,9 +361,9 @@ pub fn all_decompositions(
     // Step 1 : Anti-transpose
     print_annotated_matrix(&matrix, "pre-at");
     let mut matrix = anti_transpose(&matrix);
-    print_annotated_matrix(&matrix, "post-at");
     // Step 2 : Apply the correct annotations
     apply_annotations(&mut matrix, &g_elements);
+    print_annotated_matrix(&matrix, "post-at");
     // Step 3: Run decompositions
     let l_first_mapping = compute_l_first_mapping(&matrix);
     let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
@@ -401,6 +401,7 @@ pub fn all_decompositions(
             let dim: Vec<_> = build_dim(&df, &l_first_mapping).collect();
             let decompose_dim = rv_decompose(dim.into_iter(), &options_im);
             println!("Decomposed im");
+            print_matrix(&decompose_dim.r, "im_r");
             // Decompose dker
             let mut options_ker = base_options.clone();
             options_ker.clearing = false;
@@ -555,6 +556,7 @@ impl DecompositionEnsemble {
                 let g_idx = self.l_first_mapping.map(idx).unwrap();
                 let pos_in_g = self.g.r[g_idx].is_cycle();
                 if pos_in_g {
+                    println!("Image birth at idx {}", idx);
                     dgm.unpaired.insert(idx);
                     continue;
                 }
