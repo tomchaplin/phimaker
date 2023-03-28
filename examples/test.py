@@ -6,20 +6,20 @@ sys.path.append(os.getcwd())
 from phimaker import compute_ensemble
 
 matrix = [
-    (True, []),
-    (True, []),
-    (True, []),
-    (False, []),
-    (True, [0, 1]),
-    (True, [0, 2]),
-    (True, [1, 2]),
-    (False, [0, 3]),
-    (False, [1, 3]),
-    (False, [2, 3]),
-    (False, [4, 7, 8]),
-    (False, [5, 7, 9]),
-    (False, [6, 8, 9]),
-    (True, [4, 5, 6]),
+    (True, 0, []),
+    (True, 0, []),
+    (True, 0, []),
+    (False, 0, []),
+    (True, 1, [0, 1]),
+    (True, 1, [0, 2]),
+    (True, 1, [1, 2]),
+    (False, 1, [0, 3]),
+    (False, 1, [1, 3]),
+    (False, 1, [2, 3]),
+    (False, 2, [4, 7, 8]),
+    (False, 2, [5, 7, 9]),
+    (False, 2, [6, 8, 9]),
+    (True, 2, [4, 5, 6]),
 ]
 
 dgms = compute_ensemble(matrix)

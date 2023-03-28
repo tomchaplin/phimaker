@@ -12,7 +12,7 @@ import seaborn as sns
 import pandas as pd
 import random
 
-N = 200
+N = 50
 N_nice = 20
 max_diagram_dim = 1
 jitter_strength = 0.05
@@ -63,7 +63,7 @@ matrix = []
 for idx, f_val in enumerate(s_tree2.get_filtration()):
     smplx = f_val[0]
     sparse_bdry = [int(face_idx) for _, face_idx in s_tree2.get_boundaries(smplx)]
-    annotated_col = (is_nice_smplx(smplx), sorted(sparse_bdry))
+    annotated_col = (is_nice_smplx(smplx), len(smplx), sorted(sparse_bdry))
     matrix.append(annotated_col)
 # Report
 print("Got matrix")

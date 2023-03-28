@@ -1,8 +1,8 @@
 use std::thread;
 
 use lophat::{
-    rv_decompose, Column, DiagramReadOff, LoPhatOptions, PersistenceDiagram, RVDecomposition,
-    VecColumn,
+    anti_transpose, anti_transpose_diagram, rv_decompose, Column, DiagramReadOff, LoPhatOptions,
+    PersistenceDiagram, RVDecomposition, VecColumn,
 };
 
 use pyo3::prelude::*;
@@ -12,32 +12,81 @@ pub trait ReordorableColumn: Send + Sync + Clone + Default {
     fn unreorder_rows(&mut self, mapping: &impl IndexMapping);
 }
 #[derive(Debug, Default, Clone)]
-pub struct AnnotatedColumn<T> {
-    pub col: T,
+pub struct AnnotatedColumn<C> {
+    pub col: C,
     pub in_g: bool,
+}
+
+impl<C> Column for AnnotatedColumn<C>
+where
+    C: Column,
+{
+    fn pivot(&self) -> Option<usize> {
+        self.col.pivot()
+    }
+
+    fn add_col(&mut self, other: &Self) {
+        self.col.add_col(&other.col)
+    }
+
+    fn add_entry(&mut self, entry: usize) {
+        self.col.add_entry(entry)
+    }
+
+    fn has_entry(&self, entry: &usize) -> bool {
+        self.col.has_entry(entry)
+    }
+
+    fn dimension(&self) -> usize {
+        self.col.dimension()
+    }
+
+    fn new_with_dimension(dimension: usize) -> Self {
+        let col = C::new_with_dimension(dimension);
+        Self { col, in_g: false }
+    }
+
+    fn with_dimension(mut self, dimension: usize) -> Self {
+        self.col = self.col.with_dimension(dimension);
+        self
+    }
+
+    fn boundary(&self) -> &Vec<usize> {
+        self.col.boundary()
+    }
 }
 
 impl ReordorableColumn for VecColumn {
     // TODO: Reimplement so that this happens in-place?
     fn reorder_rows(&mut self, mapping: &impl IndexMapping) {
         let mut new_col: Vec<usize> = self
-            .internal
+            .boundary
             .iter()
             .filter_map(|&row_idx| mapping.map(row_idx))
             .collect();
         new_col.sort();
-        self.internal = new_col;
+        self.boundary = new_col;
     }
 
     // TODO: Reimplement so that this happens in-place?
     fn unreorder_rows(&mut self, mapping: &impl IndexMapping) {
         let mut new_col: Vec<usize> = self
-            .internal
+            .boundary
             .iter()
             .filter_map(|&row_idx| mapping.inverse_map(row_idx))
             .collect();
         new_col.sort();
-        self.internal = new_col;
+        self.boundary = new_col;
+    }
+}
+
+impl ReordorableColumn for AnnotatedColumn<VecColumn> {
+    fn reorder_rows(&mut self, mapping: &impl IndexMapping) {
+        self.col.reorder_rows(mapping);
+    }
+
+    fn unreorder_rows(&mut self, mapping: &impl IndexMapping) {
+        self.col.unreorder_rows(mapping);
     }
 }
 
@@ -115,12 +164,25 @@ fn extract_columns<'a>(
         .cloned()
 }
 
+fn extract_rows(col: &mut VecColumn, g_elements: &Vec<bool>) {
+    let new_bdry: Vec<_> = col
+        .boundary
+        .iter()
+        .filter(|&row_idx| g_elements[*row_idx])
+        .cloned()
+        .collect();
+    col.boundary = new_bdry;
+}
+
 fn build_dg<'a>(
     df: &'a Vec<VecColumn>,
     g_elements: &'a Vec<bool>,
     l_first_mapping: &'a VectorMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
     extract_columns(df, g_elements).map(|mut col| {
+        // Because some none-g elements might be cofaces of g_elements
+        // Need to extract columns too
+        extract_rows(&mut col, g_elements);
         col.reorder_rows(l_first_mapping);
         col
     })
@@ -153,8 +215,6 @@ fn build_kernel_mapping(dim_decomposition: &RVDecomposition<VecColumn>) -> Vecto
     }
 }
 
-// WARNING: This functions makes the following assumption:
-// The 0-cells are precisely the cells with empty boundaries
 fn build_rel_mapping(
     matrix: &Vec<VecColumn>,
     g_elements: &Vec<bool>,
@@ -176,7 +236,7 @@ fn build_rel_mapping(
                 inverse_mapping[counter] = idx;
                 counter += 1;
             }
-            if r_col.internal.len() == 0 {
+            if r_col.dimension() == 0 {
                 // This is a vertex in L, should get_mapped to l_index
                 idx_list.push(l_index)
             } else {
@@ -218,6 +278,10 @@ fn build_drel<'a>(
             } else {
                 let mut new_col = col.clone();
                 new_col.reorder_rows(rel_mapping);
+                // This should only happen once and L should get idenitifed to a vertex
+                if in_g {
+                    new_col = new_col.with_dimension(0);
+                }
                 Some(new_col)
             }
         })
@@ -269,66 +333,89 @@ fn build_dcok<'a>(
     })
 }
 
-fn run_decomposition(
-    matrix: impl Iterator<Item = VecColumn>,
-    new_column_height: Option<usize>,
-    mut options: LoPhatOptions,
-) -> RVDecomposition<VecColumn> {
-    options.column_height = new_column_height;
-    rv_decompose(matrix, options)
+fn apply_annotations(matrix: &mut Vec<AnnotatedColumn<VecColumn>>, g_elements: &Vec<bool>) {
+    matrix
+        .iter_mut()
+        .zip(g_elements.iter())
+        .for_each(|(col, &in_g)| {
+            col.in_g = in_g;
+        })
 }
 
+// TODO: Remove all anti-tranpose stuff internally
+// TODO: Replace with anti-transpose at start of function
 pub fn all_decompositions(
     matrix: Vec<AnnotatedColumn<VecColumn>>,
     num_threads: usize,
 ) -> DecompositionEnsemble {
-    let options = LoPhatOptions {
-        maintain_v: true,
+    let base_options = LoPhatOptions {
+        maintain_v: false, // Only turn on maintain_v on threads where we need it
         column_height: None,
         num_threads,
-        max_chunk_len: 1000,
+        min_chunk_len: 10000,
+        clearing: true,
     };
-    // TODO: Clean this up so we aren't collecting the matrix again.
+    // Pull off which elements are in g
+    // Reverse to work correctly with anti-transpose
+    let g_elements: Vec<bool> = matrix.iter().rev().map(|anncol| anncol.in_g).collect();
+    // Step 1 : Anti-transpose
+    print_annotated_matrix(&matrix, "pre-at");
+    let mut matrix = anti_transpose(&matrix);
+    print_annotated_matrix(&matrix, "post-at");
+    // Step 2 : Apply the correct annotations
+    apply_annotations(&mut matrix, &g_elements);
+    // Step 3: Run decompositions
     let l_first_mapping = compute_l_first_mapping(&matrix);
-    let g_elements: Vec<bool> = matrix.iter().map(|anncol| anncol.in_g).collect();
     let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
     let size_of_k = matrix.len();
     let df: Vec<VecColumn> = matrix.into_iter().map(|anncol| anncol.col).collect();
     let (f, (g, cok), (im, ker, kernel_mapping), (rel, rel_mapping)) = thread::scope(|s| {
         let thread1 = s.spawn(|| {
             // Decompose Df
-            let out = run_decomposition(df.iter().cloned(), Some(size_of_k), options);
+            let options_f = base_options.clone();
+            let decomp_f = rv_decompose(df.iter().cloned(), &options_f);
             println!("Decomposed f");
-            out
+            decomp_f
         });
         let thread2 = s.spawn(|| {
             // Decompose Dg
-            let dg = build_dg(&df, &g_elements, &l_first_mapping);
-            let decomp_dg = run_decomposition(dg, Some(size_of_l), options);
+            let mut options_g = base_options.clone();
+            options_g.maintain_v = true;
+            let dg: Vec<_> = build_dg(&df, &g_elements, &l_first_mapping).collect();
+            print_matrix(&dg, "g");
+            let decomp_dg = rv_decompose(dg.into_iter(), &options_g);
             println!("Decomposed g");
             // Decompose dcok
+            let mut options_cok = base_options.clone();
+            options_cok.clearing = false;
             let dcok = build_dcok(&df, &decomp_dg, &g_elements, &l_first_mapping);
-            let decompose_dcok = run_decomposition(dcok, Some(size_of_k), options);
+            let decompose_dcok = rv_decompose(dcok, &options_cok);
             println!("Decomposed cok");
             (decomp_dg, decompose_dcok)
         });
         let thread3 = s.spawn(|| {
             // Decompose dim
-            let dim = build_dim(&df, &l_first_mapping);
-            let decompose_dim = run_decomposition(dim, Some(size_of_k), options);
+            let mut options_im = base_options.clone();
+            options_im.maintain_v = true;
+            options_im.clearing = false;
+            let dim: Vec<_> = build_dim(&df, &l_first_mapping).collect();
+            let decompose_dim = rv_decompose(dim.into_iter(), &options_im);
             println!("Decomposed im");
             // Decompose dker
-            // TODO: Also need to return mapping from columns of Df to columns of Dker
+            let mut options_ker = base_options.clone();
+            options_ker.clearing = false;
+            options_ker.column_height = Some(size_of_k);
             let dker = build_dker(&decompose_dim, &l_first_mapping);
-            let decompose_dker = run_decomposition(dker, Some(size_of_k), options);
+            let decompose_dker = rv_decompose(dker, &options_ker);
             println!("Decomposed ker");
             let kernel_mapping = build_kernel_mapping(&decompose_dim);
             (decompose_dim, decompose_dker, kernel_mapping)
         });
         let thread4 = s.spawn(|| {
             let (rel_mapping, l_index) = build_rel_mapping(&df, &g_elements, size_of_l, size_of_k);
+            let options_rel = base_options.clone();
             let drel = build_drel(&df, &g_elements, &rel_mapping, l_index);
-            let decompose_drel = run_decomposition(drel, Some(size_of_k - size_of_l + 1), options);
+            let decompose_drel = rv_decompose(drel, &options_rel);
             println!("Decomposed rel");
             (decompose_drel, rel_mapping)
         });
@@ -355,30 +442,16 @@ pub fn all_decompositions(
     }
 }
 
-fn print_matrix(matrix: &Vec<VecColumn>) {
+fn print_matrix(matrix: &Vec<VecColumn>, prefix: &str) {
     for col in matrix {
-        println!("{:?}", col.internal);
+        println!("{} --> {:?}", prefix, col);
     }
 }
 
-pub fn print_decomp(decomp: &RVDecomposition<VecColumn>) {
-    println!("R:");
-    print_matrix(&decomp.r);
-    println!("V:");
-    print_matrix(&decomp.v.as_ref().unwrap());
-}
-
-pub fn print_ensemble(ensemble: &DecompositionEnsemble) {
-    println!("Df:");
-    print_decomp(&ensemble.f);
-    println!("Dg:");
-    print_decomp(&ensemble.g);
-    println!("Dim:");
-    print_decomp(&ensemble.im);
-    println!("Dker:");
-    print_decomp(&ensemble.ker);
-    println!("Dcok:");
-    print_decomp(&ensemble.cok);
+fn print_annotated_matrix(matrix: &Vec<AnnotatedColumn<VecColumn>>, prefix: &str) {
+    for col in matrix {
+        println!("{} --> {:?}", prefix, col);
+    }
 }
 
 fn unreorder_idxs(diagram: &mut PersistenceDiagram, mapping: &impl IndexMapping) {
@@ -419,12 +492,16 @@ struct DiagramEnsemble {
 }
 
 impl DecompositionEnsemble {
+    fn neg_in_f(&self, idx: usize) -> bool {
+        self.f.r[idx].is_boundary()
+    }
+
     fn is_kernel_birth(&self, idx: usize) -> bool {
         let in_l = self.g_elements[idx];
         if in_l {
             return false;
         }
-        let negative_in_f = self.f.r[idx].pivot().is_some();
+        let negative_in_f = self.neg_in_f(idx);
         if !negative_in_f {
             return false;
         }
@@ -441,11 +518,11 @@ impl DecompositionEnsemble {
             return false;
         }
         let g_index = self.l_first_mapping.map(idx).unwrap();
-        let negative_in_g = self.g.r[g_index].pivot().is_some();
+        let negative_in_g = self.g.r[g_index].is_boundary();
         if !negative_in_g {
             return false;
         }
-        let negative_in_f = self.f.r[idx].pivot().is_some();
+        let negative_in_f = self.neg_in_f(idx);
         if negative_in_f {
             return false;
         }
@@ -476,13 +553,13 @@ impl DecompositionEnsemble {
         for idx in 0..self.size_of_k {
             if self.g_elements[idx] {
                 let g_idx = self.l_first_mapping.map(idx).unwrap();
-                let pos_in_g = self.g.r[g_idx].pivot().is_none();
+                let pos_in_g = self.g.r[g_idx].is_cycle();
                 if pos_in_g {
                     dgm.unpaired.insert(idx);
                     continue;
                 }
             }
-            let neg_in_f = self.f.r[idx].pivot().is_some();
+            let neg_in_f = self.neg_in_f(idx);
             if neg_in_f {
                 let lowest_in_rim = self.im.r[idx].pivot().unwrap();
                 let lowest_rim_in_l = lowest_in_rim < self.size_of_l;
@@ -500,14 +577,14 @@ impl DecompositionEnsemble {
     fn cokernel_diagram(&self) -> PersistenceDiagram {
         let mut dgm = PersistenceDiagram::default();
         for idx in 0..self.size_of_k {
-            let pos_in_f = self.f.r[idx].pivot().is_none();
+            let pos_in_f = !self.neg_in_f(idx);
             let g_idx = self.l_first_mapping.map(idx).unwrap();
-            let not_in_l_or_neg_in_g = (!self.g_elements[idx]) || self.g.r[g_idx].pivot().is_some();
+            let not_in_l_or_neg_in_g = (!self.g_elements[idx]) || self.g.r[g_idx].is_boundary();
             if pos_in_f && not_in_l_or_neg_in_g {
                 dgm.unpaired.insert(idx);
                 continue;
             }
-            let neg_in_f = self.f.r[idx].pivot().is_some();
+            let neg_in_f = self.neg_in_f(idx);
             if !neg_in_f {
                 continue;
             }
@@ -522,7 +599,7 @@ impl DecompositionEnsemble {
     }
 
     fn all_diagrams(&self) -> DiagramEnsemble {
-        DiagramEnsemble {
+        let before_at = DiagramEnsemble {
             f: self.f.diagram(),
             g: {
                 let mut dgm = self.g.diagram();
@@ -537,18 +614,30 @@ impl DecompositionEnsemble {
             im: self.image_diagram(),
             ker: self.kernel_diagram(),
             cok: self.cokernel_diagram(),
+        };
+        print_matrix(&self.ker.r, "ker_r");
+        DiagramEnsemble {
+            f: anti_transpose_diagram(before_at.f, self.size_of_k),
+            g: anti_transpose_diagram(before_at.g, self.size_of_k),
+            im: anti_transpose_diagram(before_at.im, self.size_of_k),
+            ker: anti_transpose_diagram(before_at.ker, self.size_of_k),
+            cok: anti_transpose_diagram(before_at.cok, self.size_of_k),
+            rel: anti_transpose_diagram(before_at.rel, self.size_of_k),
         }
     }
 }
 
 #[pyfunction]
 #[pyo3(signature = (matrix, num_threads=0))]
-fn compute_ensemble(matrix: Vec<(bool, Vec<usize>)>, num_threads: usize) -> DiagramEnsemble {
+fn compute_ensemble(matrix: Vec<(bool, usize, Vec<usize>)>, num_threads: usize) -> DiagramEnsemble {
     let annotated_matrix = matrix
         .into_iter()
-        .map(|(in_g, bdry)| AnnotatedColumn {
+        .map(|(in_g, dimension, bdry)| AnnotatedColumn {
             in_g,
-            col: VecColumn { internal: bdry },
+            col: VecColumn {
+                dimension,
+                boundary: bdry,
+            },
         })
         .collect();
     let decomps = all_decompositions(annotated_matrix, num_threads);
@@ -575,17 +664,17 @@ mod tests {
             .map(|l| {
                 let l = l.unwrap();
                 let l_vec: Vec<usize> = l.split(",").map(|c| c.parse().unwrap()).collect();
-                (l_vec[0] == 1, l_vec)
+                (l_vec[0] == 1, l_vec[1], l_vec)
             })
-            .map(|(in_g, l_vec)| AnnotatedColumn {
+            .map(|(in_g, dimension, l_vec)| AnnotatedColumn {
                 col: VecColumn {
-                    internal: l_vec[1..].to_owned(),
+                    dimension,
+                    boundary: l_vec[2..].to_owned(),
                 },
                 in_g,
             })
             .collect();
         let ensemble = all_decompositions(boundary_matrix, 0);
-        print_ensemble(&ensemble);
         println!("{:?}", ensemble.all_diagrams());
         assert_eq!(true, true)
     }
