@@ -1,1 +1,2 @@
-import washboard_interface as washboard
+from phimaker.phimaker import compute_ensemble
+from phimaker.washboard_interface import WashboardServer, build_washboard_object
