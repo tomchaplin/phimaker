@@ -1,0 +1,3 @@
+[submodule "phimaker/washboard"]
+	path = phimaker/washboard
+	url = https://github.com/tomchaplin/washboard.git
