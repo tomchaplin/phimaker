@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import random
 import json
 
-N = 50
+N = 100
 N_nice = 20
 max_diagram_dim = 1
 jitter_strength = 0.05
@@ -164,11 +164,18 @@ def build_washboard_object(
             relations[key] = these_relations
         return relations
 
+    def replace_with_f_times(all_pairings):
+        for _, diagrams in all_pairings.items():
+            for diagram in diagrams:
+                for pairing_relations in diagram:
+                    pairing = pairing_relations[0]
+                    coords = [entrance_times[idx] for idx in pairing]
+                    pairing_relations[0] = coords
+        return all_pairings
+
     obj = {}
     obj["max_dim"] = max_diagram_dim
     obj["pseudo_inf"] = truncation * 1.05
-    obj["dimensions"] = dimensions
-    obj["filtration"] = entrance_times
     pairings = {
         "codomain": make_pairing_obj(dgms.f),
         "domain": make_pairing_obj(dgms.g),
@@ -181,7 +188,7 @@ def build_washboard_object(
         pairings[key] = add_empty_relations(pairings, key)
     for key in pairings.keys():
         pairings[key] = fill_relations(pairings, key)
-    obj["pairings"] = pairings
+    obj["pairings"] = replace_with_f_times(pairings)
     return obj
 
 
