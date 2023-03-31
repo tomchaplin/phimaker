@@ -16,4 +16,5 @@ dependencies = [
 
 [tool.maturin]
 # Include additional files
-include = ["phimaker/washboard/dist/index.html"]
+include = ["python/phimaker/washboard/dist/index.html"]
+python-source = "python"
