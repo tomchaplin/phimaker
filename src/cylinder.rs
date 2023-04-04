@@ -60,14 +60,13 @@ pub fn build_cylinder(
          y: &(usize, f64, CylinderColType, VecColumn)| { (x.1, x.2) <= (y.1, y.2) };
 
     let domain_iter = domain_matrix
-        .iter()
+        .clone()
+        .into_iter()
         .enumerate()
         .map(|(idx, (time, col))| {
             // Make two copies of each domain column
-            (idx, *time, CylinderColType::Domain, col.clone())
-        })
-        .collect::<Vec<_>>()
-        .into_iter();
+            (idx, time, CylinderColType::Domain, col.clone())
+        });
 
     let domain_shift_iter = domain_matrix
         .into_iter()
