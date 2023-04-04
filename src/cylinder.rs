@@ -55,32 +55,36 @@ pub fn build_cylinder(
     let mut times: Vec<f64> = Vec::with_capacity(cylinder_size);
 
     // Comapre times then compare cell type
-    let cell_ordering = |x: &(usize, f64, CylinderColType, VecColumn),
-                         y: &(usize, f64, CylinderColType, VecColumn)| {
-        (x.1, x.2)
-            .partial_cmp(&(y.1, y.2))
-            .expect("Could not compare entrance times")
-    };
+    let cell_ordering =
+        |x: &(usize, f64, CylinderColType, VecColumn),
+         y: &(usize, f64, CylinderColType, VecColumn)| { (x.1, x.2) <= (y.1, y.2) };
 
     let domain_iter = domain_matrix
+        .iter()
+        .enumerate()
+        .map(|(idx, (time, col))| {
+            // Make two copies of each domain column
+            (idx, *time, CylinderColType::Domain, col.clone())
+        })
+        .collect::<Vec<_>>()
+        .into_iter();
+
+    let domain_shift_iter = domain_matrix
         .into_iter()
         .enumerate()
-        .flat_map(|(idx, (time, col))| {
+        .map(|(idx, (time, col))| {
             // Make two copies of each domain column
-            vec![
-                (idx, time, CylinderColType::Domain, col.clone()),
-                (idx, time, CylinderColType::DomainShifted, col),
-            ]
-        })
-        .sorted_by(cell_ordering);
+            (idx, time, CylinderColType::DomainShifted, col)
+        });
 
     let codomain_iter = codomain_matrix
         .into_iter()
         .enumerate()
         .map(|(idx, (time, col))| (idx, time, CylinderColType::Codomain, col));
 
-    let cylinder_iter =
-        domain_iter.merge_by(codomain_iter, |x, y| cell_ordering(x, y) == Ordering::Less);
+    let cylinder_iter = domain_iter
+        .merge_by(codomain_iter, cell_ordering)
+        .merge_by(domain_shift_iter, cell_ordering);
 
     for (cylinder_idx, (original_idx, time, col_cell_type, col)) in cylinder_iter.enumerate() {
         // Build column
