@@ -1,2 +1,2 @@
-from .phimaker import compute_ensemble
+from .phimaker import compute_ensemble, compute_ensemble_cylinder
 from ._washboard_interface import WashboardServer, build_washboard_object

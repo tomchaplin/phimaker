@@ -1,3 +1,5 @@
+use pyo3::prelude::*;
+
 use std::cmp::Ordering;
 
 use itertools::Itertools;
@@ -33,10 +35,15 @@ impl Ord for CylinderColType {
     }
 }
 
+#[pyclass]
 pub struct CylinderMetadata {
+    #[pyo3(get)]
     pub times: Vec<f64>,
+    #[pyo3(get)]
     pub domain: Vec<usize>,
+    #[pyo3(get)]
     pub codomain: Vec<usize>,
+    #[pyo3(get)]
     pub domain_shift: Vec<usize>,
 }
 

@@ -5,6 +5,7 @@ pub mod ensemble;
 pub mod indexing;
 pub mod utils;
 
+use cylinder::{build_cylinder, CylinderMetadata};
 use diagrams::DiagramEnsemble;
 use ensemble::all_decompositions;
 use indexing::AnnotatedColumn;
@@ -25,10 +26,34 @@ fn compute_ensemble(matrix: Vec<(bool, Vec<usize>)>, num_threads: usize) -> Diag
     let decomps = all_decompositions(annotated_matrix, num_threads);
     decomps.all_diagrams()
 }
+
+#[pyfunction]
+#[pyo3(signature = (domain_matrix, codomain_matrix, map, num_threads=0))]
+fn compute_ensemble_cylinder(
+    domain_matrix: Vec<(f64, Vec<usize>)>,
+    codomain_matrix: Vec<(f64, Vec<usize>)>,
+    map: Vec<Vec<usize>>,
+    num_threads: usize,
+) -> (DiagramEnsemble, CylinderMetadata) {
+    let domain_matrix = domain_matrix
+        .into_iter()
+        .map(|(time, bdry)| (time, bdry.into()))
+        .collect();
+    let codomain_matrix = codomain_matrix
+        .into_iter()
+        .map(|(time, bdry)| (time, bdry.into()))
+        .collect();
+    let map = map.into_iter().map(VecColumn::from).collect();
+    let (cylinder, metadata) = build_cylinder(domain_matrix, codomain_matrix, map);
+    let decomps = all_decompositions(cylinder, num_threads);
+    (decomps.all_diagrams(), metadata)
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn phimaker(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compute_ensemble, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_ensemble_cylinder, m)?)?;
     Ok(())
 }
 
