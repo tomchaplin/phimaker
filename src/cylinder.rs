@@ -137,7 +137,7 @@ pub fn build_cylinder(
                 // Weird column
                 let domain_part = vec![domain_idxs
                     .get(original_idx)
-                    .expect("Map should have one columns per column of domain matrix")]
+                    .expect("Map should have one column per column of domain matrix")]
                 .into_iter()
                 .copied();
                 let codomain_part = map
@@ -147,7 +147,7 @@ pub fn build_cylinder(
                     .iter()
                     .map(|row_idx|
                         codomain_idxs.get(*row_idx)
-                        .expect("Non-zero indices of map columns should index into columns of codomain matrix")
+                        .expect("Map must be compatibile with both filtrations i.e. entrance time of f(c) <= entrance time of c")
                     )
                     .copied();
                 let domain_shift_part = col
