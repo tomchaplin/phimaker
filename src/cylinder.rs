@@ -35,15 +35,11 @@ impl Ord for CylinderColType {
     }
 }
 
-#[pyclass]
+#[pyclass(get_all)]
 pub struct CylinderMetadata {
-    #[pyo3(get)]
     pub times: Vec<f64>,
-    #[pyo3(get)]
     pub domain: Vec<usize>,
-    #[pyo3(get)]
     pub codomain: Vec<usize>,
-    #[pyo3(get)]
     pub domain_shift: Vec<usize>,
 }
 

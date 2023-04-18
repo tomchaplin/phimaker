@@ -76,7 +76,6 @@ pub fn all_decompositions(
             let decompose_dim = run_decomposition(dim, Some(size_of_k), options.clone());
             println!("Decomposed im");
             // Decompose dker
-            // TODO: Also need to return mapping from columns of Df to columns of Dker
             let dker = build_dker(&decompose_dim, &l_first_mapping);
             let decompose_dker = run_decomposition(dker, Some(size_of_k), options.clone());
             println!("Decomposed ker");

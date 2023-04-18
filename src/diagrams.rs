@@ -6,20 +6,14 @@ use crate::{
     indexing::{unreorder_idxs, IndexMapping},
 };
 
-#[pyclass]
+#[pyclass(get_all)]
 #[derive(Debug, Clone)]
 pub struct DiagramEnsemble {
-    #[pyo3(get)]
     pub f: PersistenceDiagram,
-    #[pyo3(get)]
     pub g: PersistenceDiagram,
-    #[pyo3(get)]
     pub im: PersistenceDiagram,
-    #[pyo3(get)]
     pub ker: PersistenceDiagram,
-    #[pyo3(get)]
     pub cok: PersistenceDiagram,
-    #[pyo3(get)]
     pub rel: PersistenceDiagram,
 }
 
