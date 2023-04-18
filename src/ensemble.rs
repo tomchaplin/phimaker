@@ -1,6 +1,6 @@
 use std::thread;
 
-use lophat::{rv_decompose, LoPhatOptions, RVDecomposition, VecColumn};
+use lophat::{anti_transpose, rv_decompose, LoPhatOptions, RVDecomposition, VecColumn};
 
 use crate::{
     builders::{build_dcok, build_dg, build_dim, build_dker, build_drel},
@@ -26,67 +26,81 @@ pub struct DecompositionEnsemble {
     pub size_of_k: usize,
 }
 
-fn run_decomposition(
-    matrix: impl Iterator<Item = VecColumn>,
-    new_column_height: Option<usize>,
-    mut options: LoPhatOptions,
-) -> RVDecomposition<VecColumn> {
-    options.column_height = new_column_height;
-    rv_decompose(matrix, &options)
-}
-
 pub fn all_decompositions(
     matrix: Vec<AnnotatedColumn<VecColumn>>,
     num_threads: usize,
 ) -> DecompositionEnsemble {
-    let options = LoPhatOptions {
-        maintain_v: true,
-        column_height: None,
+    let base_options = LoPhatOptions {
+        maintain_v: false,   // Only turn on maintain_v on threads where we need it
+        column_height: None, // Assume square unless told otherwise
         num_threads,
-        min_chunk_len: 1000,
-        clearing: false,
+        min_chunk_len: 10000,
+        clearing: true, // Clear whenever we can
     };
-    // TODO: Clean this up so we aren't collecting the matrix again.
+
     let l_first_mapping = compute_l_first_mapping(&matrix);
-    let g_elements: Vec<bool> = matrix.iter().map(|anncol| anncol.in_g).collect();
+
+    let (g_elements, df): (Vec<_>, Vec<_>) = matrix
+        .into_iter()
+        .map(|anncol| (anncol.in_g, anncol.col))
+        .unzip();
+
     let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
-    let size_of_k = matrix.len();
-    let df: Vec<VecColumn> = matrix.into_iter().map(|anncol| anncol.col).collect();
+    let size_of_k = df.len();
+
     let (f, (g, cok), (im, ker, kernel_mapping), (rel, rel_mapping)) = thread::scope(|s| {
         let thread1 = s.spawn(|| {
             // Decompose Df
-            let out = run_decomposition(df.iter().cloned(), Some(size_of_k), options.clone());
+            // Df is a chain complex so can compute anti-transpose instead
+            let df_at = anti_transpose(&df);
+            let out = rv_decompose(df_at.into_iter(), &base_options);
             println!("Decomposed f");
             out
         });
+
         let thread2 = s.spawn(|| {
             // Decompose Dg
+            // Need to use v columns of Dg later, so no AT
             let dg = build_dg(&df, &g_elements, &l_first_mapping);
-            let decomp_dg = run_decomposition(dg, Some(size_of_l), options.clone());
+            let mut dg_options = base_options.clone();
+            dg_options.maintain_v = true;
+            let decomp_dg = rv_decompose(dg, &dg_options);
             println!("Decomposed g");
             // Decompose dcok
             let dcok = build_dcok(&df, &decomp_dg, &g_elements, &l_first_mapping);
-            let decompose_dcok = run_decomposition(dcok, Some(size_of_k), options.clone());
+            let mut dcok_options = base_options.clone();
+            dcok_options.clearing = false; // Not a chain complex
+            let decompose_dcok = rv_decompose(dcok, &dcok_options);
             println!("Decomposed cok");
             (decomp_dg, decompose_dcok)
         });
+
         let thread3 = s.spawn(|| {
             // Decompose dim
+            // Need to use v columns of Dim later, also no AT or clearing since D^2 != 0
             let dim = build_dim(&df, &l_first_mapping);
-            let decompose_dim = run_decomposition(dim, Some(size_of_k), options.clone());
+            let mut dim_options = base_options.clone();
+            dim_options.maintain_v = true;
+            dim_options.clearing = false;
+            let decompose_dim = rv_decompose(dim, &dim_options);
             println!("Decomposed im");
             // Decompose dker
             let dker = build_dker(&decompose_dim, &l_first_mapping);
-            let decompose_dker = run_decomposition(dker, Some(size_of_k), options.clone());
+            let mut dker_options = base_options.clone();
+            dker_options.clearing = false; // Not a chain complex so no clearing
+            dker_options.column_height = Some(size_of_k); // Non-square matrix
+            let decompose_dker = rv_decompose(dker, &dker_options);
             println!("Decomposed ker");
             let kernel_mapping = build_kernel_mapping(&decompose_dim);
             (decompose_dim, decompose_dker, kernel_mapping)
         });
+
         let thread4 = s.spawn(|| {
             let (rel_mapping, l_index) = build_rel_mapping(&df, &g_elements, size_of_l, size_of_k);
-            let drel = build_drel(&df, &g_elements, &rel_mapping, l_index);
-            let decompose_drel =
-                run_decomposition(drel, Some(size_of_k - size_of_l + 1), options.clone());
+            let drel = build_drel(&df, &g_elements, &rel_mapping, l_index).collect();
+            // Chain complex so can use clearing and AT
+            let drel_at = anti_transpose(&drel);
+            let decompose_drel = rv_decompose(drel_at.into_iter(), &base_options);
             println!("Decomposed rel");
             (decompose_drel, rel_mapping)
         });

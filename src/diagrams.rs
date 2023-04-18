@@ -1,4 +1,4 @@
-use lophat::{Column, DiagramReadOff, PersistenceDiagram};
+use lophat::{anti_transpose_diagram, Column, DiagramReadOff, PersistenceDiagram};
 use pyo3::prelude::*;
 
 use crate::{
@@ -18,12 +18,22 @@ pub struct DiagramEnsemble {
 }
 
 impl DecompositionEnsemble {
-    fn is_kernel_birth(&self, idx: usize) -> bool {
+    // Since we anti-transposed f, to check whether a column is negative in f
+    // we need to check the diagram of f after reindexing
+    fn compute_negative_list(&self, diagram: &PersistenceDiagram) -> Vec<bool> {
+        let mut negative_list: Vec<bool> = vec![false; self.size_of_k];
+        for (_birth, death) in diagram.paired.iter() {
+            negative_list[*death] = true;
+        }
+        negative_list
+    }
+
+    fn is_kernel_birth(&self, idx: usize, f_negative_list: &Vec<bool>) -> bool {
         let in_l = self.g_elements[idx];
         if in_l {
             return false;
         }
-        let negative_in_f = self.f.r[idx].pivot().is_some();
+        let negative_in_f = f_negative_list[idx];
         if !negative_in_f {
             return false;
         }
@@ -34,7 +44,7 @@ impl DecompositionEnsemble {
         return true;
     }
 
-    fn is_kernel_death(&self, idx: usize) -> bool {
+    fn is_kernel_death(&self, idx: usize, f_negative_list: &Vec<bool>) -> bool {
         let in_l = self.g_elements[idx];
         if !in_l {
             return false;
@@ -44,21 +54,21 @@ impl DecompositionEnsemble {
         if !negative_in_g {
             return false;
         }
-        let negative_in_f = self.f.r[idx].pivot().is_some();
+        let negative_in_f = f_negative_list[idx];
         if negative_in_f {
             return false;
         }
         return true;
     }
 
-    fn kernel_diagram(&self) -> PersistenceDiagram {
+    fn kernel_diagram(&self, f_negative_list: &Vec<bool>) -> PersistenceDiagram {
         let mut dgm = PersistenceDiagram::default();
         for idx in 0..self.size_of_k {
-            if self.is_kernel_birth(idx) {
+            if self.is_kernel_birth(idx, f_negative_list) {
                 dgm.unpaired.insert(idx);
                 continue;
             }
-            if self.is_kernel_death(idx) {
+            if self.is_kernel_death(idx, f_negative_list) {
                 // TODO: Problem kernel columns have different indexing to f
                 let ker_idx = self.kernel_mapping.map(idx).unwrap();
                 let g_birth_index = self.ker.r[ker_idx].pivot().unwrap();
@@ -70,7 +80,7 @@ impl DecompositionEnsemble {
         dgm
     }
 
-    fn image_diagram(&self) -> PersistenceDiagram {
+    fn image_diagram(&self, f_negative_list: &Vec<bool>) -> PersistenceDiagram {
         let mut dgm = PersistenceDiagram::default();
         for idx in 0..self.size_of_k {
             if self.g_elements[idx] {
@@ -81,7 +91,7 @@ impl DecompositionEnsemble {
                     continue;
                 }
             }
-            let neg_in_f = self.f.r[idx].pivot().is_some();
+            let neg_in_f = f_negative_list[idx];
             if neg_in_f {
                 let lowest_in_rim = self.im.r[idx].pivot().unwrap();
                 let lowest_rim_in_l = lowest_in_rim < self.size_of_l;
@@ -96,18 +106,17 @@ impl DecompositionEnsemble {
         dgm
     }
 
-    fn cokernel_diagram(&self) -> PersistenceDiagram {
+    fn cokernel_diagram(&self, f_negative_list: &Vec<bool>) -> PersistenceDiagram {
         let mut dgm = PersistenceDiagram::default();
         for idx in 0..self.size_of_k {
-            let pos_in_f = self.f.r[idx].pivot().is_none();
+            let pos_in_f = !f_negative_list[idx];
             let g_idx = self.l_first_mapping.map(idx).unwrap();
             let not_in_l_or_neg_in_g = (!self.g_elements[idx]) || self.g.r[g_idx].pivot().is_some();
             if pos_in_f && not_in_l_or_neg_in_g {
                 dgm.unpaired.insert(idx);
                 continue;
             }
-            let neg_in_f = self.f.r[idx].pivot().is_some();
-            if !neg_in_f {
+            if pos_in_f {
                 continue;
             }
             let lowest_rim_in_l = self.im.r[idx].pivot().unwrap() < self.size_of_l;
@@ -121,21 +130,28 @@ impl DecompositionEnsemble {
     }
 
     pub fn all_diagrams(&self) -> DiagramEnsemble {
+        let f_diagram = {
+            let at_diagram = self.f.diagram();
+            anti_transpose_diagram(at_diagram, self.size_of_k)
+        };
+        let f_negative_list = self.compute_negative_list(&f_diagram);
         DiagramEnsemble {
-            f: self.f.diagram(),
             g: {
                 let mut dgm = self.g.diagram();
                 unreorder_idxs(&mut dgm, &self.l_first_mapping);
                 dgm
             },
             rel: {
-                let mut dgm = self.rel.diagram();
+                let at_diagram = self.rel.diagram();
+                let mut dgm =
+                    anti_transpose_diagram(at_diagram, self.size_of_k - self.size_of_l + 1);
                 unreorder_idxs(&mut dgm, &self.rel_mapping);
                 dgm
             },
-            im: self.image_diagram(),
-            ker: self.kernel_diagram(),
-            cok: self.cokernel_diagram(),
+            im: self.image_diagram(&f_negative_list),
+            ker: self.kernel_diagram(&f_negative_list),
+            cok: self.cokernel_diagram(&f_negative_list),
+            f: f_diagram,
         }
     }
 }

@@ -11,8 +11,10 @@ pub fn print_matrix(matrix: &Vec<VecColumn>) {
 pub fn print_decomp(decomp: &RVDecomposition<VecColumn>) {
     println!("R:");
     print_matrix(&decomp.r);
-    println!("V:");
-    print_matrix(&decomp.v.as_ref().unwrap());
+    if decomp.v.is_some() {
+        println!("V:");
+        print_matrix(&decomp.v.as_ref().unwrap());
+    }
 }
 
 pub fn print_ensemble(ensemble: &DecompositionEnsemble) {
