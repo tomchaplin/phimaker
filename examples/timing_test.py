@@ -16,7 +16,7 @@ import time
 random.seed(42)
 np.random.seed(42)
 
-N = 100
+N = 200
 N_nice = 20
 max_diagram_dim = 1
 jitter_strength = 0.05
@@ -67,7 +67,11 @@ matrix = []
 for idx, f_val in enumerate(s_tree2.get_filtration()):
     smplx = f_val[0]
     sparse_bdry = [int(face_idx) for _, face_idx in s_tree2.get_boundaries(smplx)]
-    annotated_col = (is_nice_smplx(smplx), sorted(sparse_bdry))
+    if len(sparse_bdry) == 0:
+        dimension = 0
+    else:
+        dimension = len(sparse_bdry) - 1
+    annotated_col = (is_nice_smplx(smplx), dimension, sorted(sparse_bdry))
     matrix.append(annotated_col)
 # Report
 print("Got matrix")
@@ -75,8 +79,10 @@ print(len(matrix))
 times_parallel = []
 
 # Compute diagrams
+N = 5
+
 print("Running in parallel")
-for i in range(100):
+for i in range(N):
     tic = time.time()
     dgms = compute_ensemble(matrix)
     toc = time.time()
@@ -87,7 +93,7 @@ for i in range(100):
 
 times_serial = []
 print("Running in serial")
-for i in range(100):
+for i in range(N):
     tic = time.time()
     dgms = compute_ensemble(matrix, num_threads=1)
     toc = time.time()

@@ -1,10 +1,10 @@
-use lophat::{RVDecomposition, VecColumn};
+use lophat::{Column, RVDecomposition, VecColumn};
 
 use crate::ensemble::DecompositionEnsemble;
 
 pub fn print_matrix(matrix: &Vec<VecColumn>) {
     for col in matrix {
-        println!("{:?}", col.internal);
+        println!("{:?}", col.entries());
     }
 }
 

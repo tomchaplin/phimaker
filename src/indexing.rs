@@ -14,23 +14,21 @@ impl ReordorableColumn for VecColumn {
     // TODO: Reimplement so that this happens in-place?
     fn reorder_rows(&mut self, mapping: &impl IndexMapping) {
         let mut new_col: Vec<usize> = self
-            .internal
-            .iter()
-            .filter_map(|&row_idx| mapping.map(row_idx))
+            .entries()
+            .filter_map(|row_idx| mapping.map(row_idx))
             .collect();
         new_col.sort();
-        self.internal = new_col;
+        self.set_entries(new_col);
     }
 
     // TODO: Reimplement so that this happens in-place?
     fn unreorder_rows(&mut self, mapping: &impl IndexMapping) {
         let mut new_col: Vec<usize> = self
-            .internal
-            .iter()
-            .filter_map(|&row_idx| mapping.inverse_map(row_idx))
+            .entries()
+            .filter_map(|row_idx| mapping.inverse_map(row_idx))
             .collect();
         new_col.sort();
-        self.internal = new_col;
+        self.set_entries(new_col);
     }
 }
 
@@ -96,8 +94,7 @@ pub fn build_kernel_mapping(dim_decomposition: &RVDecomposition<VecColumn>) -> V
         internal_inverse: None,
     }
 }
-// WARNING: This functions makes the following assumption:
-// The 0-cells are precisely the cells with empty boundaries
+
 pub fn build_rel_mapping(
     matrix: &Vec<VecColumn>,
     g_elements: &Vec<bool>,
@@ -119,7 +116,7 @@ pub fn build_rel_mapping(
                 inverse_mapping[counter] = idx;
                 counter += 1;
             }
-            if r_col.internal.len() == 0 {
+            if r_col.dimension() == 0 {
                 // This is a vertex in L, should get_mapped to l_index
                 idx_list.push(l_index)
             } else {

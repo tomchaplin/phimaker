@@ -12,7 +12,6 @@ crate-type = ["cdylib"]
 atomic_refcell = "0.1.9"
 crossbeam = "0.8.2"
 itertools = "0.10.5"
-lophat = "0.7.0"
-pinboard = "2.1.0"
+lophat = "0.8.4"
 pyo3 = { version = "0.18.0", features = ["extension-module"] }
 rayon = "1.7.0"

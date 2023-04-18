@@ -3,7 +3,7 @@ use pyo3::prelude::*;
 use std::cmp::Ordering;
 
 use itertools::Itertools;
-use lophat::VecColumn;
+use lophat::{Column, VecColumn};
 
 use crate::AnnotatedColumn;
 
@@ -98,8 +98,7 @@ pub fn build_cylinder(
             CylinderColType::Domain => {
                 // Take normal boundary but translate to new idxs
                 let new_boundary = col
-                    .internal
-                    .into_iter()
+                    .entries()
                     .map(|row_idx| {
                         domain_idxs
                             .get(row_idx)
@@ -108,17 +107,14 @@ pub fn build_cylinder(
                     .copied()
                     .collect();
                 AnnotatedColumn {
-                    col: VecColumn {
-                        internal: new_boundary,
-                    },
+                    col: VecColumn::from((col.dimension(), new_boundary)),
                     in_g: true,
                 }
             }
             CylinderColType::Codomain => {
                 // Take normal boundary but translate to new idxs
                 let new_boundary = col
-                    .internal
-                    .into_iter()
+                    .entries()
                     .map(|row_idx| {
                         codomain_idxs
                             .get(row_idx)
@@ -127,9 +123,7 @@ pub fn build_cylinder(
                     .copied()
                     .collect();
                 AnnotatedColumn {
-                    col: VecColumn {
-                        internal: new_boundary,
-                    },
+                    col: VecColumn::from((col.dimension(), new_boundary)),
                     in_g: false,
                 }
             }
@@ -143,16 +137,14 @@ pub fn build_cylinder(
                 let codomain_part = map
                     .get(original_idx)
                     .unwrap() // Original_idx is already an index into map
-                    .internal
-                    .iter()
+                    .entries()
                     .map(|row_idx|
-                        codomain_idxs.get(*row_idx)
+                        codomain_idxs.get(row_idx)
                         .expect("Map must be compatibile with both filtrations i.e. entrance time of f(c) <= entrance time of c")
                     )
                     .copied();
                 let domain_shift_part = col
-                    .internal
-                    .into_iter()
+                    .entries()
                     .map(|row_idx| {
                         domain_shift_idxs
                             .get(row_idx)
@@ -165,9 +157,8 @@ pub fn build_cylinder(
                     .sorted() // Different parts might be interleaved; need to sort idxs
                     .collect();
                 AnnotatedColumn {
-                    col: VecColumn {
-                        internal: new_boundary,
-                    },
+                    // The shifted col is in the dimension of the domain column + 1
+                    col: VecColumn::from((col.dimension() + 1, new_boundary)),
                     in_g: false,
                 }
             }
@@ -202,53 +193,53 @@ mod tests {
 
     use super::*;
 
-    fn build_inputs(matrix: Vec<(f64, Vec<usize>)>) -> Vec<(f64, VecColumn)> {
+    fn build_inputs(matrix: Vec<(f64, usize, Vec<usize>)>) -> Vec<(f64, VecColumn)> {
         matrix
             .into_iter()
-            .map(|(t, bdry)| (t, bdry.into()))
+            .map(|(t, dimension, boundary)| (t, VecColumn::from((dimension, boundary))))
             .collect()
     }
 
     #[test]
     fn cylinder_works() {
         let domain_matrix = build_inputs(vec![
-            (0.0, vec![]),
-            (0.0, vec![]),
-            (0.0, vec![]),
-            (0.0, vec![]),
-            (0.0, vec![0, 1]),
-            (0.0, vec![1, 3]),
-            (0.0, vec![0, 2]),
-            (0.0, vec![2, 3]),
-            (3.0, vec![4, 5, 6, 7]),
-            (4.0, vec![0, 3]),
-            (4.0, vec![4, 5, 9]),
+            (0.0, 0, vec![]),
+            (0.0, 0, vec![]),
+            (0.0, 0, vec![]),
+            (0.0, 0, vec![]),
+            (0.0, 1, vec![0, 1]),
+            (0.0, 1, vec![1, 3]),
+            (0.0, 1, vec![0, 2]),
+            (0.0, 1, vec![2, 3]),
+            (3.0, 2, vec![4, 5, 6, 7]),
+            (4.0, 1, vec![0, 3]),
+            (4.0, 2, vec![4, 5, 9]),
         ]);
         let codomain_matrix = build_inputs(vec![
-            (0.0, vec![]),
-            (0.0, vec![]),
-            (0.0, vec![]),
-            (0.0, vec![]),
-            (0.0, vec![0, 1]),
-            (0.0, vec![1, 3]),
-            (0.0, vec![0, 2]),
-            (0.0, vec![2, 3]),
-            (0.4, vec![0, 3]),
-            (0.4, vec![4, 5, 8]),
-            (1.0, vec![6, 7, 8]),
+            (0.0, 0, vec![]),
+            (0.0, 0, vec![]),
+            (0.0, 0, vec![]),
+            (0.0, 0, vec![]),
+            (0.0, 1, vec![0, 1]),
+            (0.0, 1, vec![1, 3]),
+            (0.0, 1, vec![0, 2]),
+            (0.0, 1, vec![2, 3]),
+            (0.4, 1, vec![0, 3]),
+            (0.4, 2, vec![4, 5, 8]),
+            (1.0, 2, vec![6, 7, 8]),
         ]);
         let map = vec![
-            vec![0],
-            vec![1],
-            vec![2],
-            vec![3],
-            vec![4],
-            vec![5],
-            vec![6],
-            vec![7],
-            vec![9, 10], // Long square gets mapped to sum of directed triangles
-            vec![8],
-            vec![9],
+            (0, vec![0]),
+            (0, vec![1]),
+            (0, vec![2]),
+            (0, vec![3]),
+            (1, vec![4]),
+            (1, vec![5]),
+            (1, vec![6]),
+            (1, vec![7]),
+            (2, vec![9, 10]), // Long square gets mapped to sum of directed triangles
+            (1, vec![8]),
+            (2, vec![9]),
         ]
         .into_iter()
         .map(VecColumn::from)

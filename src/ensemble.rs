@@ -32,7 +32,7 @@ fn run_decomposition(
     mut options: LoPhatOptions,
 ) -> RVDecomposition<VecColumn> {
     options.column_height = new_column_height;
-    rv_decompose(matrix, options)
+    rv_decompose(matrix, &options)
 }
 
 pub fn all_decompositions(
@@ -43,7 +43,8 @@ pub fn all_decompositions(
         maintain_v: true,
         column_height: None,
         num_threads,
-        max_chunk_len: 1000,
+        min_chunk_len: 1000,
+        clearing: false,
     };
     // TODO: Clean this up so we aren't collecting the matrix again.
     let l_first_mapping = compute_l_first_mapping(&matrix);
@@ -54,30 +55,30 @@ pub fn all_decompositions(
     let (f, (g, cok), (im, ker, kernel_mapping), (rel, rel_mapping)) = thread::scope(|s| {
         let thread1 = s.spawn(|| {
             // Decompose Df
-            let out = run_decomposition(df.iter().cloned(), Some(size_of_k), options);
+            let out = run_decomposition(df.iter().cloned(), Some(size_of_k), options.clone());
             println!("Decomposed f");
             out
         });
         let thread2 = s.spawn(|| {
             // Decompose Dg
             let dg = build_dg(&df, &g_elements, &l_first_mapping);
-            let decomp_dg = run_decomposition(dg, Some(size_of_l), options);
+            let decomp_dg = run_decomposition(dg, Some(size_of_l), options.clone());
             println!("Decomposed g");
             // Decompose dcok
             let dcok = build_dcok(&df, &decomp_dg, &g_elements, &l_first_mapping);
-            let decompose_dcok = run_decomposition(dcok, Some(size_of_k), options);
+            let decompose_dcok = run_decomposition(dcok, Some(size_of_k), options.clone());
             println!("Decomposed cok");
             (decomp_dg, decompose_dcok)
         });
         let thread3 = s.spawn(|| {
             // Decompose dim
             let dim = build_dim(&df, &l_first_mapping);
-            let decompose_dim = run_decomposition(dim, Some(size_of_k), options);
+            let decompose_dim = run_decomposition(dim, Some(size_of_k), options.clone());
             println!("Decomposed im");
             // Decompose dker
             // TODO: Also need to return mapping from columns of Df to columns of Dker
             let dker = build_dker(&decompose_dim, &l_first_mapping);
-            let decompose_dker = run_decomposition(dker, Some(size_of_k), options);
+            let decompose_dker = run_decomposition(dker, Some(size_of_k), options.clone());
             println!("Decomposed ker");
             let kernel_mapping = build_kernel_mapping(&decompose_dim);
             (decompose_dim, decompose_dker, kernel_mapping)
@@ -85,7 +86,8 @@ pub fn all_decompositions(
         let thread4 = s.spawn(|| {
             let (rel_mapping, l_index) = build_rel_mapping(&df, &g_elements, size_of_l, size_of_k);
             let drel = build_drel(&df, &g_elements, &rel_mapping, l_index);
-            let decompose_drel = run_decomposition(drel, Some(size_of_k - size_of_l + 1), options);
+            let decompose_drel =
+                run_decomposition(drel, Some(size_of_k - size_of_l + 1), options.clone());
             println!("Decomposed rel");
             (decompose_drel, rel_mapping)
         });

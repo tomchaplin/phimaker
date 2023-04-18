@@ -66,7 +66,11 @@ matrix = []
 for idx, f_val in enumerate(s_tree2.get_filtration()):
     smplx = f_val[0]
     sparse_bdry = [int(face_idx) for _, face_idx in s_tree2.get_boundaries(smplx)]
-    annotated_col = (is_nice_smplx(smplx), sorted(sparse_bdry))
+    if len(sparse_bdry) == 0:
+        dimension = 0
+    else:
+        dimension = len(sparse_bdry) - 1
+    annotated_col = (is_nice_smplx(smplx), dimension, sorted(sparse_bdry))
     matrix.append(annotated_col)
 # Report
 print("Got matrix")
