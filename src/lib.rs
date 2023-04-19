@@ -9,8 +9,8 @@ use cylinder::{build_cylinder, CylinderMetadata};
 use diagrams::DiagramEnsemble;
 use ensemble::all_decompositions;
 use indexing::AnnotatedColumn;
-use lophat::VecColumn;
 
+use lophat::{algorithms::LockFreeAlgorithm, columns::VecColumn};
 use pyo3::prelude::*;
 
 #[pyfunction]
@@ -23,7 +23,7 @@ fn compute_ensemble(matrix: Vec<(bool, usize, Vec<usize>)>, num_threads: usize) 
             col: VecColumn::from((dimension, boundary)),
         })
         .collect();
-    let decomps = all_decompositions(annotated_matrix, num_threads);
+    let decomps = all_decompositions::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads);
     decomps.all_diagrams()
 }
 
@@ -50,7 +50,7 @@ fn compute_ensemble_cylinder(
         .map(|(time, dimension, boundary)| (time, VecColumn::from((dimension, boundary))))
         .collect();
     let (cylinder, metadata) = build_cylinder(domain_matrix, codomain_matrix, map);
-    let decomps = all_decompositions(cylinder, num_threads);
+    let decomps = all_decompositions::<LockFreeAlgorithm<_>>(cylinder, num_threads);
     (decomps.all_diagrams(), metadata)
 }
 
@@ -85,7 +85,7 @@ mod tests {
                 in_g,
             })
             .collect();
-        let ensemble = all_decompositions(boundary_matrix, 0);
+        let ensemble = all_decompositions::<LockFreeAlgorithm<_>>(boundary_matrix, 0);
         print_ensemble(&ensemble);
         println!("{:?}", ensemble.all_diagrams());
         assert_eq!(true, true)

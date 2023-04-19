@@ -1,4 +1,7 @@
-use lophat::{Column, RVDecomposition, VecColumn};
+use lophat::{
+    algorithms::RVDecomposition,
+    columns::{Column, VecColumn},
+};
 
 use crate::indexing::{IndexMapping, ReordorableColumn, VectorMapping};
 
@@ -59,13 +62,16 @@ pub fn build_drel<'a>(
         })
 }
 
-pub fn build_dker<'a>(
-    dim_decomposition: &'a RVDecomposition<VecColumn>,
+pub fn build_dker<'a, Algo: RVDecomposition<VecColumn>>(
+    dim_decomposition: &'a Algo,
     mapping: &'a impl IndexMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
-    let rim_cols = dim_decomposition.r.iter();
-    let vim_cols = dim_decomposition.v.as_ref().unwrap().iter();
-    let paired_cols = rim_cols.zip(vim_cols);
+    let paired_cols = (0..dim_decomposition.n_cols()).map(|idx| {
+        (
+            dim_decomposition.get_r_col(idx),
+            dim_decomposition.get_v_col(idx).unwrap(),
+        )
+    });
     paired_cols.filter_map(|(r_col, v_col)| {
         if r_col.pivot().is_none() {
             // If r_col is zero then v_col stores a cycle
@@ -80,9 +86,9 @@ pub fn build_dker<'a>(
     })
 }
 
-pub fn build_dcok<'a>(
+pub fn build_dcok<'a, Algo: RVDecomposition<VecColumn>>(
     df: &'a Vec<VecColumn>,
-    dg_decomposition: &'a RVDecomposition<VecColumn>,
+    dg_decomposition: &'a Algo,
     g_elements: &'a Vec<bool>,
     mapping: &'a impl IndexMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
@@ -90,9 +96,9 @@ pub fn build_dcok<'a>(
         let col_in_g = g_elements[col_idx];
         if col_in_g {
             let idx_in_dg = mapping.map(col_idx).unwrap();
-            let dg_rcol = &dg_decomposition.r[idx_in_dg];
+            let dg_rcol = &dg_decomposition.get_r_col(idx_in_dg);
             if dg_rcol.pivot().is_none() {
-                let mut next_col = dg_decomposition.v.as_ref().unwrap()[idx_in_dg].clone();
+                let mut next_col = dg_decomposition.get_v_col(idx_in_dg).unwrap().clone();
                 // Convert from L simplices first back to default order
                 next_col.unreorder_rows(mapping);
                 next_col

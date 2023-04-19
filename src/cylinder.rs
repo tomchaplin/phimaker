@@ -1,9 +1,9 @@
+use lophat::columns::{Column, VecColumn};
 use pyo3::prelude::*;
 
 use std::cmp::Ordering;
 
 use itertools::Itertools;
-use lophat::{Column, VecColumn};
 
 use crate::AnnotatedColumn;
 
@@ -185,6 +185,8 @@ pub fn build_cylinder(
 
 #[cfg(test)]
 mod tests {
+    use lophat::algorithms::LockFreeAlgorithm;
+
     use crate::all_decompositions;
 
     use super::*;
@@ -244,7 +246,8 @@ mod tests {
         for (idx, (col, t)) in cyl_matrix.iter().zip(metadata.times.iter()).enumerate() {
             println!("{}:{} -> {:?}", idx, t, col);
         }
-        let ensemble = all_decompositions(cyl_matrix, 0).all_diagrams();
+        let ensemble =
+            all_decompositions::<LockFreeAlgorithm<VecColumn>>(cyl_matrix, 0).all_diagrams();
         let pairings: Vec<_> = ensemble.ker.paired.iter().collect();
         for pairing in &pairings {
             println!("{:?}", pairing);

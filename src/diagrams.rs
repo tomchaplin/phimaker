@@ -1,4 +1,4 @@
-use lophat::{anti_transpose_diagram, Column, DiagramReadOff, PersistenceDiagram};
+use lophat::{algorithms::RVDecomposition, columns::Column, utils::PersistenceDiagram};
 use pyo3::prelude::*;
 
 use crate::{
@@ -17,7 +17,7 @@ pub struct DiagramEnsemble {
     pub rel: PersistenceDiagram,
 }
 
-impl DecompositionEnsemble {
+impl<C: Column, Algo: RVDecomposition<C>> DecompositionEnsemble<C, Algo> {
     // Since we anti-transposed f, to check whether a column is negative in f
     // we need to check the diagram of f after reindexing
     fn compute_negative_list(&self, diagram: &PersistenceDiagram) -> Vec<bool> {
@@ -37,7 +37,7 @@ impl DecompositionEnsemble {
         if !negative_in_f {
             return false;
         }
-        let lowest_rim_in_l = self.im.r[idx].pivot().unwrap() < self.size_of_l;
+        let lowest_rim_in_l = self.im.get_r_col(idx).pivot().unwrap() < self.size_of_l;
         if !lowest_rim_in_l {
             return false;
         }
@@ -50,7 +50,7 @@ impl DecompositionEnsemble {
             return false;
         }
         let g_index = self.l_first_mapping.map(idx).unwrap();
-        let negative_in_g = self.g.r[g_index].pivot().is_some();
+        let negative_in_g = self.g.get_r_col(g_index).pivot().is_some();
         if !negative_in_g {
             return false;
         }
@@ -71,7 +71,7 @@ impl DecompositionEnsemble {
             if self.is_kernel_death(idx, f_negative_list) {
                 // TODO: Problem kernel columns have different indexing to f
                 let ker_idx = self.kernel_mapping.map(idx).unwrap();
-                let g_birth_index = self.ker.r[ker_idx].pivot().unwrap();
+                let g_birth_index = self.ker.get_r_col(ker_idx).pivot().unwrap();
                 let birth_index = self.l_first_mapping.inverse_map(g_birth_index).unwrap();
                 dgm.unpaired.remove(&birth_index);
                 dgm.paired.insert((birth_index, idx));
@@ -85,7 +85,7 @@ impl DecompositionEnsemble {
         for idx in 0..self.size_of_k {
             if self.g_elements[idx] {
                 let g_idx = self.l_first_mapping.map(idx).unwrap();
-                let pos_in_g = self.g.r[g_idx].pivot().is_none();
+                let pos_in_g = self.g.get_r_col(g_idx).pivot().is_none();
                 if pos_in_g {
                     dgm.unpaired.insert(idx);
                     continue;
@@ -93,7 +93,7 @@ impl DecompositionEnsemble {
             }
             let neg_in_f = f_negative_list[idx];
             if neg_in_f {
-                let lowest_in_rim = self.im.r[idx].pivot().unwrap();
+                let lowest_in_rim = self.im.get_r_col(idx).pivot().unwrap();
                 let lowest_rim_in_l = lowest_in_rim < self.size_of_l;
                 if !lowest_rim_in_l {
                     continue;
@@ -111,7 +111,8 @@ impl DecompositionEnsemble {
         for idx in 0..self.size_of_k {
             let pos_in_f = !f_negative_list[idx];
             let g_idx = self.l_first_mapping.map(idx).unwrap();
-            let not_in_l_or_neg_in_g = (!self.g_elements[idx]) || self.g.r[g_idx].pivot().is_some();
+            let not_in_l_or_neg_in_g =
+                (!self.g_elements[idx]) || self.g.get_r_col(g_idx).pivot().is_some();
             if pos_in_f && not_in_l_or_neg_in_g {
                 dgm.unpaired.insert(idx);
                 continue;
@@ -119,9 +120,9 @@ impl DecompositionEnsemble {
             if pos_in_f {
                 continue;
             }
-            let lowest_rim_in_l = self.im.r[idx].pivot().unwrap() < self.size_of_l;
+            let lowest_rim_in_l = self.im.get_r_col(idx).pivot().unwrap() < self.size_of_l;
             if !lowest_rim_in_l {
-                let lowest_in_rcok = self.cok.r[idx].pivot().unwrap();
+                let lowest_in_rcok = self.cok.get_r_col(idx).pivot().unwrap();
                 dgm.unpaired.remove(&lowest_in_rcok);
                 dgm.paired.insert((lowest_in_rcok, idx));
             }
@@ -132,7 +133,7 @@ impl DecompositionEnsemble {
     pub fn all_diagrams(&self) -> DiagramEnsemble {
         let f_diagram = {
             let at_diagram = self.f.diagram();
-            anti_transpose_diagram(at_diagram, self.size_of_k)
+            at_diagram.anti_transpose(self.size_of_k)
         };
         let f_negative_list = self.compute_negative_list(&f_diagram);
         DiagramEnsemble {
@@ -143,8 +144,7 @@ impl DecompositionEnsemble {
             },
             rel: {
                 let at_diagram = self.rel.diagram();
-                let mut dgm =
-                    anti_transpose_diagram(at_diagram, self.size_of_k - self.size_of_l + 1);
+                let mut dgm = at_diagram.anti_transpose(self.size_of_k - self.size_of_l + 1);
                 unreorder_idxs(&mut dgm, &self.rel_mapping);
                 dgm
             },

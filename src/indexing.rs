@@ -1,4 +1,8 @@
-use lophat::{Column, PersistenceDiagram, RVDecomposition, VecColumn};
+use lophat::{
+    algorithms::RVDecomposition,
+    columns::{Column, VecColumn},
+    utils::PersistenceDiagram,
+};
 
 pub trait ReordorableColumn: Send + Sync + Clone + Default {
     fn reorder_rows(&mut self, mapping: &impl IndexMapping);
@@ -78,10 +82,13 @@ pub fn compute_l_first_mapping(matrix: &Vec<AnnotatedColumn<VecColumn>>) -> Vect
     }
 }
 
-pub fn build_kernel_mapping(dim_decomposition: &RVDecomposition<VecColumn>) -> VectorMapping {
+pub fn build_kernel_mapping<Algo: RVDecomposition<VecColumn>>(
+    dim_decomposition: &Algo,
+) -> VectorMapping {
     let mut counter = 0;
     let mut idx_list: Vec<Option<usize>> = vec![];
-    for r_col in dim_decomposition.r.iter() {
+    let r_col_iter = (0..dim_decomposition.n_cols()).map(|idx| dim_decomposition.get_r_col(idx));
+    for r_col in r_col_iter {
         if r_col.pivot().is_none() {
             idx_list.push(Some(counter));
             counter += 1;
