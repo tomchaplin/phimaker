@@ -12,7 +12,10 @@ import seaborn as sns
 import pandas as pd
 import random
 
-N = 100
+np.random.seed(42)
+random.seed(42)
+
+N = 320
 N_nice = 20
 max_diagram_dim = 1
 jitter_strength = 0.05
@@ -73,7 +76,7 @@ for idx, f_val in enumerate(s_tree2.get_filtration()):
 print("Got matrix")
 print(len(matrix))
 # Compute diagrams
-dgms = compute_ensemble(matrix)
+dgms = compute_ensemble(matrix, slow=True)
 print("Done")
 # Plot point
 plt.scatter(random_points[:, 0], random_points[:, 1])

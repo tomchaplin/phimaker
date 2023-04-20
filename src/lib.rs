@@ -7,15 +7,19 @@ pub mod utils;
 
 use cylinder::{build_cylinder, CylinderMetadata};
 use diagrams::DiagramEnsemble;
-use ensemble::all_decompositions;
+use ensemble::{all_decompositions, all_decompositions_slow};
 use indexing::AnnotatedColumn;
 
 use lophat::{algorithms::LockFreeAlgorithm, columns::VecColumn};
 use pyo3::prelude::*;
 
 #[pyfunction]
-#[pyo3(signature = (matrix, num_threads=0))]
-fn compute_ensemble(matrix: Vec<(bool, usize, Vec<usize>)>, num_threads: usize) -> DiagramEnsemble {
+#[pyo3(signature = (matrix, num_threads=0, slow=false))]
+fn compute_ensemble(
+    matrix: Vec<(bool, usize, Vec<usize>)>,
+    num_threads: usize,
+    slow: bool,
+) -> DiagramEnsemble {
     let annotated_matrix = matrix
         .into_iter()
         .map(|(in_g, dimension, boundary)| AnnotatedColumn {
@@ -23,8 +27,14 @@ fn compute_ensemble(matrix: Vec<(bool, usize, Vec<usize>)>, num_threads: usize) 
             col: VecColumn::from((dimension, boundary)),
         })
         .collect();
-    let decomps = all_decompositions::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads);
-    decomps.all_diagrams()
+    if slow {
+        let decomps =
+            all_decompositions_slow::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads);
+        decomps.all_diagrams()
+    } else {
+        let decomps = all_decompositions::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads);
+        decomps.all_diagrams()
+    }
 }
 
 #[pyfunction]
