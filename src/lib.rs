@@ -3,6 +3,7 @@ pub mod cylinder;
 pub mod diagrams;
 pub mod ensemble;
 pub mod indexing;
+pub mod overlap;
 pub mod utils;
 
 use cylinder::{build_cylinder, CylinderMetadata};
@@ -11,6 +12,7 @@ use ensemble::{all_decompositions, all_decompositions_slow};
 use indexing::AnnotatedColumn;
 
 use lophat::{algorithms::LockFreeAlgorithm, columns::VecColumn};
+use overlap::compute_zero_overlap;
 use pyo3::prelude::*;
 
 #[pyfunction]
@@ -64,11 +66,24 @@ fn compute_ensemble_cylinder(
     (decomps.all_diagrams(), metadata)
 }
 
+#[pyfunction]
+fn zero_overlap(matrix: Vec<(bool, usize, Vec<usize>)>) -> Vec<(usize, usize)> {
+    let annotated_matrix: Vec<AnnotatedColumn<VecColumn>> = matrix
+        .into_iter()
+        .map(|(in_g, dimension, boundary)| AnnotatedColumn {
+            in_g,
+            col: VecColumn::from((dimension, boundary)),
+        })
+        .collect();
+    compute_zero_overlap(&annotated_matrix)
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn phimaker(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compute_ensemble, m)?)?;
     m.add_function(wrap_pyfunction!(compute_ensemble_cylinder, m)?)?;
+    m.add_function(wrap_pyfunction!(zero_overlap, m)?)?;
     Ok(())
 }
 
