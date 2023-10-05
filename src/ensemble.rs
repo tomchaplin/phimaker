@@ -1,6 +1,7 @@
 use bincode::serialize_into;
 use serde::Serialize;
 use std::{fs::File, io::BufWriter, marker::PhantomData, thread};
+use log::info;
 
 use lophat::{
     algorithms::RVDecomposition,
@@ -65,7 +66,7 @@ pub fn thread_1_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
     // Df is a chain complex so can compute anti-transpose instead
     let df_at = anti_transpose(&df);
     let out = Algo::decompose(df_at.into_iter(), Some(base_options));
-    println!("Decomposed f");
+    info!("Decomposed f");
     out
 }
 
@@ -81,13 +82,13 @@ pub fn thread_2_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
     let mut dg_options = base_options.clone();
     dg_options.maintain_v = true;
     let decomp_dg = Algo::decompose(dg, Some(dg_options));
-    println!("Decomposed g");
+    info!("Decomposed g");
     // Decompose dcok
     let dcok = build_dcok(&df, &decomp_dg, &g_elements, l_first_mapping);
     let mut dcok_options = base_options.clone();
     dcok_options.clearing = false; // Not a chain complex
     let decompose_dcok = Algo::decompose(dcok, Some(dcok_options));
-    println!("Decomposed cok");
+    info!("Decomposed cok");
     (decomp_dg, decompose_dcok)
 }
 pub fn thread_3_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + Send>(
@@ -103,14 +104,14 @@ pub fn thread_3_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
     dim_options.maintain_v = true;
     dim_options.clearing = false;
     let decompose_dim = Algo::decompose(dim, Some(dim_options));
-    println!("Decomposed im");
+    info!("Decomposed im");
     // Decompose dker
     let dker = build_dker(&decompose_dim, l_first_mapping);
     let mut dker_options = base_options.clone();
     dker_options.clearing = false; // Not a chain complex so no clearing
     dker_options.column_height = Some(size_of_k); // Non-square matrix
     let decompose_dker = Algo::decompose(dker, Some(dker_options));
-    println!("Decomposed ker");
+    info!("Decomposed ker");
     let kernel_mapping = build_kernel_mapping(&decompose_dim);
     (decompose_dim, decompose_dker, kernel_mapping)
 }
@@ -127,7 +128,7 @@ pub fn thread_4_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
     // Chain complex so can use clearing and AT
     let drel_at = anti_transpose(&drel);
     let decompose_drel = Algo::decompose(drel_at.into_iter(), Some(base_options));
-    println!("Decomposed rel");
+    info!("Decomposed rel");
     (decompose_drel, rel_mapping)
 }
 

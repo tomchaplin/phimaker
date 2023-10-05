@@ -81,6 +81,7 @@ fn zero_overlap(matrix: Vec<(bool, usize, Vec<usize>)>) -> Vec<(usize, usize)> {
 /// A Python module implemented in Rust.
 #[pymodule]
 fn phimaker(_py: Python, m: &PyModule) -> PyResult<()> {
+    pyo3_log::init();
     m.add_function(wrap_pyfunction!(compute_ensemble, m)?)?;
     m.add_function(wrap_pyfunction!(compute_ensemble_cylinder, m)?)?;
     m.add_function(wrap_pyfunction!(zero_overlap, m)?)?;
