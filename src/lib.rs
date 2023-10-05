@@ -18,6 +18,7 @@ use pyo3::prelude::*;
 #[pyfunction]
 #[pyo3(signature = (matrix, num_threads=0, slow=false))]
 fn compute_ensemble(
+    py : Python<'_>,
     matrix: Vec<(bool, usize, Vec<usize>)>,
     num_threads: usize,
     slow: bool,
@@ -34,7 +35,9 @@ fn compute_ensemble(
             all_decompositions_slow::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads);
         decomps.all_diagrams()
     } else {
-        let decomps = all_decompositions::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads);
+        let decomps = py.allow_threads(|| {
+            all_decompositions::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads)
+        });
         decomps.all_diagrams()
     }
 }
@@ -42,6 +45,7 @@ fn compute_ensemble(
 #[pyfunction]
 #[pyo3(signature = (domain_matrix, codomain_matrix, map, num_threads=0))]
 fn compute_ensemble_cylinder(
+    py : Python<'_>,
     domain_matrix: Vec<(f64, usize, Vec<usize>)>,
     codomain_matrix: Vec<(f64, usize, Vec<usize>)>,
     map: Vec<Vec<usize>>,
@@ -62,7 +66,9 @@ fn compute_ensemble_cylinder(
         .map(|(time, dimension, boundary)| (time, VecColumn::from((dimension, boundary))))
         .collect();
     let (cylinder, metadata) = build_cylinder(domain_matrix, codomain_matrix, map);
-    let decomps = all_decompositions::<LockFreeAlgorithm<_>>(cylinder, num_threads);
+    let decomps = py.allow_threads(|| {
+        all_decompositions::<LockFreeAlgorithm<_>>(cylinder, num_threads)
+    });
     (decomps.all_diagrams(), metadata)
 }
 
