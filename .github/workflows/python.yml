@@ -6,8 +6,9 @@
 name: Python Release
 
 on:
+  workflow_dispatch:
   release:
-    types: [published, workflow_dispatch]
+    types: [published]
 
 permissions:
   contents: read
