@@ -57,7 +57,7 @@ pub fn build_cylinder(
     let mut cylinder_matrix: Vec<AnnotatedColumn<VecColumn>> = Vec::with_capacity(cylinder_size);
     let mut times: Vec<f64> = Vec::with_capacity(cylinder_size);
 
-    // Comapre times then compare cell type
+    // Compare times then compare cell type
     let cell_ordering =
         |x: &(usize, f64, CylinderColType, VecColumn),
          y: &(usize, f64, CylinderColType, VecColumn)| { (x.1, x.2) <= (y.1, y.2) };

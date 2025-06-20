@@ -15,10 +15,14 @@ use lophat::{algorithms::LockFreeAlgorithm, columns::VecColumn};
 use overlap::compute_zero_overlap;
 use pyo3::prelude::*;
 
+/// Compute the six-pack of persistence diagrams for an inclusion of filtered cell complexes.
+/// `matrix` is a vector of tuples corresponding to the cells of the codomain,
+/// where each tuple is of the form
+/// `(is_simplex_in_domain, dimension_of_simplex, indices_of_boundary_simplices)`.
 #[pyfunction]
 #[pyo3(signature = (matrix, num_threads=0, slow=false))]
 fn compute_ensemble(
-    py : Python<'_>,
+    py: Python<'_>,
     matrix: Vec<(bool, usize, Vec<usize>)>,
     num_threads: usize,
     slow: bool,
@@ -42,10 +46,29 @@ fn compute_ensemble(
     }
 }
 
+/// Compute the six-pack of persistence diagrams for an arbitrary map $f$
+/// of filtered chain complexes over $\mathbb{F}_2$.
+/// `domain_matrix` and `codomain_matrix` are vectors whose i^th^ entry represents
+/// the i^th^ column of the boundary matrix of the domain and codomain, respectively.
+/// Each such entry corresponds to a generator of the chain complex and is a tuple of the form
+/// `(entrance_time, degree of i^th^ generator, indices of generators in the boundary)`.
+/// The columns must be sorted by entrance time, and the matrices must be strictly upper-triangular.
+/// Similarly, entries of `map` represent columns in the matrix of $f$.
+/// The i^th^ entry of `map` is vector of indices corresponding to the
+/// non-zero entries of the i^th^ column of the matrix of $f$.
+/// `map` must have at least as many entries as there are domain cells.
+///
+/// # Panics:
+/// - If the domain and codomain matrices are not sorted by entrance time.
+/// - If the domain and codomain matrices are not strictly upper-triangular.
+/// - If `map` is not compatible with the domain matrix, i.e., if the entrance time of any
+///   generator in the domain is less than the entrance time of any generators in its image under
+///   $f$.
+
 #[pyfunction]
 #[pyo3(signature = (domain_matrix, codomain_matrix, map, num_threads=0))]
 fn compute_ensemble_cylinder(
-    py : Python<'_>,
+    py: Python<'_>,
     domain_matrix: Vec<(f64, usize, Vec<usize>)>,
     codomain_matrix: Vec<(f64, usize, Vec<usize>)>,
     map: Vec<Vec<usize>>,
@@ -66,9 +89,8 @@ fn compute_ensemble_cylinder(
         .map(|(time, dimension, boundary)| (time, VecColumn::from((dimension, boundary))))
         .collect();
     let (cylinder, metadata) = build_cylinder(domain_matrix, codomain_matrix, map);
-    let decomps = py.allow_threads(|| {
-        all_decompositions::<LockFreeAlgorithm<_>>(cylinder, num_threads)
-    });
+    let decomps =
+        py.allow_threads(|| all_decompositions::<LockFreeAlgorithm<_>>(cylinder, num_threads));
     (decomps.all_diagrams(), metadata)
 }
 
