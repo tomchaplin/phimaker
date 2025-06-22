@@ -27,7 +27,7 @@ fn compute_ensemble(
     num_threads: usize,
     slow: bool,
 ) -> DiagramEnsemble {
-    let annotated_matrix = matrix
+    let annotated_matrix: Vec<_> = matrix
         .into_iter()
         .map(|(in_g, dimension, boundary)| AnnotatedColumn {
             in_g,
@@ -64,15 +64,15 @@ fn compute_ensemble(
 /// - If `map` is not compatible with the domain matrix, i.e., if the entrance time of any
 ///   generator in the domain is less than the entrance time of any generators in its image under
 ///   $f$.
-
 #[pyfunction]
-#[pyo3(signature = (domain_matrix, codomain_matrix, map, num_threads=0))]
+#[pyo3(signature = (domain_matrix, codomain_matrix, map, num_threads=0, slow=false))]
 fn compute_ensemble_cylinder(
     py: Python<'_>,
     domain_matrix: Vec<(f64, usize, Vec<usize>)>,
     codomain_matrix: Vec<(f64, usize, Vec<usize>)>,
     map: Vec<Vec<usize>>,
     num_threads: usize,
+    slow: bool,
 ) -> (DiagramEnsemble, CylinderMetadata) {
     // We mark each map with the dimension of the domain column
     let map = map
@@ -89,9 +89,16 @@ fn compute_ensemble_cylinder(
         .map(|(time, dimension, boundary)| (time, VecColumn::from((dimension, boundary))))
         .collect();
     let (cylinder, metadata) = build_cylinder(domain_matrix, codomain_matrix, map);
-    let decomps =
-        py.allow_threads(|| all_decompositions::<LockFreeAlgorithm<_>>(cylinder, num_threads));
-    (decomps.all_diagrams(), metadata)
+    if slow {
+        let decomps =
+            all_decompositions_slow::<LockFreeAlgorithm<_>>(cylinder, num_threads);
+        (decomps.all_diagrams(), metadata)
+    } else {
+        let decomps = py.allow_threads(|| {
+            all_decompositions::<LockFreeAlgorithm<_>>(cylinder, num_threads)
+        });
+        (decomps.all_diagrams(), metadata)
+    }
 }
 
 #[pyfunction]
