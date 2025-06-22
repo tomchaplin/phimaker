@@ -64,7 +64,7 @@ pub fn thread_1_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
 ) -> Algo {
     // Decompose Df
     // Df is a chain complex so can compute anti-transpose instead
-    let df_at = anti_transpose(&df);
+    let df_at = anti_transpose(df);
     let out = Algo::decompose(df_at.into_iter(), Some(base_options));
     debug!("Decomposed f");
     out
@@ -78,16 +78,16 @@ pub fn thread_2_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
 ) -> (Algo, Algo) {
     // Decompose Dg
     // Need to use v columns of Dg later, so no AT
-    let dg = build_dg(&df, &g_elements, &l_first_mapping);
-    let mut dg_options = base_options.clone();
+    let dg = build_dg(df, g_elements, l_first_mapping);
+    let mut dg_options = base_options;
     dg_options.maintain_v = true;
     let decomp_dg = Algo::decompose(dg, Some(dg_options));
     debug!("Decomposed g");
     // Decompose dcok
-    let dcok = build_dcok(&df, &decomp_dg, &g_elements, l_first_mapping);
-    let mut dcok_options = base_options.clone();
+    let dcok = build_dcok(df, &decomp_dg, g_elements, l_first_mapping);
+    let mut dcok_options = base_options;
     dcok_options.clearing = false; // Not a chain complex
-    let decompose_dcok = Algo::decompose(dcok, Some(dcok_options));
+    let decompose_dcok = Algo::decompose(dcok, Some(base_options));
     debug!("Decomposed cok");
     (decomp_dg, decompose_dcok)
 }
@@ -99,15 +99,15 @@ pub fn thread_3_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
 ) -> (Algo, Algo, VectorMapping) {
     // Decompose dim
     // Need to use v columns of Dim later, also no AT or clearing since D^2 != 0
-    let dim = build_dim(&df, l_first_mapping);
-    let mut dim_options = base_options.clone();
+    let dim = build_dim(df, l_first_mapping);
+    let mut dim_options = base_options;
     dim_options.maintain_v = true;
     dim_options.clearing = false;
     let decompose_dim = Algo::decompose(dim, Some(dim_options));
     debug!("Decomposed im");
     // Decompose dker
     let dker = build_dker(&decompose_dim, l_first_mapping);
-    let mut dker_options = base_options.clone();
+    let mut dker_options = base_options;
     dker_options.clearing = false; // Not a chain complex so no clearing
     dker_options.column_height = Some(size_of_k); // Non-square matrix
     let decompose_dker = Algo::decompose(dker, Some(dker_options));
@@ -123,8 +123,8 @@ pub fn thread_4_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
     size_of_k: usize,
     base_options: LoPhatOptions,
 ) -> (Algo, VectorMapping) {
-    let (rel_mapping, l_index) = build_rel_mapping(&df, &g_elements, size_of_l, size_of_k);
-    let drel = build_drel(&df, &g_elements, &rel_mapping, l_index).collect();
+    let (rel_mapping, l_index) = build_rel_mapping(df, g_elements, size_of_l, size_of_k);
+    let drel = build_drel(df, g_elements, &rel_mapping, l_index).collect();
     // Chain complex so can use clearing and AT
     let drel_at = anti_transpose(&drel);
     let decompose_drel = Algo::decompose(drel_at.into_iter(), Some(base_options));
