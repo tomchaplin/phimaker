@@ -1,5 +1,6 @@
 use lophat::columns::{Column, VecColumn};
 use pyo3::prelude::*;
+use log::debug;
 
 use std::cmp::Ordering;
 
@@ -43,6 +44,7 @@ pub struct CylinderMetadata {
     pub domain_shift: Vec<usize>,
 }
 
+// Build the filtered mapping cylinder of a map between filtered chain complexes.
 pub fn build_cylinder(
     domain_matrix: Vec<(f64, VecColumn)>,
     codomain_matrix: Vec<(f64, VecColumn)>,
@@ -67,7 +69,7 @@ pub fn build_cylinder(
         .into_iter()
         .enumerate()
         .map(|(idx, (time, col))| {
-            // Make two copies of each domain column
+            // First copy of domain columns
             (idx, time, CylinderColType::Domain, col.clone())
         });
 
@@ -75,7 +77,7 @@ pub fn build_cylinder(
         .into_iter()
         .enumerate()
         .map(|(idx, (time, col))| {
-            // Make two copies of each domain column
+            // Second copy of domain columns
             (idx, time, CylinderColType::DomainShifted, col)
         });
 
@@ -136,7 +138,7 @@ pub fn build_cylinder(
                     .entries()
                     .map(|row_idx|
                         codomain_idxs.get(row_idx)
-                        .expect("Map must be compatibile with both filtrations i.e. entrance time of f(c) <= entrance time of c")
+                        .expect("Map must be compatible with both filtrations i.e. entrance time of f(c) <= entrance time of c")
                     )
                     .copied();
                 let domain_shift_part = col
@@ -180,6 +182,7 @@ pub fn build_cylinder(
         codomain: codomain_idxs,
         domain_shift: domain_shift_idxs,
     };
+    debug!("Built mapping cylinder with {} simplices.", cylinder_matrix.len());
     (cylinder_matrix, metadata)
 }
 

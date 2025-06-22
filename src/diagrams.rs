@@ -1,6 +1,8 @@
 use bincode::deserialize_from;
 use std::{fs::File, io::BufReader};
 
+use log::debug;
+
 use lophat::{
     algorithms::RVDecomposition, columns::Column, utils::PersistenceDiagram, utils::RVDFileFormat,
 };
@@ -214,7 +216,7 @@ impl FileEnsemble {
             let at_diagram = f_decomp.diagram();
             at_diagram.anti_transpose(self.metadata.size_of_k)
         };
-        println!("Got f");
+        debug!("Got f");
         let f_negative_list = compute_negative_list(&self.metadata, &f_diagram);
         let rel_diagram = {
             let rel_decomp = from_file(&self.rel);

@@ -1,7 +1,7 @@
 use bincode::serialize_into;
+use log::debug;
 use serde::Serialize;
 use std::{fs::File, io::BufWriter, marker::PhantomData, thread};
-use log::info;
 
 use lophat::{
     algorithms::RVDecomposition,
@@ -31,18 +31,18 @@ pub struct EnsembleMetadata {
 #[derive(Debug)]
 pub struct DecompositionEnsemble<C, Algo>
 where
-        C: Column,
-        Algo: RVDecomposition<C>,
-    {
-        pub f: Algo,
-        pub g: Algo,
-        pub im: Algo,
-        pub ker: Algo,
-        pub cok: Algo,
-        pub rel: Algo,
-        pub metadata: EnsembleMetadata,
-        phantom: PhantomData<C>,
-    }
+    C: Column,
+    Algo: RVDecomposition<C>,
+{
+    pub f: Algo,
+    pub g: Algo,
+    pub im: Algo,
+    pub ker: Algo,
+    pub cok: Algo,
+    pub rel: Algo,
+    pub metadata: EnsembleMetadata,
+    phantom: PhantomData<C>,
+}
 
 #[derive(Debug)]
 pub struct FileEnsemble {
@@ -66,7 +66,7 @@ pub fn thread_1_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
     // Df is a chain complex so can compute anti-transpose instead
     let df_at = anti_transpose(&df);
     let out = Algo::decompose(df_at.into_iter(), Some(base_options));
-    info!("Decomposed f");
+    debug!("Decomposed f");
     out
 }
 
@@ -82,13 +82,13 @@ pub fn thread_2_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
     let mut dg_options = base_options.clone();
     dg_options.maintain_v = true;
     let decomp_dg = Algo::decompose(dg, Some(dg_options));
-    info!("Decomposed g");
+    debug!("Decomposed g");
     // Decompose dcok
     let dcok = build_dcok(&df, &decomp_dg, &g_elements, l_first_mapping);
     let mut dcok_options = base_options.clone();
     dcok_options.clearing = false; // Not a chain complex
     let decompose_dcok = Algo::decompose(dcok, Some(dcok_options));
-    info!("Decomposed cok");
+    debug!("Decomposed cok");
     (decomp_dg, decompose_dcok)
 }
 pub fn thread_3_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + Send>(
@@ -104,7 +104,7 @@ pub fn thread_3_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
     dim_options.maintain_v = true;
     dim_options.clearing = false;
     let decompose_dim = Algo::decompose(dim, Some(dim_options));
-    info!("Decomposed im");
+    debug!("Decomposed im");
     // Decompose dker
     let dker = build_dker(&decompose_dim, l_first_mapping);
     let mut dker_options = base_options.clone();
@@ -112,7 +112,7 @@ pub fn thread_3_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
     dker_options.column_height = Some(size_of_k); // Non-square matrix
     let decompose_dker = Algo::decompose(dker, Some(dker_options));
     let kernel_mapping = build_kernel_mapping(&decompose_dim);
-    info!("Decomposed ker");
+    debug!("Decomposed ker");
     (decompose_dim, decompose_dker, kernel_mapping)
 }
 
@@ -128,7 +128,7 @@ pub fn thread_4_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
     // Chain complex so can use clearing and AT
     let drel_at = anti_transpose(&drel);
     let decompose_drel = Algo::decompose(drel_at.into_iter(), Some(base_options));
-    info!("Decomposed rel");
+    debug!("Decomposed rel");
     (decompose_drel, rel_mapping)
 }
 
@@ -199,7 +199,7 @@ pub fn to_file<Algo: Serialize>(algo: Algo) -> File {
         let mut buf = BufWriter::new(&mut file_write);
         serialize_into(&mut buf, &algo).expect("Can serialize to file");
     }
-    // Explicity release memory
+    // Explicitly release memory
     drop(algo);
     file_read
 }
