@@ -87,7 +87,7 @@ pub fn thread_2_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
     let dcok = build_dcok(df, &decomp_dg, g_elements, l_first_mapping);
     let mut dcok_options = base_options;
     dcok_options.clearing = false; // Not a chain complex
-    let decompose_dcok = Algo::decompose(dcok, Some(base_options));
+    let decompose_dcok = Algo::decompose(dcok, Some(dcok_options));
     debug!("Decomposed cok");
     (decomp_dg, decompose_dcok)
 }
