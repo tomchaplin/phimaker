@@ -200,6 +200,8 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 [[package]]
 name = "lophat"
 version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "187085c3bbdd12ed9d3c52045bcb615fe8b8e1b3214ef6454237a2fde5528699"
 dependencies = [
  "bit-set",
  "pinboard",
@@ -231,7 +233,7 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 
 [[package]]
 name = "phimaker"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "atomic_refcell",
  "bincode",
