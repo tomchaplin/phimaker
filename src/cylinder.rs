@@ -247,13 +247,13 @@ mod tests {
         .collect();
         let (cyl_matrix, metadata) = build_cylinder(domain_matrix, codomain_matrix, map);
         for (idx, (col, t)) in cyl_matrix.iter().zip(metadata.times.iter()).enumerate() {
-            println!("{}:{} -> {:?}", idx, t, col);
+            println!("{idx}:{t} -> {col:?}");
         }
         let ensemble =
             all_decompositions::<LockFreeAlgorithm<VecColumn>>(cyl_matrix, 0).all_diagrams();
         let pairings: Vec<_> = ensemble.ker.paired.iter().collect();
         for pairing in &pairings {
-            println!("{:?}", pairing);
+            println!("{pairing:?}");
         }
         assert_eq!(pairings.len(), 1);
         let first_pairing = pairings[0];

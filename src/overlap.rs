@@ -22,8 +22,7 @@ struct ClusterData {
 
 /// Computes the H_0 overlap between two disjoint point clouds,
 /// forming the 0-skeleton of a filtered cell complex.
-
-pub fn compute_zero_overlap(matrix: &Vec<AnnotatedColumn<VecColumn>>) -> Vec<(usize, usize)> {
+pub fn compute_zero_overlap(matrix: &[AnnotatedColumn<VecColumn>]) -> Vec<(usize, usize)> {
     let mut node_list = vec![];
     let mut feature_list = vec![];
     for (idx, column) in matrix.iter().enumerate() {
@@ -52,13 +51,13 @@ pub fn compute_zero_overlap(matrix: &Vec<AnnotatedColumn<VecColumn>>) -> Vec<(us
             // Implicit assumption that source_idx < target_idx here
             let (left, right) = node_list.split_at_mut(target_idx);
             let source_node = left[source_idx].as_mut().unwrap();
-            let mut target_node = right[0].as_mut().unwrap();
-            if source_node.equiv(&target_node) {
+            let target_node = right[0].as_mut().unwrap();
+            if source_node.equiv(target_node) {
                 // This edge creates a loop - not element of MST
                 continue;
             } else {
-                // A merge is hapenning, we must update feature_list accordingly
-                source_node.union_with(&mut target_node, |source_data, target_data| {
+                // A merge is happening, we must update feature_list accordingly
+                source_node.union_with(target_node, |source_data, target_data| {
                     let (new_data, new_features) = merge_clusters(source_data, target_data, idx);
                     feature_list.extend_from_slice(new_features.as_slice());
                     new_data

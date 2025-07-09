@@ -103,8 +103,8 @@ pub fn build_kernel_mapping<Algo: RVDecomposition<VecColumn>>(
 }
 
 pub fn build_rel_mapping(
-    matrix: &Vec<VecColumn>,
-    g_elements: &Vec<bool>,
+    matrix: &[VecColumn],
+    g_elements: &[bool],
     size_of_l: usize,
     size_of_k: usize,
 ) -> (VectorMapping, usize) {

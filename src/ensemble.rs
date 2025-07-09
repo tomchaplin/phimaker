@@ -71,8 +71,8 @@ pub fn thread_1_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
 }
 
 pub fn thread_2_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + Send>(
-    df: &Vec<VecColumn>,
-    g_elements: &Vec<bool>,
+    df: &[VecColumn],
+    g_elements: &[bool],
     l_first_mapping: &VectorMapping,
     base_options: LoPhatOptions,
 ) -> (Algo, Algo) {
@@ -83,16 +83,16 @@ pub fn thread_2_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
     dg_options.maintain_v = true;
     let decomp_dg = Algo::decompose(dg, Some(dg_options));
     debug!("Decomposed g");
-    // Decompose dcok
-    let dcok = build_dcok(df, &decomp_dg, g_elements, l_first_mapping);
+    // Decompose d_cok
+    let d_cok = build_dcok(df, &decomp_dg, g_elements, l_first_mapping);
     let mut dcok_options = base_options;
     dcok_options.clearing = false; // Not a chain complex
-    let decompose_dcok = Algo::decompose(dcok, Some(dcok_options));
+    let decompose_dcok = Algo::decompose(d_cok, Some(dcok_options));
     debug!("Decomposed cok");
     (decomp_dg, decompose_dcok)
 }
 pub fn thread_3_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + Send>(
-    df: &Vec<VecColumn>,
+    df: &[VecColumn],
     l_first_mapping: &VectorMapping,
     size_of_k: usize,
     base_options: LoPhatOptions,
@@ -117,8 +117,8 @@ pub fn thread_3_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + 
 }
 
 pub fn thread_4_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + Send>(
-    df: &Vec<VecColumn>,
-    g_elements: &Vec<bool>,
+    df: &[VecColumn],
+    g_elements: &[bool],
     size_of_l: usize,
     size_of_k: usize,
     base_options: LoPhatOptions,

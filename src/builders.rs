@@ -6,8 +6,8 @@ use lophat::{
 use crate::indexing::{IndexMapping, ReordorableColumn, VectorMapping};
 
 pub fn extract_columns<'a>(
-    matrix: &'a Vec<VecColumn>,
-    extract: &'a Vec<bool>,
+    matrix: &'a [VecColumn],
+    extract: &'a [bool],
 ) -> impl Iterator<Item = VecColumn> + 'a {
     matrix
         .iter()
@@ -18,8 +18,8 @@ pub fn extract_columns<'a>(
 }
 
 pub fn build_dg<'a>(
-    df: &'a Vec<VecColumn>,
-    g_elements: &'a Vec<bool>,
+    df: &'a [VecColumn],
+    g_elements: &'a [bool],
     l_first_mapping: &'a VectorMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
     extract_columns(df, g_elements).map(|mut col| {
@@ -29,7 +29,7 @@ pub fn build_dg<'a>(
 }
 
 pub fn build_dim<'a>(
-    df: &'a Vec<VecColumn>,
+    df: &'a [VecColumn],
     mapping: &'a impl IndexMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
     df.iter().cloned().map(|mut col| {
@@ -43,8 +43,8 @@ pub fn build_dim<'a>(
 // This makes it easier to map the boundary
 // Also inherits assumption from build_rel_mapping
 pub fn build_drel<'a>(
-    df: &'a Vec<VecColumn>,
-    g_elements: &'a Vec<bool>,
+    df: &'a [VecColumn],
+    g_elements: &'a [bool],
     rel_mapping: &'a VectorMapping,
     l_index: usize,
 ) -> impl Iterator<Item = VecColumn> + 'a {
@@ -87,9 +87,9 @@ pub fn build_dker<'a, Algo: RVDecomposition<VecColumn>>(
 }
 
 pub fn build_dcok<'a, Algo: RVDecomposition<VecColumn>>(
-    df: &'a Vec<VecColumn>,
+    df: &'a [VecColumn],
     dg_decomposition: &'a Algo,
-    g_elements: &'a Vec<bool>,
+    g_elements: &'a [bool],
     mapping: &'a impl IndexMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
     (0..df.len()).map(|col_idx| {
