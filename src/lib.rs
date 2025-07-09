@@ -27,23 +27,23 @@ fn compute_ensemble(
     num_threads: usize,
     slow: bool,
 ) -> DiagramEnsemble {
-    let annotated_matrix: Vec<_> = matrix
-        .into_iter()
-        .map(|(in_g, dimension, boundary)| AnnotatedColumn {
-            in_g,
-            col: VecColumn::from((dimension, boundary)),
-        })
-        .collect();
-    if slow {
-        let decomps =
-            all_decompositions_slow::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads);
-        decomps.all_diagrams()
-    } else {
-        let decomps = py.allow_threads(|| {
-            all_decompositions::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads)
-        });
-        decomps.all_diagrams()
-    }
+    py.allow_threads(|| {
+        let annotated_matrix: Vec<_> = matrix
+            .into_iter()
+            .map(|(in_g, dimension, boundary)| AnnotatedColumn {
+                in_g,
+                col: VecColumn::from((dimension, boundary)),
+            })
+            .collect();
+        if slow {
+            let decomps =
+                all_decompositions_slow::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads);
+            decomps.all_diagrams()
+        } else {
+            let decomps = all_decompositions::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads);
+            decomps.all_diagrams()
+        }
+    })
 }
 
 /// Compute the six-pack of persistence diagrams for an arbitrary map $f$
@@ -75,28 +75,29 @@ fn compute_ensemble_cylinder(
     slow: bool,
 ) -> (DiagramEnsemble, CylinderMetadata) {
     // We mark each map with the dimension of the domain column
-    let map = map
-        .into_iter()
-        .zip(domain_matrix.iter())
-        .map(|(image, domain_col)| VecColumn::from((domain_col.1, image)))
-        .collect();
-    let domain_matrix = domain_matrix
-        .into_iter()
-        .map(|(time, dimension, boundary)| (time, VecColumn::from((dimension, boundary))))
-        .collect();
-    let codomain_matrix = codomain_matrix
-        .into_iter()
-        .map(|(time, dimension, boundary)| (time, VecColumn::from((dimension, boundary))))
-        .collect();
-    let (cylinder, metadata) = build_cylinder(domain_matrix, codomain_matrix, map);
-    if slow {
-        let decomps = all_decompositions_slow::<LockFreeAlgorithm<_>>(cylinder, num_threads);
-        (decomps.all_diagrams(), metadata)
-    } else {
-        let decomps =
-            py.allow_threads(|| all_decompositions::<LockFreeAlgorithm<_>>(cylinder, num_threads));
-        (decomps.all_diagrams(), metadata)
-    }
+    py.allow_threads(|| {
+        let map = map
+            .into_iter()
+            .zip(domain_matrix.iter())
+            .map(|(image, domain_col)| VecColumn::from((domain_col.1, image)))
+            .collect();
+        let domain_matrix = domain_matrix
+            .into_iter()
+            .map(|(time, dimension, boundary)| (time, VecColumn::from((dimension, boundary))))
+            .collect();
+        let codomain_matrix = codomain_matrix
+            .into_iter()
+            .map(|(time, dimension, boundary)| (time, VecColumn::from((dimension, boundary))))
+            .collect();
+        let (cylinder, metadata) = build_cylinder(domain_matrix, codomain_matrix, map);
+        if slow {
+            let decomps = all_decompositions_slow::<LockFreeAlgorithm<_>>(cylinder, num_threads);
+            (decomps.all_diagrams(), metadata)
+        } else {
+            let decomps = all_decompositions::<LockFreeAlgorithm<_>>(cylinder, num_threads);
+            (decomps.all_diagrams(), metadata)
+        }
+    })
 }
 
 #[pyfunction]
