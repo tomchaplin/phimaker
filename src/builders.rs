@@ -1,5 +1,5 @@
 use lophat::{
-    algorithms::RVDecomposition,
+    algorithms::Decomposition,
     columns::{Column, VecColumn},
 };
 
@@ -62,7 +62,7 @@ pub fn build_drel<'a>(
         })
 }
 
-pub fn build_dker<'a, Algo: RVDecomposition<VecColumn>>(
+pub fn build_dker<'a, Algo: Decomposition<VecColumn>>(
     dim_decomposition: &'a Algo,
     mapping: &'a impl IndexMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
@@ -86,7 +86,7 @@ pub fn build_dker<'a, Algo: RVDecomposition<VecColumn>>(
     })
 }
 
-pub fn build_dcok<'a, Algo: RVDecomposition<VecColumn>>(
+pub fn build_dcok<'a, Algo: Decomposition<VecColumn>>(
     df: &'a [VecColumn],
     dg_decomposition: &'a Algo,
     g_elements: &'a [bool],

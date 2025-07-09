@@ -4,7 +4,9 @@ use std::{fs::File, io::BufReader};
 use log::debug;
 
 use lophat::{
-    algorithms::RVDecomposition, columns::Column, utils::PersistenceDiagram, utils::RVDFileFormat,
+    algorithms::{Decomposition, DecompositionAlgo},
+    columns::Column,
+    utils::{DecompositionFileFormat, PersistenceDiagram},
 };
 use pyo3::prelude::*;
 
@@ -34,7 +36,7 @@ fn compute_negative_list(metadata: &EnsembleMetadata, diagram: &PersistenceDiagr
     negative_list
 }
 
-fn is_kernel_birth<Decomp: RVDecomposition<C>, C: Column>(
+fn is_kernel_birth<Decomp: Decomposition<C>, C: Column>(
     idx: usize,
     metadata: &EnsembleMetadata,
     f_negative_list: &[bool],
@@ -55,7 +57,7 @@ fn is_kernel_birth<Decomp: RVDecomposition<C>, C: Column>(
     true
 }
 
-fn is_kernel_death<Decomp: RVDecomposition<C>, C: Column>(
+fn is_kernel_death<Decomp: Decomposition<C>, C: Column>(
     idx: usize,
     metadata: &EnsembleMetadata,
     g: &Decomp,
@@ -77,7 +79,7 @@ fn is_kernel_death<Decomp: RVDecomposition<C>, C: Column>(
     true
 }
 
-fn kernel_diagram<Decomp: RVDecomposition<C>, C: Column>(
+fn kernel_diagram<Decomp: Decomposition<C>, C: Column>(
     metadata: &EnsembleMetadata,
     ker: &Decomp,
     g: &Decomp,
@@ -102,7 +104,7 @@ fn kernel_diagram<Decomp: RVDecomposition<C>, C: Column>(
     dgm
 }
 
-fn image_diagram<Decomp: RVDecomposition<C>, C: Column>(
+fn image_diagram<Decomp: Decomposition<C>, C: Column>(
     metadata: &EnsembleMetadata,
     g: &Decomp,
     im: &Decomp,
@@ -137,7 +139,7 @@ fn image_diagram<Decomp: RVDecomposition<C>, C: Column>(
     dgm
 }
 
-fn cokernel_diagram<Decomp: RVDecomposition<C>, C: Column>(
+fn cokernel_diagram<Decomp: Decomposition<C>, C: Column>(
     metadata: &EnsembleMetadata,
     g: &Decomp,
     im: &Decomp,
@@ -170,7 +172,7 @@ fn cokernel_diagram<Decomp: RVDecomposition<C>, C: Column>(
         });
     dgm
 }
-impl<C: Column, Algo: RVDecomposition<C>> DecompositionEnsemble<C, Algo> {
+impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
     pub fn all_diagrams(&self) -> DiagramEnsemble {
         let f_diagram = {
             let at_diagram = self.f.diagram();
@@ -211,9 +213,9 @@ impl<C: Column, Algo: RVDecomposition<C>> DecompositionEnsemble<C, Algo> {
     }
 }
 
-pub fn from_file(file: &File) -> RVDFileFormat {
+pub fn from_file(file: &File) -> DecompositionFileFormat {
     let buf = BufReader::new(file);
-    deserialize_from(buf).expect("Can desereialize from file")
+    deserialize_from(buf).expect("Can't deserialize from file")
     //from_reader(file).expect("JSON deserializes")
 }
 

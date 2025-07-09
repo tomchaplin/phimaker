@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::{fs::File, io::BufWriter, marker::PhantomData, thread};
 
 use lophat::{
-    algorithms::RVDecomposition,
+    algorithms::DecompositionAlgo,
     columns::{Column, VecColumn},
     options::LoPhatOptions,
     utils::anti_transpose,
@@ -32,14 +32,14 @@ pub struct EnsembleMetadata {
 pub struct DecompositionEnsemble<C, Algo>
 where
     C: Column,
-    Algo: RVDecomposition<C>,
+    Algo: DecompositionAlgo<C>,
 {
-    pub f: Algo,
-    pub g: Algo,
-    pub im: Algo,
-    pub ker: Algo,
-    pub cok: Algo,
-    pub rel: Algo,
+    pub f: Algo::Decomposition,
+    pub g: Algo::Decomposition,
+    pub im: Algo::Decomposition,
+    pub ker: Algo::Decomposition,
+    pub cok: Algo::Decomposition,
+    pub rel: Algo::Decomposition,
     pub metadata: EnsembleMetadata,
     phantom: PhantomData<C>,
 }
@@ -58,84 +58,101 @@ pub struct FileEnsemble {
     pub metadata: EnsembleMetadata,
 }
 
-pub fn thread_1_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + Send>(
-    df: &Vec<VecColumn>,
-    base_options: LoPhatOptions,
-) -> Algo {
+pub fn decompose_domain<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
+    df: &[VecColumn],
+    base_options: Algo::Options,
+) -> Algo::Decomposition {
     // Decompose Df
     // Df is a chain complex so can compute anti-transpose instead
     let df_at = anti_transpose(df);
-    let out = Algo::decompose(df_at.into_iter(), Some(base_options));
+    let out = Algo::init(Some(base_options))
+        .add_cols(df_at.into_iter())
+        .decompose();
     debug!("Decomposed f");
     out
 }
 
-pub fn thread_2_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + Send>(
+pub fn decompose_cokernel_codomain<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
     df: &[VecColumn],
     g_elements: &[bool],
     l_first_mapping: &VectorMapping,
-    base_options: LoPhatOptions,
-) -> (Algo, Algo) {
+    base_options: Algo::Options,
+) -> (Algo::Decomposition, Algo::Decomposition) {
     // Decompose Dg
-    // Need to use v columns of Dg later, so no AT
+    // Need to use v columns of Dg later, so no anti-transpose
     let dg = build_dg(df, g_elements, l_first_mapping);
-    let mut dg_options = base_options;
-    dg_options.maintain_v = true;
-    let decomp_dg = Algo::decompose(dg, Some(dg_options));
+    let dg_options = LoPhatOptions {
+        maintain_v: true,
+        ..base_options
+    };
+    let decomp_dg = Algo::init(Some(dg_options)).add_cols(dg).decompose();
     debug!("Decomposed g");
+
     // Decompose d_cok
     let d_cok = build_dcok(df, &decomp_dg, g_elements, l_first_mapping);
-    let mut dcok_options = base_options;
-    dcok_options.clearing = false; // Not a chain complex
-    let decompose_dcok = Algo::decompose(d_cok, Some(dcok_options));
+    let dcok_options = LoPhatOptions {
+        clearing: false,
+        ..base_options
+    };
+    let decompose_dcok = Algo::init(Some(dcok_options)).add_cols(d_cok).decompose();
     debug!("Decomposed cok");
     (decomp_dg, decompose_dcok)
 }
-pub fn thread_3_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + Send>(
+pub fn decompose_kernel<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
     df: &[VecColumn],
     l_first_mapping: &VectorMapping,
     size_of_k: usize,
-    base_options: LoPhatOptions,
-) -> (Algo, Algo, VectorMapping) {
+    base_options: Algo::Options,
+) -> (Algo::Decomposition, Algo::Decomposition, VectorMapping) {
     // Decompose dim
-    // Need to use v columns of Dim later, also no AT or clearing since D^2 != 0
+    // Need to use v columns of Dim later, also no anti-transpose or clearing since D^2 != 0
     let dim = build_dim(df, l_first_mapping);
-    let mut dim_options = base_options;
-    dim_options.maintain_v = true;
-    dim_options.clearing = false;
-    let decompose_dim = Algo::decompose(dim, Some(dim_options));
+    let dim_options = LoPhatOptions {
+        maintain_v: true,
+        clearing: false,
+        ..base_options
+    };
+    let decompose_dim = Algo::init(Some(dim_options)).add_cols(dim).decompose();
     debug!("Decomposed im");
+
     // Decompose dker
     let dker = build_dker(&decompose_dim, l_first_mapping);
-    let mut dker_options = base_options;
-    dker_options.clearing = false; // Not a chain complex so no clearing
-    dker_options.column_height = Some(size_of_k); // Non-square matrix
-    let decompose_dker = Algo::decompose(dker, Some(dker_options));
+    let dker_options = LoPhatOptions {
+        clearing: false,                // Not a chain complex so no clearing
+        column_height: Some(size_of_k), // Non-square matrix
+        ..base_options
+    };
+    let decompose_dker = Algo::init(Some(dker_options)).add_cols(dker).decompose();
     let kernel_mapping = build_kernel_mapping(&decompose_dim);
     debug!("Decomposed ker");
     (decompose_dim, decompose_dker, kernel_mapping)
 }
 
-pub fn thread_4_job<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + Send>(
+pub fn decompose_relative<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
     df: &[VecColumn],
     g_elements: &[bool],
     size_of_l: usize,
     size_of_k: usize,
     base_options: LoPhatOptions,
-) -> (Algo, VectorMapping) {
+) -> (Algo::Decomposition, VectorMapping) {
     let (rel_mapping, l_index) = build_rel_mapping(df, g_elements, size_of_l, size_of_k);
-    let drel = build_drel(df, g_elements, &rel_mapping, l_index).collect();
-    // Chain complex so can use clearing and AT
+    let drel = build_drel(df, g_elements, &rel_mapping, l_index).collect::<Vec<_>>();
+    // Chain complex so can use clearing and anti-transpose
     let drel_at = anti_transpose(&drel);
-    let decompose_drel = Algo::decompose(drel_at.into_iter(), Some(base_options));
+    let decompose_drel = Algo::init(Some(base_options))
+        .add_cols(drel_at.into_iter())
+        .decompose();
     debug!("Decomposed rel");
     (decompose_drel, rel_mapping)
 }
 
-pub fn all_decompositions<Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + Send>(
+pub fn all_decompositions<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
     matrix: Vec<AnnotatedColumn<VecColumn>>,
     num_threads: usize,
-) -> DecompositionEnsemble<VecColumn, Algo> {
+) -> DecompositionEnsemble<VecColumn, Algo>
+where
+    Algo::Decomposition: Send,
+{
     let base_options = LoPhatOptions {
         maintain_v: false,   // Only turn on maintain_v on threads where we need it
         column_height: None, // Assume square unless told otherwise
@@ -155,14 +172,18 @@ pub fn all_decompositions<Algo: RVDecomposition<VecColumn, Options = LoPhatOptio
     let size_of_k = df.len();
 
     let (f, (g, cok), (im, ker, kernel_mapping), (rel, rel_mapping)) = thread::scope(|s| {
-        let thread1 = s.spawn(|| thread_1_job(&df, base_options));
+        let thread1 = s.spawn(|| decompose_domain::<Algo>(&df, base_options));
 
-        let thread2 = s.spawn(|| thread_2_job(&df, &g_elements, &l_first_mapping, base_options));
+        let thread2 = s.spawn(|| {
+            decompose_cokernel_codomain::<Algo>(&df, &g_elements, &l_first_mapping, base_options)
+        });
 
-        let thread3 = s.spawn(|| thread_3_job(&df, &l_first_mapping, size_of_k, base_options));
+        let thread3 =
+            s.spawn(|| decompose_kernel::<Algo>(&df, &l_first_mapping, size_of_k, base_options));
 
-        let thread4 =
-            s.spawn(|| thread_4_job(&df, &g_elements, size_of_l, size_of_k, base_options));
+        let thread4 = s.spawn(|| {
+            decompose_relative::<Algo>(&df, &g_elements, size_of_l, size_of_k, base_options)
+        });
 
         (
             thread1.join().unwrap(),
@@ -209,7 +230,8 @@ pub fn all_decompositions_slow<Algo>(
     num_threads: usize,
 ) -> FileEnsemble
 where
-    Algo: RVDecomposition<VecColumn, Options = LoPhatOptions> + Send + Serialize,
+    Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>,
+    Algo::Decomposition: Serialize + Send,
 {
     let base_options = LoPhatOptions {
         maintain_v: false,   // Only turn on maintain_v on threads where we need it
@@ -229,17 +251,18 @@ where
     let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
     let size_of_k = df.len();
 
-    let f = thread_1_job::<Algo>(&df, base_options);
+    let f = decompose_domain::<Algo>(&df, base_options);
     let f = to_file(f);
-    let (g, cok) = thread_2_job::<Algo>(&df, &g_elements, &l_first_mapping, base_options);
+    let (g, cok) =
+        decompose_cokernel_codomain::<Algo>(&df, &g_elements, &l_first_mapping, base_options);
     let g = to_file(g);
     let cok = to_file(cok);
     let (im, ker, kernel_mapping) =
-        thread_3_job::<Algo>(&df, &l_first_mapping, size_of_k, base_options);
+        decompose_kernel::<Algo>(&df, &l_first_mapping, size_of_k, base_options);
     let im = to_file(im);
     let ker = to_file(ker);
     let (rel, rel_mapping) =
-        thread_4_job::<Algo>(&df, &g_elements, size_of_l, size_of_k, base_options);
+        decompose_relative::<Algo>(&df, &g_elements, size_of_l, size_of_k, base_options);
     let rel = to_file(rel);
 
     FileEnsemble {

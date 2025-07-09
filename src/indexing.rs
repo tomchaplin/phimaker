@@ -1,5 +1,5 @@
 use lophat::{
-    algorithms::RVDecomposition,
+    algorithms::Decomposition,
     columns::{Column, VecColumn},
     utils::PersistenceDiagram,
 };
@@ -82,7 +82,7 @@ pub fn compute_l_first_mapping(matrix: &Vec<AnnotatedColumn<VecColumn>>) -> Vect
     }
 }
 
-pub fn build_kernel_mapping<Algo: RVDecomposition<VecColumn>>(
+pub fn build_kernel_mapping<Algo: Decomposition<VecColumn>>(
     dim_decomposition: &Algo,
 ) -> VectorMapping {
     let mut counter = 0;

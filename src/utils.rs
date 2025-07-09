@@ -1,5 +1,5 @@
 use lophat::{
-    algorithms::RVDecomposition,
+    algorithms::{Decomposition, DecompositionAlgo},
     columns::{Column, VecColumn},
 };
 
@@ -13,13 +13,13 @@ pub fn print_matrix(matrix: &Vec<VecColumn>) {
     }
 }
 
-pub fn print_decomp<C: Column + Debug, Algo: RVDecomposition<C>>(decomp: &Algo) {
+pub fn print_decomp<C: Column + Debug, Decomp: Decomposition<C>>(decomp: &Decomp) {
     println!("R:");
     let r_matrix = (0..decomp.n_cols()).map(|idx| decomp.get_r_col(idx));
     for col in r_matrix {
         println!("{:?}", *col);
     }
-    if decomp.get_v_col(0).is_some() {
+    if decomp.get_v_col(0).is_ok() {
         let v_matrix = (0..decomp.n_cols()).map(|idx| decomp.get_v_col(idx));
         println!("V:");
         for col in v_matrix {
@@ -28,17 +28,17 @@ pub fn print_decomp<C: Column + Debug, Algo: RVDecomposition<C>>(decomp: &Algo) 
     }
 }
 
-pub fn print_ensemble<C: Column + Debug, Algo: RVDecomposition<C>>(
+pub fn print_ensemble<C: Column + Debug, Algo: DecompositionAlgo<C>>(
     ensemble: &DecompositionEnsemble<C, Algo>,
 ) {
-    println!("Df:");
+    println!("D_f:");
     print_decomp(&ensemble.f);
-    println!("Dg:");
+    println!("D_g:");
     print_decomp(&ensemble.g);
-    println!("Dim:");
+    println!("D_im:");
     print_decomp(&ensemble.im);
-    println!("Dker:");
+    println!("D_ker:");
     print_decomp(&ensemble.ker);
-    println!("Dcok:");
+    println!("D_cok:");
     print_decomp(&ensemble.cok);
 }

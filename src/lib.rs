@@ -90,13 +90,11 @@ fn compute_ensemble_cylinder(
         .collect();
     let (cylinder, metadata) = build_cylinder(domain_matrix, codomain_matrix, map);
     if slow {
-        let decomps =
-            all_decompositions_slow::<LockFreeAlgorithm<_>>(cylinder, num_threads);
+        let decomps = all_decompositions_slow::<LockFreeAlgorithm<_>>(cylinder, num_threads);
         (decomps.all_diagrams(), metadata)
     } else {
-        let decomps = py.allow_threads(|| {
-            all_decompositions::<LockFreeAlgorithm<_>>(cylinder, num_threads)
-        });
+        let decomps =
+            py.allow_threads(|| all_decompositions::<LockFreeAlgorithm<_>>(cylinder, num_threads));
         (decomps.all_diagrams(), metadata)
     }
 }
@@ -115,7 +113,7 @@ fn zero_overlap(matrix: Vec<(bool, usize, Vec<usize>)>) -> Vec<(usize, usize)> {
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn phimaker(_py: Python, m: &PyModule) -> PyResult<()> {
+fn phimaker(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
     m.add_function(wrap_pyfunction!(compute_ensemble, m)?)?;
     m.add_function(wrap_pyfunction!(compute_ensemble_cylinder, m)?)?;

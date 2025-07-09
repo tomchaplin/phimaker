@@ -1,6 +1,6 @@
+use log::debug;
 use lophat::columns::{Column, VecColumn};
 use pyo3::prelude::*;
-use log::debug;
 
 use std::cmp::Ordering;
 
@@ -182,7 +182,10 @@ pub fn build_cylinder(
         codomain: codomain_idxs,
         domain_shift: domain_shift_idxs,
     };
-    debug!("Built mapping cylinder with {} simplices.", cylinder_matrix.len());
+    debug!(
+        "Built mapping cylinder with {} simplices.",
+        cylinder_matrix.len()
+    );
     (cylinder_matrix, metadata)
 }
 
