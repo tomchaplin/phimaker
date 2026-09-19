@@ -15,10 +15,13 @@ use lophat::{algorithms::LockFreeAlgorithm, columns::VecColumn};
 use overlap::compute_zero_overlap;
 use pyo3::prelude::*;
 
-/// Compute the six-pack of persistence diagrams for an inclusion of filtered cell complexes.
-/// `matrix` is a vector of tuples corresponding to the cells of the codomain,
+/// Compute the six-pack of persistence diagrams for an inclusion of filtered chain complexes.
+/// Requires a generating set for the codomain that extends a generating set for the domain.
+/// `matrix` is a vector of tuples corresponding to the generators of the codomain,
 /// where each tuple is of the form
-/// `(is_simplex_in_domain, dimension_of_simplex, indices_of_boundary_simplices)`.
+/// `(is_generator_in_domain, dimension_of_generator, indices_of_generators_in_boundary)`.
+/// `num_threads` controls the maximum number of threads used.
+/// `slow` ??
 #[pyfunction]
 #[pyo3(signature = (matrix, num_threads=0, slow=false))]
 fn compute_ensemble(
@@ -30,8 +33,8 @@ fn compute_ensemble(
     py.allow_threads(|| {
         let annotated_matrix: Vec<_> = matrix
             .into_iter()
-            .map(|(in_g, dimension, boundary)| AnnotatedColumn {
-                in_g,
+            .map(|(in_domain, dimension, boundary)| AnnotatedColumn {
+                in_domain,
                 col: VecColumn::from((dimension, boundary)),
             })
             .collect();
@@ -105,7 +108,7 @@ fn zero_overlap(matrix: Vec<(bool, usize, Vec<usize>)>) -> Vec<(usize, usize)> {
     let annotated_matrix: Vec<AnnotatedColumn<VecColumn>> = matrix
         .into_iter()
         .map(|(in_g, dimension, boundary)| AnnotatedColumn {
-            in_g,
+            in_domain,
             col: VecColumn::from((dimension, boundary)),
         })
         .collect();
@@ -142,7 +145,7 @@ mod tests {
             })
             .map(|(in_g, dimension, l_vec)| AnnotatedColumn {
                 col: VecColumn::from((dimension, l_vec[2..].to_owned())),
-                in_g,
+                in_domain: in_g,
             })
             .collect();
         let ensemble = all_decompositions::<LockFreeAlgorithm<_>>(boundary_matrix, 0);

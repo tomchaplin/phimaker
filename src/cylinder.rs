@@ -106,7 +106,7 @@ pub fn build_cylinder(
                     .collect();
                 AnnotatedColumn {
                     col: VecColumn::from((col.dimension(), new_boundary)),
-                    in_g: true,
+                    in_domain: true,
                 }
             }
             CylinderColType::Codomain => {
@@ -122,7 +122,7 @@ pub fn build_cylinder(
                     .collect();
                 AnnotatedColumn {
                     col: VecColumn::from((col.dimension(), new_boundary)),
-                    in_g: false,
+                    in_domain: false,
                 }
             }
             CylinderColType::DomainShifted => {
@@ -157,7 +157,7 @@ pub fn build_cylinder(
                 AnnotatedColumn {
                     // The shifted col is in the dimension of the domain column + 1
                     col: VecColumn::from((col.dimension() + 1, new_boundary)),
-                    in_g: false,
+                    in_domain: false,
                 }
             }
         };

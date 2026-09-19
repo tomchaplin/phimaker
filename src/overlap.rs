@@ -30,7 +30,7 @@ pub fn compute_zero_overlap(matrix: &[AnnotatedColumn<VecColumn>]) -> Vec<(usize
         // We push None to list so that node index line up with column indexes
         let new_node = if column.col.dimension() == 0 {
             let data = ClusterData {
-                chromatic_index: column.in_g.into(),
+                chromatic_index: column.in_domain.into(),
                 size: 1,
             };
             Some(UnionFindNode::new(data))

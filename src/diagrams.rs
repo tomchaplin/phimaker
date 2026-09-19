@@ -29,7 +29,7 @@ pub struct DiagramEnsemble {
 // Since we anti-transposed f, to check whether a column is negative in f
 // we need to check the diagram of f after reindexing
 fn compute_negative_list(metadata: &EnsembleMetadata, diagram: &PersistenceDiagram) -> Vec<bool> {
-    let mut negative_list: Vec<bool> = vec![false; metadata.size_of_k];
+    let mut negative_list: Vec<bool> = vec![false; metadata.sz_cod];
     for (_birth, death) in diagram.paired.iter() {
         negative_list[*death] = true;
     }
@@ -42,7 +42,7 @@ fn is_kernel_birth<Decomp: Decomposition<C>, C: Column>(
     f_negative_list: &[bool],
     im: &Decomp,
 ) -> bool {
-    let in_l = metadata.g_elements[idx];
+    let in_l = metadata.col_in_dom[idx];
     if in_l {
         return false;
     }
@@ -50,7 +50,7 @@ fn is_kernel_birth<Decomp: Decomposition<C>, C: Column>(
     if !negative_in_f {
         return false;
     }
-    let lowest_rim_in_l = im.get_r_col(idx).pivot().unwrap() < metadata.size_of_l;
+    let lowest_rim_in_l = im.get_r_col(idx).pivot().unwrap() < metadata.sz_dom;
     if !lowest_rim_in_l {
         return false;
     }
@@ -63,11 +63,11 @@ fn is_kernel_death<Decomp: Decomposition<C>, C: Column>(
     g: &Decomp,
     f_negative_list: &[bool],
 ) -> bool {
-    let in_l = metadata.g_elements[idx];
+    let in_l = metadata.col_in_dom[idx];
     if !in_l {
         return false;
     }
-    let g_index = metadata.l_first_mapping.map(idx).unwrap();
+    let g_index = metadata.dom_first_mapping.map(idx).unwrap();
     let negative_in_g = g.get_r_col(g_index).pivot().is_some();
     if !negative_in_g {
         return false;
@@ -87,7 +87,7 @@ fn kernel_diagram<Decomp: Decomposition<C>, C: Column>(
     f_negative_list: &[bool],
 ) -> PersistenceDiagram {
     let mut dgm = PersistenceDiagram::default();
-    for idx in 0..metadata.size_of_k {
+    for idx in 0..metadata.sz_cod {
         if is_kernel_birth(idx, metadata, f_negative_list, im) {
             dgm.unpaired.insert(idx);
             continue;
@@ -96,7 +96,7 @@ fn kernel_diagram<Decomp: Decomposition<C>, C: Column>(
             // TODO: Problem kernel columns have different indexing to f
             let ker_idx = metadata.kernel_mapping.map(idx).unwrap();
             let g_birth_index = ker.get_r_col(ker_idx).pivot().unwrap();
-            let birth_index = metadata.l_first_mapping.inverse_map(g_birth_index).unwrap();
+            let birth_index = metadata.dom_first_mapping.inverse_map(g_birth_index).unwrap();
             dgm.unpaired.remove(&birth_index);
             dgm.paired.insert((birth_index, idx));
         }
@@ -114,11 +114,11 @@ fn image_diagram<Decomp: Decomposition<C>, C: Column>(
     f_negative_list
         .iter()
         .enumerate()
-        .take(metadata.size_of_k)
+        .take(metadata.sz_cod)
         .for_each(|(idx, &neg_in_f)| {
             // for idx in 0..metadata.size_of_k {
-            if metadata.g_elements[idx] {
-                let g_idx = metadata.l_first_mapping.map(idx).unwrap();
+            if metadata.col_in_dom[idx] {
+                let g_idx = metadata.dom_first_mapping.map(idx).unwrap();
                 let pos_in_g = g.get_r_col(g_idx).pivot().is_none();
                 if pos_in_g {
                     dgm.unpaired.insert(idx);
@@ -127,11 +127,11 @@ fn image_diagram<Decomp: Decomposition<C>, C: Column>(
             }
             if neg_in_f {
                 let lowest_in_rim = im.get_r_col(idx).pivot().unwrap();
-                let lowest_rim_in_l = lowest_in_rim < metadata.size_of_l;
+                let lowest_rim_in_l = lowest_in_rim < metadata.sz_dom;
                 if !lowest_rim_in_l {
                     return;
                 }
-                let birth_idx = metadata.l_first_mapping.inverse_map(lowest_in_rim).unwrap();
+                let birth_idx = metadata.dom_first_mapping.inverse_map(lowest_in_rim).unwrap();
                 dgm.unpaired.remove(&birth_idx);
                 dgm.paired.insert((birth_idx, idx));
             }
@@ -150,12 +150,12 @@ fn cokernel_diagram<Decomp: Decomposition<C>, C: Column>(
     f_negative_list
         .iter()
         .enumerate()
-        .take(metadata.size_of_k)
+        .take(metadata.sz_cod)
         .for_each(|(idx, &neg_in_f)| {
             let pos_in_f = !neg_in_f;
-            let g_idx = metadata.l_first_mapping.map(idx).unwrap();
+            let g_idx = metadata.dom_first_mapping.map(idx).unwrap();
             let not_in_l_or_neg_in_g =
-                (!metadata.g_elements[idx]) || g.get_r_col(g_idx).pivot().is_some();
+                (!metadata.col_in_dom[idx]) || g.get_r_col(g_idx).pivot().is_some();
             if pos_in_f && not_in_l_or_neg_in_g {
                 dgm.unpaired.insert(idx);
                 return;
@@ -163,7 +163,7 @@ fn cokernel_diagram<Decomp: Decomposition<C>, C: Column>(
             if pos_in_f {
                 return;
             }
-            let lowest_rim_in_l = im.get_r_col(idx).pivot().unwrap() < metadata.size_of_l;
+            let lowest_rim_in_l = im.get_r_col(idx).pivot().unwrap() < metadata.sz_dom;
             if !lowest_rim_in_l {
                 let lowest_in_rcok = cok.get_r_col(idx).pivot().unwrap();
                 dgm.unpaired.remove(&lowest_in_rcok);
@@ -175,35 +175,35 @@ fn cokernel_diagram<Decomp: Decomposition<C>, C: Column>(
 impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
     pub fn all_diagrams(&self) -> DiagramEnsemble {
         let f_diagram = {
-            let at_diagram = self.f.diagram();
-            at_diagram.anti_transpose(self.metadata.size_of_k)
+            let at_diagram = self.cod.diagram();
+            at_diagram.anti_transpose(self.metadata.sz_cod)
         };
         let f_negative_list = compute_negative_list(&self.metadata, &f_diagram);
 
         DiagramEnsemble {
             g: {
-                let mut dgm = self.g.diagram();
-                unreorder_idxs(&mut dgm, &self.metadata.l_first_mapping);
+                let mut dgm = self.dom.diagram();
+                unreorder_idxs(&mut dgm, &self.metadata.dom_first_mapping);
                 dgm
             },
             rel: {
                 let at_diagram = self.rel.diagram();
                 let mut dgm = at_diagram
-                    .anti_transpose(self.metadata.size_of_k - self.metadata.size_of_l + 1);
+                    .anti_transpose(self.metadata.sz_cod - self.metadata.sz_dom + 1);
                 unreorder_idxs(&mut dgm, &self.metadata.rel_mapping);
                 dgm
             },
-            im: image_diagram(&self.metadata, &self.g, &self.im, &f_negative_list),
+            im: image_diagram(&self.metadata, &self.dom, &self.im, &f_negative_list),
             ker: kernel_diagram(
                 &self.metadata,
                 &self.ker,
-                &self.g,
+                &self.dom,
                 &self.im,
                 &f_negative_list,
             ),
             cok: cokernel_diagram(
                 &self.metadata,
-                &self.g,
+                &self.dom,
                 &self.im,
                 &self.cok,
                 &f_negative_list,
@@ -224,7 +224,7 @@ impl FileEnsemble {
         let f_diagram = {
             let f_decomp = from_file(&self.f);
             let at_diagram = f_decomp.diagram();
-            at_diagram.anti_transpose(self.metadata.size_of_k)
+            at_diagram.anti_transpose(self.metadata.sz_cod)
         };
         debug!("Got f");
         let f_negative_list = compute_negative_list(&self.metadata, &f_diagram);
@@ -232,14 +232,14 @@ impl FileEnsemble {
             let rel_decomp = from_file(&self.rel);
             let at_diagram = rel_decomp.diagram();
             let mut dgm =
-                at_diagram.anti_transpose(self.metadata.size_of_k - self.metadata.size_of_l + 1);
+                at_diagram.anti_transpose(self.metadata.sz_cod - self.metadata.sz_dom + 1);
             unreorder_idxs(&mut dgm, &self.metadata.rel_mapping);
             dgm
         };
         let g_decomp = from_file(&self.g);
         let g_diagram = {
             let mut dgm = g_decomp.diagram();
-            unreorder_idxs(&mut dgm, &self.metadata.l_first_mapping);
+            unreorder_idxs(&mut dgm, &self.metadata.dom_first_mapping);
             dgm
         };
         let im_decomp = from_file(&self.im);

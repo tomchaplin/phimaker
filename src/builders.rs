@@ -12,27 +12,27 @@ pub fn extract_columns<'a>(
     matrix
         .iter()
         .zip(extract.iter())
-        .filter(|(_, in_g)| **in_g)
+        .filter(|(_, in_dom)| **in_dom)
         .map(|(col, _)| col)
         .cloned()
 }
 
-pub fn build_dg<'a>(
-    df: &'a [VecColumn],
-    g_elements: &'a [bool],
-    l_first_mapping: &'a VectorMapping,
+pub fn build_d_dom<'a>(
+    d_cod: &'a [VecColumn],
+    col_in_dom: &'a [bool],
+    dom_first_mapping: &'a VectorMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
-    extract_columns(df, g_elements).map(|mut col| {
-        col.reorder_rows(l_first_mapping);
+    extract_columns(d_cod, col_in_dom).map(|mut col| {
+        col.reorder_rows(dom_first_mapping);
         col
     })
 }
 
-pub fn build_dim<'a>(
-    df: &'a [VecColumn],
+pub fn build_d_im<'a>(
+    d_cod: &'a [VecColumn],
     mapping: &'a impl IndexMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
-    df.iter().cloned().map(|mut col| {
+    d_cod.iter().cloned().map(|mut col| {
         col.reorder_rows(mapping);
         col
     })
@@ -42,7 +42,7 @@ pub fn build_dim<'a>(
 // This ensures that a 1-cell not in L can have at most 1 vertex in L
 // This makes it easier to map the boundary
 // Also inherits assumption from build_rel_mapping
-pub fn build_drel<'a>(
+pub fn build_d_rel<'a>(
     df: &'a [VecColumn],
     g_elements: &'a [bool],
     rel_mapping: &'a VectorMapping,
@@ -62,7 +62,7 @@ pub fn build_drel<'a>(
         })
 }
 
-pub fn build_dker<'a, Algo: Decomposition<VecColumn>>(
+pub fn build_d_ker<'a, Algo: Decomposition<VecColumn>>(
     dim_decomposition: &'a Algo,
     mapping: &'a impl IndexMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
@@ -86,27 +86,26 @@ pub fn build_dker<'a, Algo: Decomposition<VecColumn>>(
     })
 }
 
-pub fn build_dcok<'a, Algo: Decomposition<VecColumn>>(
-    df: &'a [VecColumn],
-    dg_decomposition: &'a Algo,
-    g_elements: &'a [bool],
-    mapping: &'a impl IndexMapping,
+pub fn build_d_cok<'a, Algo: Decomposition<VecColumn>>(
+    d_cod: &'a [VecColumn],
+    d_dom_decomp: &'a Algo,
+    col_in_dom: &'a [bool],
+    dom_first_mapping: &'a impl IndexMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
-    (0..df.len()).map(|col_idx| {
-        let col_in_g = g_elements[col_idx];
-        if col_in_g {
-            let idx_in_dg = mapping.map(col_idx).unwrap();
-            let dg_rcol = &dg_decomposition.get_r_col(idx_in_dg);
-            if dg_rcol.pivot().is_none() {
-                let mut next_col = dg_decomposition.get_v_col(idx_in_dg).unwrap().clone();
+    (0..d_cod.len()).map(|col_idx| {
+        if col_in_dom[col_idx] {
+            let idx_in_d_dom = dom_first_mapping.map(col_idx).unwrap();
+            let d_dom_rcol = &d_dom_decomp.get_r_col(idx_in_d_dom);
+            if d_dom_rcol.pivot().is_none() {
+                let mut next_col = d_dom_decomp.get_v_col(idx_in_d_dom).unwrap().clone();
                 // Convert from L simplices first back to default order
-                next_col.unreorder_rows(mapping);
+                next_col.unreorder_rows(dom_first_mapping);
                 next_col
             } else {
-                df[col_idx].clone()
+                d_cod[col_idx].clone()
             }
         } else {
-            df[col_idx].clone()
+            d_cod[col_idx].clone()
         }
     })
 }

@@ -8,10 +8,12 @@ pub trait ReordorableColumn: Send + Sync + Clone + Default {
     fn reorder_rows(&mut self, mapping: &impl IndexMapping);
     fn unreorder_rows(&mut self, mapping: &impl IndexMapping);
 }
+
+/// Column of boundary matrix annotated with whether the column is in the domain.
 #[derive(Debug, Default, Clone)]
 pub struct AnnotatedColumn<T> {
     pub col: T,
-    pub in_g: bool,
+    pub in_domain: bool,
 }
 
 impl ReordorableColumn for VecColumn {
@@ -36,6 +38,8 @@ impl ReordorableColumn for VecColumn {
     }
 }
 
+/// Represents a mapping of index sets,
+/// optionally providing the inverse mapping if one exists.
 pub trait IndexMapping {
     fn map(&self, index: usize) -> Option<usize>;
     fn inverse_map(&self, index: usize) -> Option<usize>;
@@ -43,6 +47,7 @@ pub trait IndexMapping {
 
 #[derive(Debug)]
 pub struct VectorMapping {
+    // TODO: why do we need Option here?
     internal: Vec<Option<usize>>,
     internal_inverse: Option<Vec<usize>>,
 }
@@ -53,32 +58,38 @@ impl IndexMapping for VectorMapping {
     }
 
     fn inverse_map(&self, index: usize) -> Option<usize> {
-        let inv = self.internal_inverse.as_ref().unwrap();
-        Some(inv[index])
+        self.internal_inverse.as_ref().map(|inv| inv[index])
     }
 }
 
-pub fn compute_l_first_mapping(matrix: &Vec<AnnotatedColumn<VecColumn>>) -> VectorMapping {
+/// Compute a permutation of the rows of the matrix so that generators of the domain come first.
+/// Refer to the description of `D_im` in the Cohen-Steiner paper.
+pub fn compute_dom_first_mapping(matrix: &Vec<AnnotatedColumn<VecColumn>>) -> VectorMapping {
     let total_size = matrix.len();
-    let num_in_g = matrix.iter().filter(|col| col.in_g).count();
-    let mut next_g_index = 0;
-    let mut next_f_index = num_in_g;
+    let num_in_domain = matrix.iter().filter(|col| col.in_domain).count();
+    let mut next_domain_idx = 0;
+    let mut next_non_domain_idx = num_in_domain;
     let mut mapping = Vec::with_capacity(total_size);
-    let mut inverse_mapping = vec![0; total_size];
+    let mut inv_mapping = vec![0; total_size];
     for col in matrix {
-        if col.in_g {
-            inverse_mapping[next_g_index] = mapping.len();
-            mapping.push(Some(next_g_index));
-            next_g_index += 1;
+        if col.in_domain {
+            inv_mapping[next_domain_idx] = mapping.len();
+            mapping.push(Some(next_domain_idx));
+            next_domain_idx += 1;
         } else {
-            inverse_mapping[next_f_index] = mapping.len();
-            mapping.push(Some(next_f_index));
-            next_f_index += 1
+            inv_mapping[next_non_domain_idx] = mapping.len();
+            mapping.push(Some(next_non_domain_idx));
+            next_non_domain_idx += 1
         }
     }
+    // Returns the permutation of the rows.
+    // If `D` is the original boundary matrix, then
+    // `(D_im)_{i, j} = D_{inv_mapping[i], j}`
+    // or equivalently
+    // `(D)_{mapping[i], j} = D_{i, j}`
     VectorMapping {
         internal: mapping,
-        internal_inverse: Some(inverse_mapping),
+        internal_inverse: Some(inv_mapping),
     }
 }
 
