@@ -53,11 +53,25 @@ pub struct VectorMapping {
 
 impl IndexMapping for VectorMapping {
     fn map(&self, index: usize) -> Option<usize> {
-        self.internal[index]
+        (if index < self.internal.len() {
+            Some(self.internal[index])
+        } else {
+            None
+        })
+        .flatten()
     }
 
     fn inverse_map(&self, index: usize) -> Option<usize> {
-        self.internal_inverse.as_ref().map(|inv| inv[index])
+        self.internal_inverse
+            .as_ref()
+            .map(|inv| {
+                if index < inv.len() {
+                    Some(inv[index])
+                } else {
+                    None
+                }
+            })
+            .flatten()
     }
 }
 
