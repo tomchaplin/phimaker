@@ -18,8 +18,8 @@ use crate::{
 #[pyclass(get_all)]
 #[derive(Debug, Clone)]
 pub struct DiagramEnsemble {
-    pub f: PersistenceDiagram,
-    pub g: PersistenceDiagram,
+    pub cod: PersistenceDiagram,
+    pub dom: PersistenceDiagram,
     pub im: PersistenceDiagram,
     pub ker: PersistenceDiagram,
     pub cok: PersistenceDiagram,
@@ -107,41 +107,45 @@ fn kernel_diagram<Decomp: Decomposition<C>, C: Column>(
     dgm
 }
 
-fn image_diagram<Decomp: Decomposition<C>, C: Column>(
+fn codomain_image_diagram<Decomp: Decomposition<C>, C: Column>(
     metadata: &EnsembleMetadata,
     dom_decomp: &Decomp,
     im_decomp: &Decomp,
-    cod_negative_list: &[bool],
-) -> PersistenceDiagram {
-    // TODO: we don't need cod_negative_list or dom_decomp
-    // We only need the negative columns (pivot columns) in R_im
-    let mut dgm = PersistenceDiagram::default();
-    cod_negative_list
-        .iter()
-        .enumerate()
-        .take(metadata.sz_cod)
-        .for_each(|(idx, &neg_in_cod)| {
-            // for idx in 0..metadata.size_of_k {
+) -> (PersistenceDiagram, PersistenceDiagram) {
+    let mut im_dgm = PersistenceDiagram::default();
+    let mut cod_dgm = PersistenceDiagram::default();
+    (0..metadata.sz_cod).for_each(|idx| {
+        if let Some(low_idx) = im_decomp.get_r_col(idx).pivot() {
+            // The column is a death in the codomain.
+            // We need to add the column to the codomain diagram.
+            // The birth index, i.e., the index of the lowest entry in this column,
+            // corresponds to a row in D_im, which has permuted rows.
+            // We need the unpermuted index.
+            let birth_idx = metadata.dom_first_mapping.inverse_map(low_idx).unwrap();
+            cod_dgm.unpaired.remove(&birth_idx);
+            cod_dgm.paired.insert((birth_idx, idx));
+
+            // Check if the birth simplex is in the domain.
+            // If yes, then add a feature to the image diagram.
+            let low_idx_in_dom = low_idx < metadata.sz_dom;
+            if low_idx_in_dom {
+                im_dgm.unpaired.remove(&birth_idx);
+                im_dgm.paired.insert((birth_idx, idx));
+            }
+        } else {
+            // The column is a birth in the codomain.
+            cod_dgm.unpaired.insert(idx);
+
+            // Check if the column is a birth in the domain.
             if metadata.col_in_dom[idx] {
                 let dom_idx = metadata.dom_first_mapping.map(idx).unwrap();
-                let is_cycle = dom_decomp.get_r_col(dom_idx).pivot().is_none();
-                if is_cycle {
-                    dgm.unpaired.insert(idx);
-                    return;
+                if dom_decomp.get_r_col(dom_idx).pivot().is_none() {
+                    im_dgm.unpaired.insert(idx);
                 }
             }
-            if neg_in_cod {
-                let lowest_in_r_im = im_decomp.get_r_col(idx).pivot().unwrap();
-                let lowest_r_im_in_l = lowest_in_r_im < metadata.sz_dom;
-                if !lowest_r_im_in_l {
-                    return;
-                }
-                let birth_idx = metadata.dom_first_mapping.inverse_map(lowest_in_r_im).unwrap();
-                dgm.unpaired.remove(&birth_idx);
-                dgm.paired.insert((birth_idx, idx));
-            }
-        });
-    dgm
+        }
+    });
+    (cod_dgm, im_dgm)
 }
 
 fn cokernel_diagram<Decomp: Decomposition<C>, C: Column>(
@@ -182,20 +186,21 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
         let cod_diagram = self.cod.diagram().anti_transpose(self.metadata.sz_cod);
         let cod_negative_list = compute_negative_list(&self.metadata, &cod_diagram);
 
+        let (cod_dgm, im_dgm) = codomain_image_diagram(&self.metadata, &self.dom, &self.im);
         DiagramEnsemble {
-            g: {
+            dom: {
                 let mut dgm = self.dom.diagram();
                 unreorder_idxs(&mut dgm, &self.metadata.dom_first_mapping);
                 dgm
             },
             rel: {
                 let at_diagram = self.rel.diagram();
-                let mut dgm = at_diagram
-                    .anti_transpose(self.metadata.sz_cod - self.metadata.sz_dom + 1);
+                let mut dgm =
+                    at_diagram.anti_transpose(self.metadata.sz_cod - self.metadata.sz_dom + 1);
                 unreorder_idxs(&mut dgm, &self.metadata.rel_mapping);
                 dgm
             },
-            im: image_diagram(&self.metadata, &self.dom, &self.im, &cod_negative_list),
+            im: im_dgm,
             ker: kernel_diagram(
                 &self.metadata,
                 &self.ker,
@@ -210,7 +215,7 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
                 &self.cok,
                 &cod_negative_list,
             ),
-            f: cod_diagram,
+            cod: cod_dgm,
         }
     }
 }
@@ -224,7 +229,7 @@ pub fn from_file(file: &File) -> DecompositionFileFormat {
 impl FileEnsemble {
     pub fn all_diagrams(&self) -> DiagramEnsemble {
         let f_diagram = {
-            let f_decomp = from_file(&self.f);
+            let f_decomp = from_file(&self.cod);
             let at_diagram = f_decomp.diagram();
             at_diagram.anti_transpose(self.metadata.sz_cod)
         };
@@ -238,7 +243,7 @@ impl FileEnsemble {
             unreorder_idxs(&mut dgm, &self.metadata.rel_mapping);
             dgm
         };
-        let g_decomp = from_file(&self.g);
+        let g_decomp = from_file(&self.dom);
         let g_diagram = {
             let mut dgm = g_decomp.diagram();
             unreorder_idxs(&mut dgm, &self.metadata.dom_first_mapping);
@@ -254,7 +259,7 @@ impl FileEnsemble {
             &f_negative_list,
         );
         drop(ker_decomp);
-        let im_diagram = image_diagram(&self.metadata, &g_decomp, &im_decomp, &f_negative_list);
+        let (cod_diagram, im_diagram) = codomain_image_diagram(&self.metadata, &g_decomp, &im_decomp);
         let cok_decomp = from_file(&self.cok);
         let cok_diagram = cokernel_diagram(
             &self.metadata,
@@ -264,8 +269,8 @@ impl FileEnsemble {
             &f_negative_list,
         );
         DiagramEnsemble {
-            f: f_diagram,
-            g: g_diagram,
+            cod: cod_diagram,
+            dom: g_diagram,
             rel: rel_diagram,
             im: im_diagram,
             ker: ker_diagram,

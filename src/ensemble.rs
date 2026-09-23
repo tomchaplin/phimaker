@@ -46,8 +46,8 @@ where
 
 #[derive(Debug)]
 pub struct FileEnsemble {
-    pub f: File,
-    pub g: File,
+    pub cod: File,
+    pub dom: File,
     pub im: File,
     pub ker: File,
 
@@ -59,14 +59,14 @@ pub struct FileEnsemble {
 }
 
 pub fn decompose_cod<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
-    df: &[VecColumn],
+    d_cod: &[VecColumn],
     base_options: Algo::Options,
 ) -> Algo::Decomposition {
     // Decompose Df
     // Df is a chain complex so can compute anti-transpose instead
-    let df_at = anti_transpose(df);
+    let d_cod_anti_transpose = anti_transpose(d_cod);
     let out = Algo::init(Some(base_options))
-        .add_cols(df_at.into_iter())
+        .add_cols(d_cod_anti_transpose.into_iter())
         .decompose();
     debug!("Decomposed cod");
     out
@@ -85,7 +85,9 @@ pub fn decompose_dom_cok<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOpti
         maintain_v: true,
         ..base_options
     };
-    let decomp_d_dom = Algo::init(Some(d_dom_decomp_options)).add_cols(d_dom).decompose();
+    let decomp_d_dom = Algo::init(Some(d_dom_decomp_options))
+        .add_cols(d_dom)
+        .decompose();
     debug!("Decomposed dom");
 
     // Decompose d_cok
@@ -94,7 +96,9 @@ pub fn decompose_dom_cok<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOpti
         clearing: false,
         ..base_options
     };
-    let decomp_d_cok = Algo::init(Some(d_cok_decomp_options)).add_cols(d_cok).decompose();
+    let decomp_d_cok = Algo::init(Some(d_cok_decomp_options))
+        .add_cols(d_cok)
+        .decompose();
     debug!("Decomposed cok");
     (decomp_d_dom, decomp_d_cok)
 }
@@ -112,13 +116,15 @@ pub fn decompose_im_ker<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptio
         clearing: false,
         ..base_options
     };
-    let decomp_d_im = Algo::init(Some(d_im_decomp_options)).add_cols(d_im).decompose();
+    let decomp_d_im = Algo::init(Some(d_im_decomp_options))
+        .add_cols(d_im)
+        .decompose();
     debug!("Decomposed im");
 
     // Decompose d_ker
     let d_ker = build_d_ker(&decomp_d_im, dom_first_mapping);
     let d_ker_options = LoPhatOptions {
-        clearing: false,                // Not a chain complex so no clearing
+        clearing: false,             // Not a chain complex so no clearing
         column_height: Some(sz_cod), // Non-square matrix
         ..base_options
     };
@@ -171,7 +177,12 @@ where
     let sz_dom = col_in_dom.iter().filter(|in_dom| **in_dom).count();
     let sz_cod = d_cod.len();
 
-    let (cod, (dom, cok), (im, ker, kernel_mapping), (rel, rel_mapping)) = thread::scope(|s| {
+    let (
+        cod_decomp,
+        (dom_decomp, cok_decomp),
+        (im_decomp, ker_decomp, kernel_mapping),
+        (rel_decomp, rel_mapping),
+    ) = thread::scope(|s| {
         let thread1 = s.spawn(|| decompose_cod::<Algo>(&d_cod, base_options));
 
         let thread2 = s.spawn(|| {
@@ -181,9 +192,8 @@ where
         let thread3 =
             s.spawn(|| decompose_im_ker::<Algo>(&d_cod, &dom_first_mapping, sz_cod, base_options));
 
-        let thread4 = s.spawn(|| {
-            decompose_rel::<Algo>(&d_cod, &col_in_dom, sz_dom, sz_cod, base_options)
-        });
+        let thread4 =
+            s.spawn(|| decompose_rel::<Algo>(&d_cod, &col_in_dom, sz_dom, sz_cod, base_options));
 
         (
             thread1.join().unwrap(),
@@ -193,12 +203,12 @@ where
         )
     });
     DecompositionEnsemble {
-        cod,
-        dom,
-        im,
-        ker,
-        cok,
-        rel,
+        cod: cod_decomp,
+        dom: dom_decomp,
+        im: im_decomp,
+        ker: ker_decomp,
+        cok: cok_decomp,
+        rel: rel_decomp,
         metadata: EnsembleMetadata {
             col_in_dom,
             dom_first_mapping,
@@ -212,13 +222,13 @@ where
 }
 
 pub fn to_file<Algo: Serialize>(algo: Algo) -> File {
-    let mut file_write = tempfile::NamedTempFile::new().expect("Can get temp file");
+    let mut file_write = tempfile::NamedTempFile::new().expect("Can't get temp file");
     println!("Writing to {:?}", file_write.path());
     // We reopen so that we can hold onto the file for later reading
-    let file_read = file_write.reopen().expect("Can reopen tempfile");
+    let file_read = file_write.reopen().expect("Can't reopen tempfile");
     {
         let mut buf = BufWriter::new(&mut file_write);
-        serialize_into(&mut buf, &algo).expect("Can serialize to file");
+        serialize_into(&mut buf, &algo).expect("Can't serialize to file");
     }
     // Explicitly release memory
     drop(algo);
@@ -241,44 +251,44 @@ where
         clearing: true, // Clear whenever we can
     };
 
-    let l_first_mapping = compute_dom_first_mapping(&matrix);
+    let dom_first_mapping = compute_dom_first_mapping(&matrix);
 
-    let (g_elements, df): (Vec<_>, Vec<_>) = matrix
+    let (col_in_dom, d_cod): (Vec<_>, Vec<_>) = matrix
         .into_iter()
         .map(|anncol| (anncol.in_domain, anncol.col))
         .unzip();
 
-    let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();
-    let size_of_k = df.len();
+    let sz_dom = col_in_dom.iter().filter(|in_g| **in_g).count();
+    let sz_cod = d_cod.len();
 
-    let f = decompose_cod::<Algo>(&df, base_options);
-    let f = to_file(f);
-    let (g, cok) =
-        decompose_dom_cok::<Algo>(&df, &g_elements, &l_first_mapping, base_options);
-    let g = to_file(g);
-    let cok = to_file(cok);
-    let (im, ker, kernel_mapping) =
-        decompose_im_ker::<Algo>(&df, &l_first_mapping, size_of_k, base_options);
-    let im = to_file(im);
-    let ker = to_file(ker);
-    let (rel, rel_mapping) =
-        decompose_rel::<Algo>(&df, &g_elements, size_of_l, size_of_k, base_options);
-    let rel = to_file(rel);
+    let cod_decomp = decompose_cod::<Algo>(&d_cod, base_options);
+    let cod = to_file(cod_decomp);
+    let (dom_decomp, cok_decomp) =
+        decompose_dom_cok::<Algo>(&d_cod, &col_in_dom, &dom_first_mapping, base_options);
+    let dom = to_file(dom_decomp);
+    let cok = to_file(cok_decomp);
+    let (im_decomp, ker_decomp, kernel_mapping) =
+        decompose_im_ker::<Algo>(&d_cod, &dom_first_mapping, sz_cod, base_options);
+    let im = to_file(im_decomp);
+    let ker = to_file(ker_decomp);
+    let (rel_decomp, rel_mapping) =
+        decompose_rel::<Algo>(&d_cod, &col_in_dom, sz_dom, sz_cod, base_options);
+    let rel = to_file(rel_decomp);
 
     FileEnsemble {
-        f,
-        g,
+        cod,
+        dom,
         im,
         ker,
         cok,
         rel,
         metadata: EnsembleMetadata {
-            col_in_dom: g_elements,
-            dom_first_mapping: l_first_mapping,
+            col_in_dom,
+            dom_first_mapping,
             kernel_mapping,
             rel_mapping,
-            sz_dom: size_of_l,
-            sz_cod: size_of_k,
+            sz_dom,
+            sz_cod,
         },
     }
 }
