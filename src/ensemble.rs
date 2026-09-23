@@ -98,7 +98,7 @@ pub fn decompose_dom_cok<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOpti
     debug!("Decomposed cok");
     (decomp_d_dom, decomp_d_cok)
 }
-pub fn decompose_ker<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
+pub fn decompose_im_ker<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
     d_cod: &[VecColumn],
     dom_first_mapping: &VectorMapping,
     sz_cod: usize,
@@ -115,7 +115,7 @@ pub fn decompose_ker<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>
     let decomp_d_im = Algo::init(Some(d_im_decomp_options)).add_cols(d_im).decompose();
     debug!("Decomposed im");
 
-    // Decompose dker
+    // Decompose d_ker
     let d_ker = build_d_ker(&decomp_d_im, dom_first_mapping);
     let d_ker_options = LoPhatOptions {
         clearing: false,                // Not a chain complex so no clearing
@@ -179,7 +179,7 @@ where
         });
 
         let thread3 =
-            s.spawn(|| decompose_ker::<Algo>(&d_cod, &dom_first_mapping, sz_cod, base_options));
+            s.spawn(|| decompose_im_ker::<Algo>(&d_cod, &dom_first_mapping, sz_cod, base_options));
 
         let thread4 = s.spawn(|| {
             decompose_rel::<Algo>(&d_cod, &col_in_dom, sz_dom, sz_cod, base_options)
@@ -258,7 +258,7 @@ where
     let g = to_file(g);
     let cok = to_file(cok);
     let (im, ker, kernel_mapping) =
-        decompose_ker::<Algo>(&df, &l_first_mapping, size_of_k, base_options);
+        decompose_im_ker::<Algo>(&df, &l_first_mapping, size_of_k, base_options);
     let im = to_file(im);
     let ker = to_file(ker);
     let (rel, rel_mapping) =

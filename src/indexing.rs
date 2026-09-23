@@ -47,7 +47,6 @@ pub trait IndexMapping {
 
 #[derive(Debug)]
 pub struct VectorMapping {
-    // TODO: why do we need Option here?
     internal: Vec<Option<usize>>,
     internal_inverse: Option<Vec<usize>>,
 }

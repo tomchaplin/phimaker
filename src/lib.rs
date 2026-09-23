@@ -44,6 +44,8 @@ fn compute_ensemble(
             decomps.all_diagrams()
         } else {
             let decomps = all_decompositions::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads);
+            // TODO: get the matrix of the map on persistence modules
+            // as well as a basis for the matrix
             decomps.all_diagrams()
         }
     })

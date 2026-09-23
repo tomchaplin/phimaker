@@ -63,13 +63,13 @@ pub fn build_d_rel<'a>(
 }
 
 pub fn build_d_ker<'a, Algo: Decomposition<VecColumn>>(
-    dim_decomposition: &'a Algo,
+    d_im_decomposition: &'a Algo,
     mapping: &'a impl IndexMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
-    let paired_cols = (0..dim_decomposition.n_cols()).map(|idx| {
+    let paired_cols = (0..d_im_decomposition.n_cols()).map(|idx| {
         (
-            dim_decomposition.get_r_col(idx),
-            dim_decomposition.get_v_col(idx).unwrap(),
+            d_im_decomposition.get_r_col(idx),
+            d_im_decomposition.get_v_col(idx).unwrap(),
         )
     });
     paired_cols.filter_map(|(r_col, v_col)| {

@@ -26,8 +26,8 @@ pub struct DiagramEnsemble {
     pub rel: PersistenceDiagram,
 }
 
-// Since we anti-transposed f, to check whether a column is negative in f
-// we need to check the diagram of f after reindexing
+/// Returns the list of negative indices in the diagram, i.e., indices
+/// of non-zero columns. Such columns represent deaths in the diagram.
 fn compute_negative_list(metadata: &EnsembleMetadata, diagram: &PersistenceDiagram) -> Vec<bool> {
     let mut negative_list: Vec<bool> = vec![false; metadata.sz_cod];
     for (_birth, death) in diagram.paired.iter() {
@@ -106,32 +106,34 @@ fn kernel_diagram<Decomp: Decomposition<C>, C: Column>(
 
 fn image_diagram<Decomp: Decomposition<C>, C: Column>(
     metadata: &EnsembleMetadata,
-    g: &Decomp,
-    im: &Decomp,
-    f_negative_list: &[bool],
+    dom_decomp: &Decomp,
+    im_decomp: &Decomp,
+    cod_negative_list: &[bool],
 ) -> PersistenceDiagram {
+    // TODO: we don't need cod_negative_list or dom_decomp
+    // We only need the negative columns (pivot columns) in R_im
     let mut dgm = PersistenceDiagram::default();
-    f_negative_list
+    cod_negative_list
         .iter()
         .enumerate()
         .take(metadata.sz_cod)
-        .for_each(|(idx, &neg_in_f)| {
+        .for_each(|(idx, &neg_in_cod)| {
             // for idx in 0..metadata.size_of_k {
             if metadata.col_in_dom[idx] {
-                let g_idx = metadata.dom_first_mapping.map(idx).unwrap();
-                let pos_in_g = g.get_r_col(g_idx).pivot().is_none();
-                if pos_in_g {
+                let dom_idx = metadata.dom_first_mapping.map(idx).unwrap();
+                let is_cycle = dom_decomp.get_r_col(dom_idx).pivot().is_none();
+                if is_cycle {
                     dgm.unpaired.insert(idx);
                     return;
                 }
             }
-            if neg_in_f {
-                let lowest_in_rim = im.get_r_col(idx).pivot().unwrap();
-                let lowest_rim_in_l = lowest_in_rim < metadata.sz_dom;
-                if !lowest_rim_in_l {
+            if neg_in_cod {
+                let lowest_in_r_im = im_decomp.get_r_col(idx).pivot().unwrap();
+                let lowest_r_im_in_l = lowest_in_r_im < metadata.sz_dom;
+                if !lowest_r_im_in_l {
                     return;
                 }
-                let birth_idx = metadata.dom_first_mapping.inverse_map(lowest_in_rim).unwrap();
+                let birth_idx = metadata.dom_first_mapping.inverse_map(lowest_in_r_im).unwrap();
                 dgm.unpaired.remove(&birth_idx);
                 dgm.paired.insert((birth_idx, idx));
             }
@@ -174,11 +176,8 @@ fn cokernel_diagram<Decomp: Decomposition<C>, C: Column>(
 }
 impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
     pub fn all_diagrams(&self) -> DiagramEnsemble {
-        let f_diagram = {
-            let at_diagram = self.cod.diagram();
-            at_diagram.anti_transpose(self.metadata.sz_cod)
-        };
-        let f_negative_list = compute_negative_list(&self.metadata, &f_diagram);
+        let cod_diagram = self.cod.diagram().anti_transpose(self.metadata.sz_cod);
+        let cod_negative_list = compute_negative_list(&self.metadata, &cod_diagram);
 
         DiagramEnsemble {
             g: {
@@ -193,22 +192,22 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
                 unreorder_idxs(&mut dgm, &self.metadata.rel_mapping);
                 dgm
             },
-            im: image_diagram(&self.metadata, &self.dom, &self.im, &f_negative_list),
+            im: image_diagram(&self.metadata, &self.dom, &self.im, &cod_negative_list),
             ker: kernel_diagram(
                 &self.metadata,
                 &self.ker,
                 &self.dom,
                 &self.im,
-                &f_negative_list,
+                &cod_negative_list,
             ),
             cok: cokernel_diagram(
                 &self.metadata,
                 &self.dom,
                 &self.im,
                 &self.cok,
-                &f_negative_list,
+                &cod_negative_list,
             ),
-            f: f_diagram,
+            f: cod_diagram,
         }
     }
 }
