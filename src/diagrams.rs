@@ -39,19 +39,19 @@ fn compute_negative_list(metadata: &EnsembleMetadata, diagram: &PersistenceDiagr
 fn is_kernel_birth<Decomp: Decomposition<C>, C: Column>(
     idx: usize,
     metadata: &EnsembleMetadata,
-    f_negative_list: &[bool],
-    im: &Decomp,
+    cod_negative_list: &[bool],
+    im_decomp: &Decomp,
 ) -> bool {
-    let in_l = metadata.col_in_dom[idx];
-    if in_l {
+    let in_dom = metadata.col_in_dom[idx];
+    if in_dom {
         return false;
     }
-    let negative_in_f = f_negative_list[idx];
-    if !negative_in_f {
+    let negative_in_cod = cod_negative_list[idx];
+    if !negative_in_cod {
         return false;
     }
-    let lowest_rim_in_l = im.get_r_col(idx).pivot().unwrap() < metadata.sz_dom;
-    if !lowest_rim_in_l {
+    let low_idx_in_dom = im_decomp.get_r_col(idx).pivot().unwrap() < metadata.sz_dom;
+    if !low_idx_in_dom {
         return false;
     }
     true
@@ -60,20 +60,20 @@ fn is_kernel_birth<Decomp: Decomposition<C>, C: Column>(
 fn is_kernel_death<Decomp: Decomposition<C>, C: Column>(
     idx: usize,
     metadata: &EnsembleMetadata,
-    g: &Decomp,
-    f_negative_list: &[bool],
+    dom_decomp: &Decomp,
+    cod_negative_list: &[bool],
 ) -> bool {
-    let in_l = metadata.col_in_dom[idx];
-    if !in_l {
+    let in_dom = metadata.col_in_dom[idx];
+    if !in_dom {
         return false;
     }
-    let g_index = metadata.dom_first_mapping.map(idx).unwrap();
-    let negative_in_g = g.get_r_col(g_index).pivot().is_some();
-    if !negative_in_g {
+    let dom_idx = metadata.dom_first_mapping.map(idx).unwrap();
+    let negative_in_dom = dom_decomp.get_r_col(dom_idx).pivot().is_some();
+    if !negative_in_dom {
         return false;
     }
-    let negative_in_f = f_negative_list[idx];
-    if negative_in_f {
+    let negative_in_cod = cod_negative_list[idx];
+    if negative_in_cod {
         return false;
     }
     true
@@ -82,23 +82,23 @@ fn is_kernel_death<Decomp: Decomposition<C>, C: Column>(
 fn kernel_diagram<Decomp: Decomposition<C>, C: Column>(
     metadata: &EnsembleMetadata,
     ker: &Decomp,
-    g: &Decomp,
-    im: &Decomp,
-    f_negative_list: &[bool],
+    dom_decomp: &Decomp,
+    im_decomp: &Decomp,
+    cod_negative_list: &[bool],
 ) -> PersistenceDiagram {
     let mut dgm = PersistenceDiagram::default();
     for idx in 0..metadata.sz_cod {
-        if is_kernel_birth(idx, metadata, f_negative_list, im) {
+        if is_kernel_birth(idx, metadata, cod_negative_list, im_decomp) {
             dgm.unpaired.insert(idx);
             continue;
         }
-        if is_kernel_death(idx, metadata, g, f_negative_list) {
+        if is_kernel_death(idx, metadata, dom_decomp, cod_negative_list) {
             // TODO: Problem kernel columns have different indexing to f
             let ker_idx = metadata.kernel_mapping.map(idx).unwrap();
-            let g_birth_index = ker.get_r_col(ker_idx).pivot().unwrap();
+            let dom_birth_index = ker.get_r_col(ker_idx).pivot().unwrap();
             let birth_index = metadata
                 .dom_first_mapping
-                .inverse_map(g_birth_index)
+                .inverse_map(dom_birth_index)
                 .unwrap();
             dgm.unpaired.remove(&birth_index);
             dgm.paired.insert((birth_index, idx));
@@ -150,33 +150,33 @@ fn codomain_image_diagram<Decomp: Decomposition<C>, C: Column>(
 
 fn cokernel_diagram<Decomp: Decomposition<C>, C: Column>(
     metadata: &EnsembleMetadata,
-    g: &Decomp,
-    im: &Decomp,
-    cok: &Decomp,
-    f_negative_list: &[bool],
+    dom_decomp: &Decomp,
+    im_decomp: &Decomp,
+    cok_decomp: &Decomp,
+    cod_negative_list: &[bool],
 ) -> PersistenceDiagram {
     let mut dgm = PersistenceDiagram::default();
-    f_negative_list
+    cod_negative_list
         .iter()
         .enumerate()
         .take(metadata.sz_cod)
-        .for_each(|(idx, &neg_in_f)| {
-            let pos_in_f = !neg_in_f;
-            let g_idx = metadata.dom_first_mapping.map(idx).unwrap();
-            let not_in_l_or_neg_in_g =
-                (!metadata.col_in_dom[idx]) || g.get_r_col(g_idx).pivot().is_some();
-            if pos_in_f && not_in_l_or_neg_in_g {
+        .for_each(|(idx, &is_death_in_cod)| {
+            let is_birth_in_cod = !is_death_in_cod;
+            let dom_idx = metadata.dom_first_mapping.map(idx).unwrap();
+            let not_in_dom_or_neg_in_dom =
+                (!metadata.col_in_dom[idx]) || dom_decomp.get_r_col(dom_idx).pivot().is_some();
+            if is_birth_in_cod && not_in_dom_or_neg_in_dom {
                 dgm.unpaired.insert(idx);
                 return;
             }
-            if pos_in_f {
+            if is_birth_in_cod {
                 return;
             }
-            let lowest_rim_in_l = im.get_r_col(idx).pivot().unwrap() < metadata.sz_dom;
-            if !lowest_rim_in_l {
-                let lowest_in_rcok = cok.get_r_col(idx).pivot().unwrap();
-                dgm.unpaired.remove(&lowest_in_rcok);
-                dgm.paired.insert((lowest_in_rcok, idx));
+            let low_idx_in_dom = im_decomp.get_r_col(idx).pivot().unwrap() < metadata.sz_dom;
+            if !low_idx_in_dom {
+                let lowest_in_r_cok = cok_decomp.get_r_col(idx).pivot().unwrap();
+                dgm.unpaired.remove(&lowest_in_r_cok);
+                dgm.paired.insert((lowest_in_r_cok, idx));
             }
         });
     dgm

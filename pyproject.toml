@@ -30,8 +30,6 @@ requires = ["maturin~=1.0"]
 build-backend = "maturin"
 
 [tool.maturin]
-# Include additional files
-# include = ["python/phimaker/washboard/dist/index.html"]
 python-source = "python"
 
 [tool.pyrefly]
