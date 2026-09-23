@@ -228,13 +228,11 @@ pub fn from_file(file: &File) -> DecompositionFileFormat {
 
 impl FileEnsemble {
     pub fn all_diagrams(&self) -> DiagramEnsemble {
-        let f_diagram = {
-            let f_decomp = from_file(&self.cod);
-            let at_diagram = f_decomp.diagram();
-            at_diagram.anti_transpose(self.metadata.sz_cod)
-        };
-        debug!("Got f");
-        let f_negative_list = compute_negative_list(&self.metadata, &f_diagram);
+        let cod_diagram = from_file(&self.cod)
+            .diagram()
+            .anti_transpose(self.metadata.sz_cod);
+        debug!("Got cod");
+        let cod_negative_list = compute_negative_list(&self.metadata, &cod_diagram);
         let rel_diagram = {
             let rel_decomp = from_file(&self.rel);
             let at_diagram = rel_decomp.diagram();
@@ -243,9 +241,9 @@ impl FileEnsemble {
             unreorder_idxs(&mut dgm, &self.metadata.rel_mapping);
             dgm
         };
-        let g_decomp = from_file(&self.dom);
-        let g_diagram = {
-            let mut dgm = g_decomp.diagram();
+        let dom_decomp = from_file(&self.dom);
+        let dom_diagram = {
+            let mut dgm = dom_decomp.diagram();
             unreorder_idxs(&mut dgm, &self.metadata.dom_first_mapping);
             dgm
         };
@@ -254,23 +252,24 @@ impl FileEnsemble {
         let ker_diagram = kernel_diagram(
             &self.metadata,
             &ker_decomp,
-            &g_decomp,
+            &dom_decomp,
             &im_decomp,
-            &f_negative_list,
+            &cod_negative_list,
         );
         drop(ker_decomp);
-        let (cod_diagram, im_diagram) = codomain_image_diagram(&self.metadata, &g_decomp, &im_decomp);
+        let (cod_diagram, im_diagram) =
+            codomain_image_diagram(&self.metadata, &dom_decomp, &im_decomp);
         let cok_decomp = from_file(&self.cok);
         let cok_diagram = cokernel_diagram(
             &self.metadata,
-            &g_decomp,
+            &dom_decomp,
             &im_decomp,
             &cok_decomp,
-            &f_negative_list,
+            &cod_negative_list,
         );
         DiagramEnsemble {
             cod: cod_diagram,
-            dom: g_diagram,
+            dom: dom_diagram,
             rel: rel_diagram,
             im: im_diagram,
             ker: ker_diagram,
