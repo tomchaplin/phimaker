@@ -241,11 +241,11 @@ where
         clearing: true, // Clear whenever we can
     };
 
-    let l_first_mapping = compute_l_first_mapping(&matrix);
+    let l_first_mapping = compute_dom_first_mapping(&matrix);
 
     let (g_elements, df): (Vec<_>, Vec<_>) = matrix
         .into_iter()
-        .map(|anncol| (anncol.in_g, anncol.col))
+        .map(|anncol| (anncol.in_domain, anncol.col))
         .unzip();
 
     let size_of_l = g_elements.iter().filter(|in_g| **in_g).count();

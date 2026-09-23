@@ -96,7 +96,10 @@ fn kernel_diagram<Decomp: Decomposition<C>, C: Column>(
             // TODO: Problem kernel columns have different indexing to f
             let ker_idx = metadata.kernel_mapping.map(idx).unwrap();
             let g_birth_index = ker.get_r_col(ker_idx).pivot().unwrap();
-            let birth_index = metadata.dom_first_mapping.inverse_map(g_birth_index).unwrap();
+            let birth_index = metadata
+                .dom_first_mapping
+                .inverse_map(g_birth_index)
+                .unwrap();
             dgm.unpaired.remove(&birth_index);
             dgm.paired.insert((birth_index, idx));
         }

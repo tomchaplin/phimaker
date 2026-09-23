@@ -64,14 +64,13 @@ impl IndexMapping for VectorMapping {
     fn inverse_map(&self, index: usize) -> Option<usize> {
         self.internal_inverse
             .as_ref()
-            .map(|inv| {
+            .and_then(|inv| {
                 if index < inv.len() {
                     Some(inv[index])
                 } else {
                     None
                 }
             })
-            .flatten()
     }
 }
 

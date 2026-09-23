@@ -24,7 +24,7 @@ use pyo3::prelude::*;
 /// `slow` ??
 #[pyfunction]
 #[pyo3(signature = (matrix, num_threads=0, slow=false))]
-fn compute_ensemble(
+fn sixpack_from_inclusion(
     py: Python<'_>,
     matrix: Vec<(bool, usize, Vec<usize>)>,
     num_threads: usize,
@@ -61,7 +61,8 @@ fn compute_ensemble(
 /// Similarly, entries of `map` represent columns in the matrix of $f$.
 /// The i^th^ entry of `map` is vector of indices corresponding to the
 /// non-zero entries of the i^th^ column of the matrix of $f$.
-/// `map` must have at least as many entries as there are domain cells.
+/// `map` must have at least as many entries as there are domain cells,
+/// and must satisfy the requirements of a filtered chain map.
 ///
 /// # Panics:
 /// - If the domain and codomain matrices are not sorted by entrance time.
@@ -71,7 +72,7 @@ fn compute_ensemble(
 ///   $f$.
 #[pyfunction]
 #[pyo3(signature = (domain_matrix, codomain_matrix, map, num_threads=0, slow=false))]
-fn compute_ensemble_cylinder(
+fn sixpack(
     py: Python<'_>,
     domain_matrix: Vec<(f64, usize, Vec<usize>)>,
     codomain_matrix: Vec<(f64, usize, Vec<usize>)>,
@@ -105,11 +106,12 @@ fn compute_ensemble_cylinder(
     })
 }
 
+
 #[pyfunction]
 fn zero_overlap(matrix: Vec<(bool, usize, Vec<usize>)>) -> Vec<(usize, usize)> {
     let annotated_matrix: Vec<AnnotatedColumn<VecColumn>> = matrix
         .into_iter()
-        .map(|(in_g, dimension, boundary)| AnnotatedColumn {
+        .map(|(in_domain, dimension, boundary)| AnnotatedColumn {
             in_domain,
             col: VecColumn::from((dimension, boundary)),
         })
@@ -121,8 +123,8 @@ fn zero_overlap(matrix: Vec<(bool, usize, Vec<usize>)>) -> Vec<(usize, usize)> {
 #[pymodule]
 fn phimaker(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
-    m.add_function(wrap_pyfunction!(compute_ensemble, m)?)?;
-    m.add_function(wrap_pyfunction!(compute_ensemble_cylinder, m)?)?;
+    m.add_function(wrap_pyfunction!(sixpack_from_inclusion, m)?)?;
+    m.add_function(wrap_pyfunction!(sixpack, m)?)?;
     m.add_function(wrap_pyfunction!(zero_overlap, m)?)?;
     Ok(())
 }

@@ -1,9 +1,9 @@
-import sys
 import os
+import sys
 
 sys.path.append(os.getcwd())
 
-from phimaker import compute_ensemble
+from phimaker import sixpack_from_inclusion
 
 matrix = [
     (True, 0, []),
@@ -22,14 +22,14 @@ matrix = [
     (True, 2, [4, 5, 6]),
 ]
 
-dgms = compute_ensemble(matrix)
-print("f:")
-print(dgms.f.unpaired)
-print(dgms.f.paired)
+dgms = sixpack_from_inclusion(matrix)
+print("cod:")
+print(dgms.cod.unpaired)
+print(dgms.cod.paired)
 
-print("g:")
-print(dgms.g.unpaired)
-print(dgms.g.paired)
+print("dom:")
+print(dgms.dom.unpaired)
+print(dgms.dom.paired)
 
 print("im:")
 print(dgms.im.unpaired)

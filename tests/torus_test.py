@@ -1,16 +1,12 @@
-import sys
-import os
-
-sys.path.append(os.getcwd())
-
-from gudhi import RipsComplex
-import numpy as np
-from phimaker import compute_ensemble
 import math
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
 import random
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from gudhi import RipsComplex
+from phimaker import compute_ensemble
 
 N = 10
 aN_nice = 20
