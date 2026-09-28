@@ -12,8 +12,7 @@ pub fn extract_columns<'a>(
     matrix
         .iter()
         .zip(extract.iter())
-        .filter(|(_, in_dom)| **in_dom)
-        .map(|(col, _)| col)
+        .filter_map(|(col, in_dom)| if *in_dom { Some(col) } else { None })
         .cloned()
 }
 
@@ -22,20 +21,17 @@ pub fn build_d_dom<'a>(
     col_in_dom: &'a [bool],
     dom_first_mapping: &'a VectorMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
-    extract_columns(d_cod, col_in_dom).map(|mut col| {
-        col.reorder_rows(dom_first_mapping);
-        col
-    })
+    extract_columns(d_cod, col_in_dom).map(|col| col.reorder_rows(dom_first_mapping))
 }
 
 pub fn build_d_im<'a>(
     d_cod: &'a [VecColumn],
     mapping: &'a impl IndexMapping,
 ) -> impl Iterator<Item = VecColumn> + 'a {
-    d_cod.iter().cloned().map(|mut col| {
-        col.reorder_rows(mapping);
-        col
-    })
+    d_cod
+        .iter()
+        .cloned()
+        .map(|col| col.reorder_rows(mapping))
 }
 // WARNING: This functions makes the following assumption:
 // If the boundary of a cell is entirely contained in L then that cell is in L
@@ -55,9 +51,7 @@ pub fn build_d_rel<'a>(
             if in_g && idx != l_index {
                 None
             } else {
-                let mut new_col = col.clone();
-                new_col.reorder_rows(rel_mapping);
-                Some(new_col)
+                Some(col.clone().reorder_rows(rel_mapping))
             }
         })
 }
@@ -76,9 +70,7 @@ pub fn build_d_ker<'a, Algo: Decomposition<VecColumn>>(
         if r_col.pivot().is_none() {
             // If r_col is zero then v_col stores a cycle
             // We should add it to dker with the elements of L appearing first
-            let mut new_col = v_col.clone();
-            new_col.reorder_rows(mapping);
-            Some(new_col)
+            Some(v_col.clone().reorder_rows(mapping))
         } else {
             // Filter this column out
             None

@@ -5,7 +5,7 @@ use lophat::{
 };
 
 pub trait ReordorableColumn: Send + Sync + Clone + Default {
-    fn reorder_rows(&mut self, mapping: &impl IndexMapping);
+    fn reorder_rows(self, mapping: &impl IndexMapping) -> Self;
     fn unreorder_rows(&mut self, mapping: &impl IndexMapping);
 }
 
@@ -18,13 +18,14 @@ pub struct AnnotatedColumn<T> {
 
 impl ReordorableColumn for VecColumn {
     // TODO: Reimplement so that this happens in-place?
-    fn reorder_rows(&mut self, mapping: &impl IndexMapping) {
+    fn reorder_rows(mut self, mapping: &impl IndexMapping) -> Self {
         let mut new_col: Vec<usize> = self
             .entries()
             .filter_map(|row_idx| mapping.map(row_idx))
             .collect();
         new_col.sort();
         self.set_entries(new_col);
+        self
     }
 
     // TODO: Reimplement so that this happens in-place?
@@ -76,7 +77,7 @@ impl IndexMapping for VectorMapping {
 
 /// Compute a permutation of the rows of the matrix so that generators of the domain come first.
 /// Refer to the description of `D_im` in the Cohen-Steiner paper.
-pub fn compute_dom_first_mapping(matrix: &Vec<AnnotatedColumn<VecColumn>>) -> VectorMapping {
+pub fn compute_dom_first_mapping(matrix: &[AnnotatedColumn<VecColumn>]) -> VectorMapping {
     let total_size = matrix.len();
     let num_in_domain = matrix.iter().filter(|col| col.in_domain).count();
     let mut next_domain_idx = 0;

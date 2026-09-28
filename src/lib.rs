@@ -106,7 +106,6 @@ fn sixpack(
     })
 }
 
-
 #[pyfunction]
 fn zero_overlap(matrix: Vec<(bool, usize, Vec<usize>)>) -> Vec<(usize, usize)> {
     let annotated_matrix: Vec<AnnotatedColumn<VecColumn>> = matrix
