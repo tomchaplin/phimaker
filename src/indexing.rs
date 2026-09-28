@@ -1,8 +1,9 @@
 use lophat::{
     algorithms::Decomposition,
     columns::{Column, VecColumn},
-    utils::PersistenceDiagram,
 };
+
+use crate::diagrams::{ExtendedUsize, PersistenceDiagram};
 
 pub trait ReordorableColumn: Send + Sync + Clone + Default {
     fn reorder_rows(self, mapping: &impl IndexMapping) -> Self;
@@ -170,21 +171,17 @@ pub fn build_rel_mapping(
 }
 
 pub fn unreorder_idxs(diagram: &mut PersistenceDiagram, mapping: &impl IndexMapping) {
-    diagram.unpaired = diagram
-        .unpaired
-        .iter()
-        .cloned()
-        .map(|idx| mapping.inverse_map(idx).unwrap())
-        .collect();
-    diagram.paired = diagram
-        .paired
-        .iter()
-        .cloned()
-        .map(|(b_idx, d_idx)| {
-            (
-                mapping.inverse_map(b_idx).unwrap(),
-                mapping.inverse_map(d_idx).unwrap(),
-            )
+    diagram.0 = diagram
+        .drain()
+        .map(|(birth, death)| {
+            let birth = mapping.inverse_map(birth).unwrap();
+            let death = match death {
+                ExtendedUsize::Finite(death) => {
+                    ExtendedUsize::Finite(mapping.inverse_map(death).unwrap())
+                }
+                ExtendedUsize::Infinity => ExtendedUsize::Infinity,
+            };
+            (birth, death)
         })
         .collect();
 }

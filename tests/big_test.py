@@ -104,8 +104,9 @@ def plot_diagram(
                 entrance_times[death_idx],
                 dimensions[birth_idx] - dim_shift,
             ]
-            for birth_idx, death_idx in diagram.paired
-            if entrance_times[death_idx] != entrance_times[birth_idx]
+            for birth_idx, death_idx in diagram.items()
+            if death_idx is not None
+            and entrance_times[death_idx] != entrance_times[birth_idx]
             and dimensions[birth_idx] - dim_shift <= max_dim
         ]
         + [
@@ -114,8 +115,9 @@ def plot_diagram(
                 truncation * 1.05,
                 dimensions[birth_idx] - dim_shift,
             ]
-            for birth_idx in diagram.unpaired
-            if dimensions[birth_idx] - dim_shift <= max_dim
+            for birth_idx, death_idx in diagram.items()
+            if death_idx is None
+            and dimensions[birth_idx] - dim_shift <= max_dim
         ]
     )
     df = pd.DataFrame(data=all_pts, columns=["Birth", "Death", "Dimension"])

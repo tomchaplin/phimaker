@@ -30,7 +30,7 @@ fn sixpack_from_inclusion(
     num_threads: usize,
     slow: bool,
 ) -> DiagramEnsemble {
-    py.allow_threads(|| {
+    py.detach(|| {
         let annotated_matrix: Vec<_> = matrix
             .into_iter()
             .map(|(in_domain, dimension, boundary)| AnnotatedColumn {
@@ -81,7 +81,7 @@ fn sixpack(
     slow: bool,
 ) -> (DiagramEnsemble, CylinderMetadata) {
     // We mark each map with the dimension of the domain column
-    py.allow_threads(|| {
+    py.detach(|| {
         let map = map
             .into_iter()
             .zip(domain_matrix.iter())

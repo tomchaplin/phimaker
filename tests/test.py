@@ -23,26 +23,6 @@ matrix = [
 ]
 
 dgms = sixpack_from_inclusion(matrix)
-print("cod:")
-print(dgms.cod.unpaired)
-print(dgms.cod.paired)
-
-print("dom:")
-print(dgms.dom.unpaired)
-print(dgms.dom.paired)
-
-print("im:")
-print(dgms.im.unpaired)
-print(dgms.im.paired)
-
-print("ker:")
-print(dgms.ker.unpaired)
-print(dgms.ker.paired)
-
-print("cok:")
-print(dgms.cok.unpaired)
-print(dgms.cok.paired)
-
-print("rel:")
-print(dgms.rel.unpaired)
-print(dgms.rel.paired)
+for name in ("cod", "dom", "im", "ker", "cok", "rel"):
+    print(f"{name}:")
+    print(getattr(dgms, name))

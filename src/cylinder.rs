@@ -254,7 +254,14 @@ mod tests {
         }
         let ensemble =
             all_decompositions::<LockFreeAlgorithm<VecColumn>>(cyl_matrix, 0).all_diagrams();
-        let pairings: Vec<_> = ensemble.ker.paired.iter().collect();
+        let pairings: Vec<_> = ensemble
+            .ker
+            .iter()
+            .filter_map(|(&birth, &death)| match death {
+                crate::diagrams::ExtendedUsize::Finite(death) => Some((birth, death)),
+                crate::diagrams::ExtendedUsize::Infinity => None,
+            })
+            .collect();
         for pairing in &pairings {
             println!("{pairing:?}");
         }
