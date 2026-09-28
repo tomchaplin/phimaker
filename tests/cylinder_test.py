@@ -29,15 +29,15 @@ codomain = [
 map = [[0], [1], [2], [3], [4], [5], [6], [7], [9, 10]]
 
 ensemble, metadata = sixpack(domain, codomain, map)
-ker = ensemble.ker
+ker = ensemble.kernel
 
 diagrams = {
-    "cod": ensemble.cod,
-    "dom": ensemble.dom,
-    "rel": ensemble.rel,
-    "ker": ensemble.ker,
-    "im": ensemble.im,
-    "cok": ensemble.cok,
+    "codomain": ensemble.codomain,
+    "domain": ensemble.domain,
+    "relative": ensemble.relative,
+    "kernel": ensemble.kernel,
+    "image": ensemble.image,
+    "cokernel": ensemble.cokernel,
 }
 
 for dgm_name, dgm in diagrams.items():

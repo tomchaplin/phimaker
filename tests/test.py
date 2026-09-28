@@ -23,6 +23,6 @@ matrix = [
 ]
 
 dgms = sixpack_from_inclusion(matrix)
-for name in ("cod", "dom", "im", "ker", "cok", "rel"):
+for name in ("codomain", "domain", "image", "kernel", "cokernel", "relative"):
     print(f"{name}:")
     print(getattr(dgms, name))

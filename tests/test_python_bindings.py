@@ -10,12 +10,12 @@ class PythonBindingsTests(unittest.TestCase):
 
     def test_inclusion_diagrams_in_both_modes(self):
         expected = {
-            "dom": {0: None},
-            "cod": {0: None, 1: 2},
-            "im": {0: None},
-            "ker": {},
-            "cok": {1: 2},
-            "rel": {0: None, 1: 2},
+            "domain": {0: None},
+            "codomain": {0: None, 1: 2},
+            "image": {0: None},
+            "kernel": {},
+            "cokernel": {1: 2},
+            "relative": {0: None, 1: 2},
         }
         for slow in (False, True):
             with self.subTest(slow=slow):
@@ -27,7 +27,7 @@ class PythonBindingsTests(unittest.TestCase):
 
     def test_diagram_lookup_iteration_and_copying(self):
         diagrams = sixpack_from_inclusion(self.inclusion, num_threads=2)
-        diagram = diagrams.cod
+        diagram = diagrams.codomain
         self.assertEqual(diagram[1], 2)
         self.assertIsNone(diagram[0])
         self.assertEqual(set(diagram), {0, 1})
@@ -39,7 +39,7 @@ class PythonBindingsTests(unittest.TestCase):
         del diagram[0]
         self.assertEqual(diagram, {1: None})
         # Ensemble getters return independent dictionaries.
-        self.assertEqual(diagrams.cod, {0: None, 1: 2})
+        self.assertEqual(diagrams.codomain, {0: None, 1: 2})
 
     def test_identity_chain_map_in_both_modes(self):
         interval = [(0.0, 0, []), (0.0, 0, []), (1.0, 1, [0, 1])]
@@ -48,7 +48,7 @@ class PythonBindingsTests(unittest.TestCase):
                 diagrams, metadata = sixpack(
                     interval, interval, [[0], [1], [2]], num_threads=2, slow=slow
                 )
-                for name in ("dom", "cod", "im", "ker", "cok"):
+                for name in ("domain", "codomain", "image", "kernel", "cokernel"):
                     diagram = getattr(diagrams, name)
                     pairs = sorted(
                         (metadata.times[b], metadata.times[d])
@@ -56,7 +56,7 @@ class PythonBindingsTests(unittest.TestCase):
                         if d is not None and metadata.times[b] != metadata.times[d]
                     )
                     unpaired = sorted(metadata.times[b] for b, d in diagram.items() if d is None)
-                    expected = ([], []) if name in ("ker", "cok") else ([(0.0, 1.0)], [0.0])
+                    expected = ([], []) if name in ("kernel", "cokernel") else ([(0.0, 1.0)], [0.0])
                     self.assertEqual((pairs, unpaired), expected)
 
     def test_zero_overlap(self):

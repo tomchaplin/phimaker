@@ -128,12 +128,12 @@ impl PersistenceDiagram {
 #[pyclass(get_all, from_py_object)]
 #[derive(Debug, Clone)]
 pub struct DiagramEnsemble {
-    pub cod: PersistenceDiagram,
-    pub dom: PersistenceDiagram,
-    pub im: PersistenceDiagram,
-    pub ker: PersistenceDiagram,
-    pub cok: PersistenceDiagram,
-    pub rel: PersistenceDiagram,
+    pub codomain: PersistenceDiagram,
+    pub domain: PersistenceDiagram,
+    pub image: PersistenceDiagram,
+    pub kernel: PersistenceDiagram,
+    pub cokernel: PersistenceDiagram,
+    pub relative: PersistenceDiagram,
 }
 
 /// Returns the list of negative indices in the diagram, i.e., indices
@@ -297,34 +297,34 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 
         let (cod_dgm, im_dgm) = codomain_image_diagram(&self.metadata, &self.dom, &self.im);
         DiagramEnsemble {
-            dom: {
+            domain: {
                 let mut dgm = PersistenceDiagram::from_decomposition(&self.dom);
                 unreorder_idxs(&mut dgm, &self.metadata.dom_first_mapping);
                 dgm
             },
-            rel: {
+            relative: {
                 let at_diagram = PersistenceDiagram::from_decomposition(&self.rel);
                 let mut dgm =
                     at_diagram.anti_transpose(self.metadata.sz_cod - self.metadata.sz_dom + 1);
                 unreorder_idxs(&mut dgm, &self.metadata.rel_mapping);
                 dgm
             },
-            im: im_dgm,
-            ker: kernel_diagram(
+            image: im_dgm,
+            kernel: kernel_diagram(
                 &self.metadata,
                 &self.ker,
                 &self.dom,
                 &self.im,
                 &cod_negative_list,
             ),
-            cok: cokernel_diagram(
+            cokernel: cokernel_diagram(
                 &self.metadata,
                 &self.dom,
                 &self.im,
                 &self.cok,
                 &cod_negative_list,
             ),
-            cod: cod_dgm,
+            codomain: cod_dgm,
         }
     }
 }
@@ -376,12 +376,12 @@ impl FileEnsemble {
             &cod_negative_list,
         );
         DiagramEnsemble {
-            cod: cod_diagram,
-            dom: dom_diagram,
-            rel: rel_diagram,
-            im: im_diagram,
-            ker: ker_diagram,
-            cok: cok_diagram,
+            codomain: cod_diagram,
+            domain: dom_diagram,
+            relative: rel_diagram,
+            image: im_diagram,
+            kernel: ker_diagram,
+            cokernel: cok_diagram,
         }
     }
 }

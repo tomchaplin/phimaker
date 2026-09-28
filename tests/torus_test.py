@@ -158,7 +158,7 @@ def plot_diagram(
 
 fig, axes = plt.subplots(nrows=2, ncols=3, figsize=[3.5 * 3, 3.5 * 2])
 plot_diagram(
-    dgms.ker,
+    dgms.kernel,
     entrance_times,
     dimensions,
     truncation,
@@ -168,7 +168,7 @@ plot_diagram(
     max_dim=max_diagram_dim,
 )
 plot_diagram(
-    dgms.rel,
+    dgms.relative,
     entrance_times,
     dimensions,
     truncation,
@@ -177,7 +177,7 @@ plot_diagram(
     max_dim=max_diagram_dim + 1,
 )
 plot_diagram(
-    dgms.cok,
+    dgms.cokernel,
     entrance_times,
     dimensions,
     truncation,
@@ -186,7 +186,7 @@ plot_diagram(
     max_dim=max_diagram_dim,
 )
 plot_diagram(
-    dgms.g,
+    dgms.domain,
     entrance_times,
     dimensions,
     truncation,
@@ -195,7 +195,7 @@ plot_diagram(
     max_dim=max_diagram_dim,
 )
 plot_diagram(
-    dgms.im,
+    dgms.image,
     entrance_times,
     dimensions,
     truncation,
@@ -204,7 +204,7 @@ plot_diagram(
     max_dim=max_diagram_dim,
 )
 plot_diagram(
-    dgms.f,
+    dgms.codomain,
     entrance_times,
     dimensions,
     truncation,
