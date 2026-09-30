@@ -1,3 +1,7 @@
+//! Construction of the six reduction matrices for an inclusion.
+//! Low-level builders assume valid filtered F2 chain complexes and consistent
+//! domain-first permutations preserving order within domain and complement.
+
 use itertools::Itertools;
 use lophat::{
     algorithms::Decomposition,
@@ -6,6 +10,10 @@ use lophat::{
 
 use crate::indexing::{DensePermutation, Permutation, PermuteItems};
 
+/// Build the domain boundary matrix in local domain coordinates.
+///
+/// `cols_in_dom` must be sorted, distinct, in range, and boundary-closed.
+/// The permutation maps these columns, in order, to the initial index block.
 pub fn build_d_dom(
     d_cod: &[VecColumn],
     cols_in_dom: &[usize],
@@ -19,6 +27,11 @@ pub fn build_d_dom(
     })
 }
 
+/// Build the image reduction matrix by permuting boundary rows only.
+///
+/// Columns retain the original codomain order. The domain-first permutation must
+/// preserve relative order within the domain and its complement. This matrix
+/// need not square to zero and must be reduced without clearing.
 pub fn build_d_im(
     d_cod: &[VecColumn],
     dom_first_permutation: &impl Permutation,
@@ -30,6 +43,11 @@ pub fn build_d_im(
         ))
     })
 }
+/// Build the quotient boundary matrix B/A, with no extra basepoint.
+///
+/// The first `sz_domain` permuted indices must be exactly the boundary-closed
+/// domain. Remove those rows and columns and subtract `sz_domain` from remaining
+/// row indices. Local quotient index i corresponds to inverse_map(i + sz_domain).
 pub fn build_d_rel(
     d_cod: &[VecColumn],
     dom_first_permutation: &impl Permutation,
@@ -56,6 +74,14 @@ pub fn build_d_rel(
     })
 }
 
+/// Build the kernel reduction matrix from the cycle columns of the image matrix.
+///
+/// Select V columns whose reduced R column is zero, in original column order,
+/// then permute their rows using the same domain-first mapping. This rectangular
+/// matrix has codomain height and must be reduced without clearing.
+///
+/// # Panics
+/// Panics if the image decomposition did not retain V.
 pub fn build_d_ker<Algo: Decomposition<VecColumn>>(
     d_im_decomposition: &Algo,
     mapping: &impl Permutation,
@@ -69,6 +95,15 @@ pub fn build_d_ker<Algo: Decomposition<VecColumn>>(
     })
 }
 
+/// Build the cokernel reduction matrix in original codomain coordinates.
+///
+/// Replace each domain cycle column by its domain V column, translating local
+/// domain rows back to original indices; retain other boundary columns.
+/// The decomposition and permutation must describe the same domain. Reduce the
+/// result without clearing.
+///
+/// # Panics
+/// Panics if required V columns were not retained.
 pub fn build_d_cok<Algo: Decomposition<VecColumn>>(
     d_cod: &[VecColumn],
     d_dom_decomp: &Algo,
@@ -94,7 +129,8 @@ pub fn build_d_cok<Algo: Decomposition<VecColumn>>(
     })
 }
 
-/// Iterate over indices containing cycles of d_im, in sorted order.
+/// Iterate over column indices with zero reduced R columns, in ascending order.
+/// This tests reduced columns, not whether the corresponding original boundary is zero.
 pub fn decomp_cycle_idxs<Algo: Decomposition<VecColumn>>(
     d_im_decomposition: &Algo,
 ) -> impl Iterator<Item = usize> {

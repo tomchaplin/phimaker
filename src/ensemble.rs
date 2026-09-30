@@ -1,3 +1,5 @@
+//! Reduction of the six matrices, in memory or using temporary files.
+
 use bincode::serialize_into;
 use itertools::Itertools;
 use log::debug;
@@ -20,41 +22,66 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Default)]
+/// Coordinate maps shared by the six decompositions.
 pub struct EnsembleMetadata {
+    /// Original indices to domain-first indices, preserving order within each block.
     pub dom_first_permutation: DensePermutation,
+    /// Original image cycle-column index to compact kernel column index.
     pub kernel_mapping: HashMap<usize, usize>,
+    /// Sorted original indices of domain generators.
     pub cols_in_dom: Vec<usize>,
+    /// Number of domain generators.
     pub sz_domain: usize,
+    /// Number of codomain generators.
     pub sz_codomain: usize,
 }
 
 #[derive(Debug)]
+/// Six in-memory decompositions with the metadata needed to extract diagrams.
 pub struct DecompositionEnsemble<C, Algo>
 where
     C: Column,
     Algo: DecompositionAlgo<C>,
 {
+    /// Anti-transposed codomain decomposition.
     pub d_cod: Algo::Decomposition,
+    /// Domain decomposition in local domain coordinates, retaining V.
     pub d_dom: Algo::Decomposition,
+    /// Image decomposition: original columns, domain-first rows, retaining V.
     pub d_im: Algo::Decomposition,
+    /// Kernel decomposition: compact cycle columns and domain-first rows.
     pub d_ker: Algo::Decomposition,
+    /// Cokernel decomposition in original codomain coordinates.
     pub d_cok: Algo::Decomposition,
+    /// Anti-transposed relative decomposition in local quotient coordinates.
     pub d_rel: Algo::Decomposition,
+    /// Coordinate maps for this inclusion.
     pub metadata: EnsembleMetadata,
     phantom: PhantomData<C>,
 }
 
 #[derive(Debug)]
+/// Six serialized decompositions with shared metadata. Reading advances file cursors.
 pub struct FileEnsemble {
+    /// Anti-transposed codomain decomposition.
     pub d_cod: File,
+    /// Domain decomposition in local domain coordinates, retaining V.
     pub d_dom: File,
+    /// Image decomposition: original columns, domain-first rows, retaining V.
     pub d_im: File,
+    /// Kernel decomposition: compact cycle columns and domain-first rows.
     pub d_ker: File,
+    /// Cokernel decomposition in original codomain coordinates.
     pub d_cok: File,
+    /// Anti-transposed relative decomposition in local quotient coordinates.
     pub d_rel: File,
+    /// Coordinate maps for this inclusion.
     pub metadata: EnsembleMetadata,
 }
 
+/// Reduce the anti-transpose of a square codomain boundary matrix.
+/// Returned indices are reversed dual coordinates; undo with
+/// [`crate::diagrams::PersistenceDiagram::anti_transpose`]. Options pass through.
 pub fn decompose_cod<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
     d_cod: &[VecColumn],
     base_options: Algo::Options,
@@ -69,6 +96,10 @@ pub fn decompose_cod<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>
     out
 }
 
+/// Reduce domain and cokernel matrices, returning them in that order.
+/// The domain indices must be sorted and consistent with the domain-first
+/// permutation. Retains domain V and disables cokernel clearing; other options
+/// come from `base_options`. See [`build_d_dom`] and [`build_d_cok`].
 pub fn decompose_dom_cok<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
     d_cod: &[VecColumn],
     cols_in_dom: &[usize], // WARNING: assumes that this is sorted
@@ -99,6 +130,11 @@ pub fn decompose_dom_cok<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOpti
     debug!("Decomposed d_cok");
     (d_dom_decomp, decomp_d_cok)
 }
+/// Reduce image and kernel matrices and return their column correspondence.
+/// The third result maps original image cycle-column indices to compact kernel
+/// column indices. `sz_cod` must equal the codomain size. Retains image V,
+/// disables clearing for both matrices, and sets kernel height to `sz_cod`.
+/// The permutation must match the inclusion; see [`build_d_im`] and [`build_d_ker`].
 pub fn decompose_im_ker<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
     d_cod: &[VecColumn],
     dom_first_mapping: &impl Permutation,
@@ -138,6 +174,10 @@ pub fn decompose_im_ker<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptio
     (d_im_decomp, d_ker_decomp, ker_mapping)
 }
 
+/// Reduce the anti-transpose of the quotient boundary B/A.
+/// The permutation must put the `sz_domain` domain generators first. Returned
+/// indices are reversed local quotient indices, not original codomain indices.
+/// See [`build_d_rel`]; reduction options pass through.
 pub fn decompose_rel<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
     d_cod: &[VecColumn],
     dom_first_mapping: &impl Permutation,
@@ -154,6 +194,19 @@ pub fn decompose_rel<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>
     decomp_d_rel
 }
 
+/// Compute all six decompositions of an inclusion A into B over F2.
+///
+/// `boundary_matrix[j]` contains sorted, distinct nonzero row indices less than j.
+/// `dimensions` has one entry per column; boundaries lower degree by one and
+/// square to zero. `cols_in_dom` contains distinct in-range indices closed under
+/// boundary. Its order is arbitrary and is normalized internally. Inputs are
+/// assumed valid, not comprehensively validated; violations may panic or produce
+/// incorrect diagrams. Column indices define filtration order.
+///
+/// Four scoped workers reduce codomain, domain/cokernel, image/kernel, and relative
+/// matrices. `num_threads` limits each reduction, not the total worker count;
+/// zero requests automatic counts. All results remain in memory. Call
+/// [`DecompositionEnsemble::all_diagrams`] to restore original index coordinates.
 pub fn all_decompositions<
     Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>,
     UsizeSlice: Deref<Target = [usize]>,
@@ -231,6 +284,13 @@ where
     }
 }
 
+/// Serialize a value with bincode into a temporary file and release the value.
+/// Returns a separate read handle positioned at the start. The temporary pathname
+/// is removed when the writer is dropped; the returned handle keeps data alive.
+/// Use [`crate::diagrams::from_file`] for LoPhat decompositions.
+///
+/// # Panics
+/// Panics if temporary-file creation, reopening, or serialization fails.
 pub fn to_file<Algo: Serialize>(algo: Algo) -> File {
     let mut file_write = tempfile::NamedTempFile::new().expect("Can't get temp file");
     println!("Writing to {:?}", file_write.path());
@@ -245,6 +305,28 @@ pub fn to_file<Algo: Serialize>(algo: Algo) -> File {
     file_read
 }
 
+/// Compute all six decompositions of an inclusion A into B over F2.
+///
+/// `boundary_matrix[j]` contains sorted, distinct nonzero row indices less than j.
+/// `dimensions` has one entry per column; boundaries lower degree by one and
+/// square to zero. `cols_in_dom` contains distinct in-range indices closed under
+/// boundary. Its order is arbitrary and is normalized internally. Inputs are
+/// assumed valid, not comprehensively validated; violations may panic or produce
+/// incorrect diagrams. Column indices define filtration order.
+///
+/// Four scoped workers reduce codomain, domain/cokernel, image/kernel, and relative
+/// matrices. `num_threads` limits each reduction, not the total worker count;
+/// zero requests automatic counts. All results remain in memory. Call
+/// [`DecompositionEnsemble::all_diagrams`] to restore original index coordinates.
+/// Compute the same reductions as [`all_decompositions`] using temporary files.
+///
+/// Inputs, assumptions, and thread-count semantics are identical. Reduction groups
+/// run sequentially and release decompositions after serialization. This is not
+/// fully out-of-core: [`FileEnsemble::all_diagrams`] reloads all six at once.
+///
+/// # Panics
+/// Panics on temporary-file or serialization errors. LoPhat 0.11.0 also panics
+/// when serializing an empty decomposition, e.g. for an empty domain or quotient.
 pub fn all_decompositions_slow<
     Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>,
     UsizeSlice: Deref<Target = [usize]>,

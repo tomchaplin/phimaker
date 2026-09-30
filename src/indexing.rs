@@ -1,10 +1,17 @@
+//! Index permutations between original and domain-first coordinates.
+
 use itertools::Itertools;
 
+/// A bijection on a finite index set, with its inverse.
 pub trait Permutation {
+    /// Map an original index to its permuted position. The index must be in range.
     fn map(&self, idx: usize) -> usize;
+    /// Recover the original index from an in-range permuted position.
     fn inverse_map(&self, idx: usize) -> usize;
 }
 
+/// A permutation stored as forward and inverse lookup tables.
+/// Out-of-range lookups panic; the default permutation is empty.
 #[derive(Debug, Clone, Default)]
 pub struct DensePermutation {
     perm: Vec<usize>,
@@ -21,9 +28,11 @@ impl DensePermutation {
     }
 }
 impl Permutation for DensePermutation {
+    /// Map an original index to its permuted position. The index must be in range.
     fn map(&self, idx: usize) -> usize {
         self.perm[idx]
     }
+    /// Recover the original index from an in-range permuted position.
     fn inverse_map(&self, idx: usize) -> usize {
         self.inverse[idx]
     }

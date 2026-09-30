@@ -1,3 +1,5 @@
+//! Birth-to-death dictionaries and extraction from reduced matrices.
+
 use bincode::deserialize_from;
 use std::{
     collections::HashMap,
@@ -23,7 +25,9 @@ use crate::{
 /// Infinity is greater than every finite index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ExtendedUsize {
+    /// A finite death column index.
     Finite(usize),
+    /// An essential class that never dies.
     Infinity,
 }
 
@@ -65,7 +69,10 @@ impl<'py> IntoPyObject<'py> for &ExtendedUsize {
 /// Maps each generator's birth index to its death index, or infinity.
 /// Python receives a dictionary with `None` for infinite deaths.
 #[derive(Default, Debug, Clone, PartialEq, Eq, IntoPyObject, IntoPyObjectRef)]
-pub struct PersistenceDiagram(pub HashMap<usize, ExtendedUsize>);
+pub struct PersistenceDiagram(
+    /// Birth-to-death entries; keys identify generators uniquely.
+    pub HashMap<usize, ExtendedUsize>,
+);
 
 impl Deref for PersistenceDiagram {
     type Target = HashMap<usize, ExtendedUsize>;
@@ -103,7 +110,9 @@ impl FromIterator<(usize, ExtendedUsize)> for PersistenceDiagram {
     }
 }
 impl PersistenceDiagram {
-    /// Extract pairings from a reduced, square boundary matrix.
+    /// Extract pairings from a reduced square, strictly upper-triangular boundary matrix.
+    /// Requires a valid chain-complex reduction. V is not needed. Results use the
+    /// supplied matrix coordinates; reverse anti-transposed coordinates separately.
     pub fn from_decomposition<C: Column>(decomposition: &impl Decomposition<C>) -> Self {
         let mut diagram = Self((0..decomposition.n_cols()).map(|i| (i, Infinity)).collect());
         for death in 0..decomposition.n_cols() {
@@ -116,6 +125,9 @@ impl PersistenceDiagram {
     }
 
     /// Restore filtration indices after reducing an anti-transposed boundary matrix.
+    /// Finite pairs (b, d) become (n - 1 - d, n - 1 - b); essential birth b
+    /// becomes n - 1 - b. Every finite index must be less than `matrix_size`.
+    /// An empty diagram accepts size zero.
     pub fn anti_transpose(self, matrix_size: usize) -> Self {
         Self(
             self.0
@@ -128,6 +140,8 @@ impl PersistenceDiagram {
         )
     }
 
+    /// Apply the inverse permutation to every birth and finite death.
+    /// All indices must lie in the permutation range; infinity is unchanged.
     pub fn unpermute_idxs(mut self, mapping: &impl Permutation) -> Self {
         self.0 = self
             .drain()
@@ -145,6 +159,9 @@ impl PersistenceDiagram {
         self
     }
 
+    /// Map every birth and finite death through f, leaving infinity unchanged.
+    /// To preserve distinct generators, f must be injective on births. Colliding
+    /// keys overwrite entries in unspecified order. No order validation is performed.
     pub fn map_idxs<F: Fn(usize) -> usize>(mut self, f: F) -> Self {
         self.0 = self
             .drain()
@@ -163,12 +180,21 @@ impl PersistenceDiagram {
 
 #[pyclass(get_all, from_py_object)]
 #[derive(Debug, Clone)]
+/// Six diagrams in original inclusion (or cylinder) indices, across all degrees.
+/// Python getters return independent dicts with None for infinite death.
+/// Kernel degree is birth-cell degree minus one; other degrees equal birth-cell degree.
 pub struct DiagramEnsemble {
+    /// Persistent homology of the codomain.
     pub codomain: PersistenceDiagram,
+    /// Persistent homology of the domain.
     pub domain: PersistenceDiagram,
+    /// Image of the induced homology map.
     pub image: PersistenceDiagram,
+    /// Kernel of the induced homology map.
     pub kernel: PersistenceDiagram,
+    /// Cokernel of the induced homology map.
     pub cokernel: PersistenceDiagram,
+    /// Persistent homology of the quotient complex (no extra basepoint).
     pub relative: PersistenceDiagram,
 }
 
@@ -294,6 +320,9 @@ fn cokernel_diagram<Decomp: Decomposition<C>, C: Column>(
     dgm
 }
 impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
+    /// Extract all six diagrams in original codomain column coordinates.
+    /// The decompositions and metadata must come from the same valid inclusion.
+    /// Does not mutate the decompositions; repeated extraction is supported.
     pub fn all_diagrams(&self) -> DiagramEnsemble {
         DiagramEnsemble {
             domain: {
@@ -311,24 +340,19 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
                     .map_idxs(f)
             },
             image: image_diagram(&self.metadata, &self.d_dom, &self.d_im),
-            kernel: kernel_diagram(
-                &self.metadata,
-                &self.d_ker,
-                &self.d_dom,
-                &self.d_im,
-            ),
-            cokernel: cokernel_diagram(
-                &self.metadata,
-                &self.d_dom,
-                &self.d_im,
-                &self.d_cok,
-            ),
+            kernel: kernel_diagram(&self.metadata, &self.d_ker, &self.d_dom, &self.d_im),
+            cokernel: cokernel_diagram(&self.metadata, &self.d_dom, &self.d_im, &self.d_cok),
             codomain: PersistenceDiagram::from_decomposition(&self.d_cod)
                 .anti_transpose(self.metadata.sz_codomain),
         }
     }
 }
 
+/// Deserialize a LoPhat decomposition from the current file position using bincode.
+/// Reading advances the shared file cursor; seek back before reading again.
+///
+/// # Panics
+/// Panics on I/O errors or incompatible/corrupt serialized data.
 pub fn from_file(file: &File) -> DecompositionFileFormat {
     let buf = BufReader::new(file);
     deserialize_from(buf).expect("Can't deserialize from file")
@@ -336,6 +360,10 @@ pub fn from_file(file: &File) -> DecompositionFileFormat {
 }
 
 impl FileEnsemble {
+    /// Load all six decompositions and extract diagrams in original coordinates.
+    /// All files must be positioned at the start of compatible serialized data.
+    /// This loads all six simultaneously and advances their cursors; rewind each
+    /// file before calling again. Panics on read/deserialization errors.
     pub fn all_diagrams(&self) -> DiagramEnsemble {
         let d_dom_decomp = from_file(&self.d_dom);
         let d_cod_decomp = from_file(&self.d_cod);
@@ -359,18 +387,8 @@ impl FileEnsemble {
                     .map_idxs(f)
             },
             image: image_diagram(&self.metadata, &d_dom_decomp, &d_im_decomp),
-            kernel: kernel_diagram(
-                &self.metadata,
-                &d_ker_decomp,
-                &d_dom_decomp,
-                &d_im_decomp,
-            ),
-            cokernel: cokernel_diagram(
-                &self.metadata,
-                &d_dom_decomp,
-                &d_im_decomp,
-                &d_cok_decomp,
-            ),
+            kernel: kernel_diagram(&self.metadata, &d_ker_decomp, &d_dom_decomp, &d_im_decomp),
+            cokernel: cokernel_diagram(&self.metadata, &d_dom_decomp, &d_im_decomp, &d_cok_decomp),
         }
     }
 }

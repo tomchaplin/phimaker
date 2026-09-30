@@ -39,3 +39,16 @@ Cohen-Steiner, D., Edelsbrunner, H., Harer, J. and Morozov, D., 2009, January.
 Persistent homology for kernels, images, and cokernels.
 In Proceedings of the twentieth annual ACM-SIAM symposium on Discrete algorithms (pp. 1011-1020).
 Society for Industrial and Applied Mathematics.
+
+## API documentation
+
+Run `cargo doc --no-deps --open` to build the Rust API reference. The public
+functions document input assumptions and index coordinates. Python docstrings
+come from the same Rust sources: use `help(phimaker.sixpack_from_inclusion)` or
+`help(phimaker.sixpack)` after building/installing the extension.
+
+The inclusion API takes boundary columns, dimensions, and domain column indices.
+It uses filtration indices only. The general-map API `sixpack` takes timed
+complexes and returns mapping-cylinder metadata alongside its diagrams; use
+that metadata to interpret the returned indices. Inputs must be valid filtered
+chain complexes over F2; the API does not comprehensively validate them.

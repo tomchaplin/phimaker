@@ -1,3 +1,5 @@
+//! Mapping-cylinder construction for filtered chain maps over F2.
+
 use log::debug;
 use pyo3::prelude::*;
 
@@ -34,15 +36,39 @@ impl Ord for CylinderColType {
 }
 
 #[pyclass(get_all)]
+/// Coordinate and filtration metadata for the mapping cylinder.
+/// Python properties return copies of these arrays.
 pub struct CylinderMetadata {
+    /// Entrance time of each cylinder column.
     pub times: Vec<f64>,
+    /// Original domain index to cylinder index.
     pub domain_indices: Vec<usize>,
+    /// Original codomain index to cylinder index.
     pub codomain_indices: Vec<usize>,
+    /// Original domain index to its degree-one-higher cylinder copy.
     pub domain_shift: Vec<usize>,
+    /// Degree of each cylinder generator.
     pub dimensions: Vec<usize>,
 }
 
-// Build the filtered mapping cylinder of a map between filtered chain complexes.
+/// Build the filtered mapping cylinder of a chain map A to B over F2.
+///
+/// Input columns are (entrance time, degree, sorted boundary indices). Each matrix
+/// must have nondecreasing non-NaN times and be strictly upper triangular, with
+/// boundary squared zero and degree lowered by one. `chain_morphism[i]` is a
+/// sorted, duplicate-free list of codomain indices for the image of generator i.
+/// There must be at least one map column per domain column; extras are ignored.
+/// The map must preserve degree, commute with boundary, and not increase time.
+///
+/// Returns a boundary matrix with 2 * len(A) + len(B) columns and its metadata.
+/// The shifted copy of a has boundary a + f(a) + shift(boundary(a)). Equal-time
+/// columns are ordered domain, codomain, shifted domain, preserving input order.
+/// Use metadata to translate indices; the original domain embeds as a subcomplex.
+///
+/// # Panics
+/// Panics for unavailable boundary/image indices or missing map columns.
+/// Algebraic validity, sortedness, and non-NaN times are caller assumptions and
+/// are not comprehensively checked.
 pub fn build_cylinder<UsizeSlice: Deref<Target = [usize]>>(
     domain_matrix: &[(
         f64,        // entrance time
@@ -154,9 +180,11 @@ pub fn build_cylinder<UsizeSlice: Deref<Target = [usize]>>(
             }
             CylinderColType::DomainShifted => {
                 // Identity going down a dimension, into the domain.
-                let domain_part = vec![domain_idxs
-                    .get(original_idx)
-                    .expect("Map should have one column per column of domain matrix")]
+                let domain_part = vec![
+                    domain_idxs
+                        .get(original_idx)
+                        .expect("Map should have one column per column of domain matrix"),
+                ]
                 .into_iter()
                 .copied();
                 // The mapping going down a dimension
