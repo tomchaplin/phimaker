@@ -7,8 +7,6 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use log::debug;
-
 use lophat::{
     algorithms::{Decomposition, DecompositionAlgo},
     columns::Column,
@@ -18,10 +16,11 @@ use pyo3::prelude::*;
 
 use crate::{
     ensemble::{DecompositionEnsemble, EnsembleMetadata, FileEnsemble},
-    indexing::{IndexMapping, unreorder_idxs},
+    indexing::Permutation,
 };
 
-/// A nonnegative index or infinity. Infinity is greater than every finite index.
+/// A nonnegative index or infinity.
+/// Infinity is greater than every finite index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ExtendedUsize {
     Finite(usize),
@@ -98,6 +97,11 @@ impl Display for PersistenceDiagram {
     }
 }
 
+impl FromIterator<(usize, ExtendedUsize)> for PersistenceDiagram {
+    fn from_iter<T: IntoIterator<Item = (usize, ExtendedUsize)>>(iter: T) -> Self {
+        PersistenceDiagram(iter.into_iter().collect())
+    }
+}
 impl PersistenceDiagram {
     /// Extract pairings from a reduced, square boundary matrix.
     pub fn from_decomposition<C: Column>(decomposition: &impl Decomposition<C>) -> Self {
@@ -123,6 +127,38 @@ impl PersistenceDiagram {
                 .collect(),
         )
     }
+
+    pub fn unpermute_idxs(mut self, mapping: &impl Permutation) -> Self {
+        self.0 = self
+            .drain()
+            .map(|(birth, death)| {
+                let birth = mapping.inverse_map(birth);
+                let death = match death {
+                    ExtendedUsize::Finite(death) => {
+                        ExtendedUsize::Finite(mapping.inverse_map(death))
+                    }
+                    ExtendedUsize::Infinity => ExtendedUsize::Infinity,
+                };
+                (birth, death)
+            })
+            .collect();
+        self
+    }
+
+    pub fn map_idxs<F: Fn(usize) -> usize>(mut self, f: F) -> Self {
+        self.0 = self
+            .drain()
+            .map(|(birth, death)| {
+                let birth = f(birth);
+                let death = match death {
+                    Finite(death) => ExtendedUsize::Finite(f(death)),
+                    Infinity => Infinity,
+                };
+                (birth, death)
+            })
+            .collect();
+        self
+    }
 }
 
 #[pyclass(get_all, from_py_object)]
@@ -136,33 +172,21 @@ pub struct DiagramEnsemble {
     pub relative: PersistenceDiagram,
 }
 
-/// Returns the list of negative indices in the diagram, i.e., indices
-/// of non-zero columns. Such columns represent deaths in the diagram.
-fn compute_negative_list(metadata: &EnsembleMetadata, diagram: &PersistenceDiagram) -> Vec<bool> {
-    let mut negative_list: Vec<bool> = vec![false; metadata.sz_cod];
-    for death in diagram.values() {
-        if let Finite(death) = death {
-            negative_list[*death] = true;
-        }
-    }
-    negative_list
-}
-
 fn is_kernel_birth<Decomp: Decomposition<C>, C: Column>(
     idx: usize,
     metadata: &EnsembleMetadata,
-    cod_negative_list: &[bool],
-    im_decomp: &Decomp,
+    d_im_decomp: &Decomp,
 ) -> bool {
-    let in_dom = metadata.col_in_dom[idx];
+    let in_dom = metadata.dom_first_permutation.map(idx) < metadata.sz_domain;
     if in_dom {
         return false;
     }
-    let negative_in_cod = cod_negative_list[idx];
+    // Note: we use d_im here because d_cod is anti-transposed
+    let negative_in_cod = d_im_decomp.get_r_col(idx).is_boundary();
     if !negative_in_cod {
         return false;
     }
-    let low_idx_in_dom = im_decomp.get_r_col(idx).pivot().unwrap() < metadata.sz_dom;
+    let low_idx_in_dom = d_im_decomp.get_r_col(idx).pivot().unwrap() < metadata.sz_domain;
     if !low_idx_in_dom {
         return false;
     }
@@ -172,19 +196,20 @@ fn is_kernel_birth<Decomp: Decomposition<C>, C: Column>(
 fn is_kernel_death<Decomp: Decomposition<C>, C: Column>(
     idx: usize,
     metadata: &EnsembleMetadata,
-    dom_decomp: &Decomp,
-    cod_negative_list: &[bool],
+    d_dom_decomp: &Decomp,
+    d_im_decomp: &Decomp,
 ) -> bool {
-    let in_dom = metadata.col_in_dom[idx];
+    let in_dom = metadata.dom_first_permutation.map(idx) < metadata.sz_domain;
     if !in_dom {
         return false;
     }
-    let dom_idx = metadata.dom_first_mapping.map(idx).unwrap();
-    let negative_in_dom = dom_decomp.get_r_col(dom_idx).pivot().is_some();
+    let dom_idx = metadata.dom_first_permutation.map(idx);
+    let negative_in_dom = d_dom_decomp.get_r_col(dom_idx).is_boundary();
     if !negative_in_dom {
         return false;
     }
-    let negative_in_cod = cod_negative_list[idx];
+    // Note: we use d_im here because d_cod is anti-transposed
+    let negative_in_cod = d_im_decomp.get_r_col(idx).is_boundary();
     if negative_in_cod {
         return false;
     }
@@ -194,137 +219,112 @@ fn is_kernel_death<Decomp: Decomposition<C>, C: Column>(
 fn kernel_diagram<Decomp: Decomposition<C>, C: Column>(
     metadata: &EnsembleMetadata,
     ker: &Decomp,
-    dom_decomp: &Decomp,
-    im_decomp: &Decomp,
-    cod_negative_list: &[bool],
+    d_dom_decomp: &Decomp,
+    d_im_decomp: &Decomp,
 ) -> PersistenceDiagram {
     let mut dgm = PersistenceDiagram::default();
-    for idx in 0..metadata.sz_cod {
-        if is_kernel_birth(idx, metadata, cod_negative_list, im_decomp) {
+    for idx in 0..metadata.sz_codomain {
+        if is_kernel_birth(idx, metadata, d_im_decomp) {
             dgm.insert(idx, Infinity);
             continue;
         }
-        if is_kernel_death(idx, metadata, dom_decomp, cod_negative_list) {
+        if is_kernel_death(idx, metadata, d_dom_decomp, d_im_decomp) {
             // TODO: Problem kernel columns have different indexing to f
-            let ker_idx = metadata.kernel_mapping.map(idx).unwrap();
+            let ker_idx = *metadata.kernel_mapping.get(&idx).unwrap();
             let dom_birth_index = ker.get_r_col(ker_idx).pivot().unwrap();
-            let birth_index = metadata
-                .dom_first_mapping
-                .inverse_map(dom_birth_index)
-                .unwrap();
+            let birth_index = metadata.dom_first_permutation.inverse_map(dom_birth_index);
             dgm.insert(birth_index, Finite(idx));
         }
     }
     dgm
 }
 
-fn codomain_image_diagram<Decomp: Decomposition<C>, C: Column>(
+fn image_diagram<Decomp: Decomposition<C>, C: Column>(
     metadata: &EnsembleMetadata,
-    dom_decomp: &Decomp,
-    im_decomp: &Decomp,
-) -> (PersistenceDiagram, PersistenceDiagram) {
+    d_dom_decomp: &Decomp,
+    d_im_decomp: &Decomp,
+) -> PersistenceDiagram {
     let mut im_dgm = PersistenceDiagram::default();
-    let mut cod_dgm = PersistenceDiagram::default();
-    (0..metadata.sz_cod).for_each(|idx| {
-        if let Some(low_idx) = im_decomp.get_r_col(idx).pivot() {
-            // The column is a death in the codomain.
-            // We need to add the column to the codomain diagram.
-            // The birth index, i.e., the index of the lowest entry in this column,
-            // corresponds to a row in D_im, which has permuted rows.
-            // We need the unpermuted index.
-            let birth_idx = metadata.dom_first_mapping.inverse_map(low_idx).unwrap();
-            cod_dgm.insert(birth_idx, Finite(idx));
-
-            // Check if the birth simplex is in the domain.
-            // If yes, then add a feature to the image diagram.
-            let low_idx_in_dom = low_idx < metadata.sz_dom;
+    (0..metadata.sz_codomain).for_each(|idx| {
+        if let Some(low_idx) = d_im_decomp.get_r_col(idx).pivot() {
+            let birth_idx = metadata.dom_first_permutation.inverse_map(low_idx);
+            let low_idx_in_dom = low_idx < metadata.sz_domain;
             if low_idx_in_dom {
                 im_dgm.insert(birth_idx, Finite(idx));
             }
         } else {
-            // The column is a birth in the codomain.
-            cod_dgm.insert(idx, Infinity);
-
             // Check if the column is a birth in the domain.
-            if metadata.col_in_dom[idx] {
-                let dom_idx = metadata.dom_first_mapping.map(idx).unwrap();
-                if dom_decomp.get_r_col(dom_idx).pivot().is_none() {
-                    im_dgm.insert(idx, Infinity);
-                }
+            let idx_dom_first = metadata.dom_first_permutation.map(idx);
+            let idx_in_domain = idx_dom_first < metadata.sz_domain;
+            if idx_in_domain && d_dom_decomp.get_r_col(idx_dom_first).is_cycle() {
+                im_dgm.insert(idx, Infinity);
             }
         }
     });
-    (cod_dgm, im_dgm)
+    im_dgm
 }
 
 fn cokernel_diagram<Decomp: Decomposition<C>, C: Column>(
     metadata: &EnsembleMetadata,
-    dom_decomp: &Decomp,
-    im_decomp: &Decomp,
-    cok_decomp: &Decomp,
-    cod_negative_list: &[bool],
+    d_dom_decomp: &Decomp,
+    d_im_decomp: &Decomp,
+    d_cok_decomp: &Decomp,
 ) -> PersistenceDiagram {
     let mut dgm = PersistenceDiagram::default();
-    cod_negative_list
-        .iter()
-        .enumerate()
-        .take(metadata.sz_cod)
-        .for_each(|(idx, &is_death_in_cod)| {
-            let is_birth_in_cod = !is_death_in_cod;
-            let dom_idx = metadata.dom_first_mapping.map(idx).unwrap();
-            let not_in_dom_or_neg_in_dom =
-                (!metadata.col_in_dom[idx]) || dom_decomp.get_r_col(dom_idx).pivot().is_some();
-            if is_birth_in_cod && not_in_dom_or_neg_in_dom {
-                dgm.insert(idx, Infinity);
-                return;
-            }
-            if is_birth_in_cod {
-                return;
-            }
-            let low_idx_in_dom = im_decomp.get_r_col(idx).pivot().unwrap() < metadata.sz_dom;
-            if !low_idx_in_dom {
-                let lowest_in_r_cok = cok_decomp.get_r_col(idx).pivot().unwrap();
-                dgm.insert(lowest_in_r_cok, Finite(idx));
-            }
-        });
+    let sz_codomain = d_im_decomp.n_cols();
+    (0..sz_codomain).for_each(|idx| {
+        let is_birth_in_cod = d_im_decomp.get_r_col(idx).is_cycle();
+        let idx_dom_first = metadata.dom_first_permutation.map(idx);
+        let idx_in_dom = idx_dom_first < metadata.sz_domain;
+        let not_in_dom_or_neg_in_dom =
+            (!idx_in_dom) || d_dom_decomp.get_r_col(idx_dom_first).is_boundary();
+        if is_birth_in_cod && not_in_dom_or_neg_in_dom {
+            dgm.insert(idx, Infinity);
+            return;
+        }
+        if is_birth_in_cod {
+            return;
+        }
+        let low_idx_in_dom = d_im_decomp.get_r_col(idx).pivot().unwrap() < metadata.sz_domain;
+        if !low_idx_in_dom {
+            let lowest_in_r_cok = d_cok_decomp.get_r_col(idx).pivot().unwrap();
+            dgm.insert(lowest_in_r_cok, Finite(idx));
+        }
+    });
     dgm
 }
 impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
     pub fn all_diagrams(&self) -> DiagramEnsemble {
-        let cod_diagram =
-            PersistenceDiagram::from_decomposition(&self.cod).anti_transpose(self.metadata.sz_cod);
-        let cod_negative_list = compute_negative_list(&self.metadata, &cod_diagram);
-
-        let (cod_dgm, im_dgm) = codomain_image_diagram(&self.metadata, &self.dom, &self.im);
         DiagramEnsemble {
             domain: {
-                let mut dgm = PersistenceDiagram::from_decomposition(&self.dom);
-                unreorder_idxs(&mut dgm, &self.metadata.dom_first_mapping);
-                dgm
+                PersistenceDiagram::from_decomposition(&self.d_dom)
+                    .unpermute_idxs(&self.metadata.dom_first_permutation)
             },
             relative: {
-                let at_diagram = PersistenceDiagram::from_decomposition(&self.rel);
-                let mut dgm =
-                    at_diagram.anti_transpose(self.metadata.sz_cod - self.metadata.sz_dom + 1);
-                unreorder_idxs(&mut dgm, &self.metadata.rel_mapping);
-                dgm
+                let f = |idx| {
+                    self.metadata
+                        .dom_first_permutation
+                        .inverse_map(idx + self.metadata.sz_domain)
+                };
+                PersistenceDiagram::from_decomposition(&self.d_rel)
+                    .anti_transpose(self.metadata.sz_codomain - self.metadata.sz_domain)
+                    .map_idxs(f)
             },
-            image: im_dgm,
+            image: image_diagram(&self.metadata, &self.d_dom, &self.d_im),
             kernel: kernel_diagram(
                 &self.metadata,
-                &self.ker,
-                &self.dom,
-                &self.im,
-                &cod_negative_list,
+                &self.d_ker,
+                &self.d_dom,
+                &self.d_im,
             ),
             cokernel: cokernel_diagram(
                 &self.metadata,
-                &self.dom,
-                &self.im,
-                &self.cok,
-                &cod_negative_list,
+                &self.d_dom,
+                &self.d_im,
+                &self.d_cok,
             ),
-            codomain: cod_dgm,
+            codomain: PersistenceDiagram::from_decomposition(&self.d_cod)
+                .anti_transpose(self.metadata.sz_codomain),
         }
     }
 }
@@ -337,51 +337,40 @@ pub fn from_file(file: &File) -> DecompositionFileFormat {
 
 impl FileEnsemble {
     pub fn all_diagrams(&self) -> DiagramEnsemble {
-        let cod_diagram = PersistenceDiagram::from_decomposition(&from_file(&self.cod))
-            .anti_transpose(self.metadata.sz_cod);
-        debug!("Got cod");
-        let cod_negative_list = compute_negative_list(&self.metadata, &cod_diagram);
-        let rel_diagram = {
-            let rel_decomp = from_file(&self.rel);
-            let at_diagram = PersistenceDiagram::from_decomposition(&rel_decomp);
-            let mut dgm =
-                at_diagram.anti_transpose(self.metadata.sz_cod - self.metadata.sz_dom + 1);
-            unreorder_idxs(&mut dgm, &self.metadata.rel_mapping);
-            dgm
-        };
-        let dom_decomp = from_file(&self.dom);
-        let dom_diagram = {
-            let mut dgm = PersistenceDiagram::from_decomposition(&dom_decomp);
-            unreorder_idxs(&mut dgm, &self.metadata.dom_first_mapping);
-            dgm
-        };
-        let im_decomp = from_file(&self.im);
-        let ker_decomp = from_file(&self.ker);
-        let ker_diagram = kernel_diagram(
-            &self.metadata,
-            &ker_decomp,
-            &dom_decomp,
-            &im_decomp,
-            &cod_negative_list,
-        );
-        drop(ker_decomp);
-        let (cod_diagram, im_diagram) =
-            codomain_image_diagram(&self.metadata, &dom_decomp, &im_decomp);
-        let cok_decomp = from_file(&self.cok);
-        let cok_diagram = cokernel_diagram(
-            &self.metadata,
-            &dom_decomp,
-            &im_decomp,
-            &cok_decomp,
-            &cod_negative_list,
-        );
+        let d_dom_decomp = from_file(&self.d_dom);
+        let d_cod_decomp = from_file(&self.d_cod);
+        let d_im_decomp = from_file(&self.d_im);
+        let d_cok_decomp = from_file(&self.d_cok);
+        let d_ker_decomp = from_file(&self.d_ker);
+        let d_rel_decomp = from_file(&self.d_rel);
         DiagramEnsemble {
-            codomain: cod_diagram,
-            domain: dom_diagram,
-            relative: rel_diagram,
-            image: im_diagram,
-            kernel: ker_diagram,
-            cokernel: cok_diagram,
+            domain: PersistenceDiagram::from_decomposition(&d_dom_decomp)
+                .unpermute_idxs(&self.metadata.dom_first_permutation),
+            codomain: PersistenceDiagram::from_decomposition(&d_cod_decomp)
+                .anti_transpose(self.metadata.sz_codomain),
+            relative: {
+                let f = |idx| {
+                    self.metadata
+                        .dom_first_permutation
+                        .inverse_map(idx + self.metadata.sz_domain)
+                };
+                PersistenceDiagram::from_decomposition(&d_rel_decomp)
+                    .anti_transpose(self.metadata.sz_codomain - self.metadata.sz_domain)
+                    .map_idxs(f)
+            },
+            image: image_diagram(&self.metadata, &d_dom_decomp, &d_im_decomp),
+            kernel: kernel_diagram(
+                &self.metadata,
+                &d_ker_decomp,
+                &d_dom_decomp,
+                &d_im_decomp,
+            ),
+            cokernel: cokernel_diagram(
+                &self.metadata,
+                &d_dom_decomp,
+                &d_im_decomp,
+                &d_cok_decomp,
+            ),
         }
     }
 }
@@ -457,18 +446,13 @@ mod tests {
 
     #[test]
     fn reindexing_preserves_essential_and_finite_intervals() {
-        use crate::indexing::{AnnotatedColumn, compute_dom_first_mapping, unreorder_idxs};
+        use crate::builders::compute_dom_first_permutation;
 
-        let matrix: Vec<_> = [false, true, false, true]
-            .into_iter()
-            .map(|in_domain| AnnotatedColumn {
-                in_domain,
-                col: VecColumn::from((0, vec![])),
-            })
-            .collect();
-        let mapping = compute_dom_first_mapping(&matrix);
-        let mut diagram = PersistenceDiagram([(0, Finite(3)), (1, Infinity)].into());
-        unreorder_idxs(&mut diagram, &mapping);
+        let sz_codomain = 4;
+        let cols_in_dom = vec![1, 3];
+        let mapping = compute_dom_first_permutation(sz_codomain, &cols_in_dom);
+        let diagram =
+            PersistenceDiagram([(0, Finite(3)), (1, Infinity)].into()).unpermute_idxs(&mapping);
         assert_eq!(
             diagram,
             PersistenceDiagram([(1, Finite(2)), (3, Infinity)].into())

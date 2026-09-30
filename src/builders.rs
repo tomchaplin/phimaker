@@ -1,103 +1,127 @@
+use itertools::Itertools;
 use lophat::{
     algorithms::Decomposition,
     columns::{Column, VecColumn},
 };
 
-use crate::indexing::{IndexMapping, ReordorableColumn, VectorMapping};
+use crate::indexing::{DensePermutation, Permutation, PermuteItems};
 
-pub fn extract_columns<'a>(
-    matrix: &'a [VecColumn],
-    extract: &'a [bool],
-) -> impl Iterator<Item = VecColumn> + 'a {
-    matrix
-        .iter()
-        .zip(extract.iter())
-        .filter_map(|(col, in_dom)| if *in_dom { Some(col) } else { None })
-        .cloned()
+pub fn build_d_dom(
+    d_cod: &[VecColumn],
+    cols_in_dom: &[usize],
+    dom_first_permutation: &impl Permutation,
+) -> impl Iterator<Item = VecColumn> {
+    cols_in_dom.iter().map(|&idx| {
+        let col = &d_cod[idx];
+        let dimension = col.dimension();
+        let column = col.entries().permuted(dom_first_permutation).collect_vec();
+        VecColumn::from((dimension, column))
+    })
 }
 
-pub fn build_d_dom<'a>(
-    d_cod: &'a [VecColumn],
-    col_in_dom: &'a [bool],
-    dom_first_mapping: &'a VectorMapping,
-) -> impl Iterator<Item = VecColumn> + 'a {
-    extract_columns(d_cod, col_in_dom).map(|col| col.reorder_rows(dom_first_mapping))
+pub fn build_d_im(
+    d_cod: &[VecColumn],
+    dom_first_permutation: &impl Permutation,
+) -> impl Iterator<Item = VecColumn> {
+    d_cod.iter().map(|col| {
+        VecColumn::from((
+            col.dimension(),
+            col.entries().permuted(dom_first_permutation).collect_vec(),
+        ))
+    })
+}
+pub fn build_d_rel(
+    d_cod: &[VecColumn],
+    dom_first_permutation: &impl Permutation,
+    sz_domain: usize,
+) -> impl Iterator<Item = VecColumn> {
+    let sz_codomain = d_cod.len();
+    (sz_domain..sz_codomain).map(move |idx_dom_first| {
+        let idx = dom_first_permutation.inverse_map(idx_dom_first);
+        let col = &d_cod[idx];
+        VecColumn::from((
+            col.dimension(),
+            col.entries()
+                .filter_map(|row_idx| {
+                    let row_idx_dom_first = dom_first_permutation.map(row_idx);
+                    if row_idx_dom_first < sz_domain {
+                        None
+                    } else {
+                        Some(row_idx_dom_first - sz_domain)
+                    }
+                })
+                .sorted()
+                .collect_vec(),
+        ))
+    })
 }
 
-pub fn build_d_im<'a>(
-    d_cod: &'a [VecColumn],
-    mapping: &'a impl IndexMapping,
-) -> impl Iterator<Item = VecColumn> + 'a {
-    d_cod
-        .iter()
-        .cloned()
-        .map(|col| col.reorder_rows(mapping))
-}
-// WARNING: This functions makes the following assumption:
-// If the boundary of a cell is entirely contained in L then that cell is in L
-// This ensures that a 1-cell not in L can have at most 1 vertex in L
-// This makes it easier to map the boundary
-// Also inherits assumption from build_rel_mapping
-pub fn build_d_rel<'a>(
-    df: &'a [VecColumn],
-    g_elements: &'a [bool],
-    rel_mapping: &'a VectorMapping,
-    l_index: usize,
-) -> impl Iterator<Item = VecColumn> + 'a {
-    df.iter()
-        .zip(g_elements.iter())
-        .enumerate()
-        .filter_map(move |(idx, (col, &in_g))| {
-            if in_g && idx != l_index {
-                None
-            } else {
-                Some(col.clone().reorder_rows(rel_mapping))
-            }
-        })
+pub fn build_d_ker<Algo: Decomposition<VecColumn>>(
+    d_im_decomposition: &Algo,
+    mapping: &impl Permutation,
+) -> impl Iterator<Item = VecColumn> {
+    decomp_cycle_idxs(d_im_decomposition).map(|idx| {
+        let v_col = d_im_decomposition.get_v_col(idx).unwrap();
+        VecColumn::from((
+            v_col.dimension(),
+            v_col.entries().permuted(mapping).collect_vec(),
+        ))
+    })
 }
 
-pub fn build_d_ker<'a, Algo: Decomposition<VecColumn>>(
-    d_im_decomposition: &'a Algo,
-    mapping: &'a impl IndexMapping,
-) -> impl Iterator<Item = VecColumn> + 'a {
-    let paired_cols = (0..d_im_decomposition.n_cols()).map(|idx| {
-        (
-            d_im_decomposition.get_r_col(idx),
-            d_im_decomposition.get_v_col(idx).unwrap(),
-        )
+pub fn build_d_cok<Algo: Decomposition<VecColumn>>(
+    d_cod: &[VecColumn],
+    d_dom_decomp: &Algo,
+    dom_first_mapping: &impl Permutation,
+) -> impl Iterator<Item = VecColumn> {
+    let sz_domain = d_dom_decomp.n_cols();
+    (0..d_cod.len()).map(move |idx| {
+        let idx_dom_first = dom_first_mapping.map(idx);
+        let col_in_dom = idx_dom_first < sz_domain;
+        if col_in_dom && d_dom_decomp.get_r_col(idx_dom_first).is_cycle() {
+            VecColumn::from((
+                d_cod[idx].dimension(),
+                d_dom_decomp
+                    .get_v_col(idx_dom_first)
+                    .unwrap()
+                    .entries()
+                    .unpermuted(dom_first_mapping)
+                    .collect_vec(),
+            ))
+        } else {
+            d_cod[idx].clone()
+        }
+    })
+}
+
+/// Iterate over indices containing cycles of d_im, in sorted order.
+pub fn decomp_cycle_idxs<Algo: Decomposition<VecColumn>>(
+    d_im_decomposition: &Algo,
+) -> impl Iterator<Item = usize> {
+    (0..d_im_decomposition.n_cols()).filter(|&idx| {
+        let r_col = d_im_decomposition.get_r_col(idx);
+        r_col.is_cycle()
+    })
+}
+
+/// Permutes row indices so that all rows of the domain appear before other rows.
+pub(crate) fn compute_dom_first_permutation(
+    total_size: usize,
+    cols_in_dom: &[usize],
+) -> DensePermutation {
+    let cols_in_dom = cols_in_dom.iter().copied().sorted().collect::<Vec<_>>();
+    let num_in_domain = cols_in_dom.len();
+    let mut next_domain_idx = 0;
+    let mut next_non_domain_idx = num_in_domain;
+    let mut perm = vec![0; total_size];
+    (0..total_size).for_each(|idx| {
+        if next_domain_idx < num_in_domain && cols_in_dom[next_domain_idx] == idx {
+            perm[idx] = next_domain_idx;
+            next_domain_idx += 1;
+        } else {
+            perm[idx] = next_non_domain_idx;
+            next_non_domain_idx += 1
+        }
     });
-    paired_cols.filter_map(|(r_col, v_col)| {
-        if r_col.pivot().is_none() {
-            // If r_col is zero then v_col stores a cycle
-            // We should add it to dker with the elements of L appearing first
-            Some(v_col.clone().reorder_rows(mapping))
-        } else {
-            // Filter this column out
-            None
-        }
-    })
-}
-
-pub fn build_d_cok<'a, Algo: Decomposition<VecColumn>>(
-    d_cod: &'a [VecColumn],
-    d_dom_decomp: &'a Algo,
-    col_in_dom: &'a [bool],
-    dom_first_mapping: &'a impl IndexMapping,
-) -> impl Iterator<Item = VecColumn> + 'a {
-    (0..d_cod.len()).map(|col_idx| {
-        if col_in_dom[col_idx] {
-            let idx_in_d_dom = dom_first_mapping.map(col_idx).unwrap();
-            let d_dom_rcol = &d_dom_decomp.get_r_col(idx_in_d_dom);
-            if d_dom_rcol.pivot().is_none() {
-                let mut next_col = d_dom_decomp.get_v_col(idx_in_d_dom).unwrap().clone();
-                // Convert from L simplices first back to default order
-                next_col.unreorder_rows(dom_first_mapping);
-                next_col
-            } else {
-                d_cod[col_idx].clone()
-            }
-        } else {
-            d_cod[col_idx].clone()
-        }
-    })
+    DensePermutation::new(perm)
 }

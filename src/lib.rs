@@ -3,47 +3,49 @@ pub mod cylinder;
 pub mod diagrams;
 pub mod ensemble;
 pub mod indexing;
-pub mod overlap;
 pub mod utils;
 
 use cylinder::{build_cylinder, CylinderMetadata};
 use diagrams::DiagramEnsemble;
 use ensemble::{all_decompositions, all_decompositions_slow};
-use indexing::AnnotatedColumn;
 
-use lophat::{algorithms::LockFreeAlgorithm, columns::VecColumn};
-use overlap::compute_zero_overlap;
+use lophat::algorithms::LockFreeAlgorithm;
 use pyo3::prelude::*;
 
 /// Compute the six-pack of persistence diagrams for an inclusion of filtered chain complexes.
 /// Requires a generating set for the codomain that extends a generating set for the domain.
-/// `matrix` is a vector of tuples corresponding to the generators of the codomain,
-/// where each tuple is of the form
-/// `(is_generator_in_domain, dimension_of_generator, indices_of_generators_in_boundary)`.
-/// `num_threads` controls the maximum number of threads used.
-/// `slow` ??
+/// `boundary_matrix`: vector such that `boundary_matrix[i]` is the vector
+/// of indices of generators in the boundary of generator `i`.
+/// `dimensions`: list of dimensions of the generators in the codomain.
+/// `cols_in_domain`: list of indices of generators of the domain.
+/// `num_threads`: the maximum number of threads used in individual decompositions.
+/// `slow`: whether the decompositions should be performed in memory or streamed from disk.
 #[pyfunction]
-#[pyo3(signature = (matrix, num_threads=0, slow=false))]
+#[pyo3(signature = (boundary_matrix, dimensions, cols_in_domain, num_threads=0, slow=false))]
 fn sixpack_from_inclusion(
     py: Python<'_>,
-    matrix: Vec<(bool, usize, Vec<usize>)>,
+    boundary_matrix: Vec<Vec<usize>>,
+    dimensions: Vec<usize>,
+    cols_in_domain: Vec<usize>,
     num_threads: usize,
     slow: bool,
 ) -> DiagramEnsemble {
     py.detach(|| {
-        let annotated_matrix: Vec<_> = matrix
-            .into_iter()
-            .map(|(in_domain, dimension, boundary)| AnnotatedColumn {
-                in_domain,
-                col: VecColumn::from((dimension, boundary)),
-            })
-            .collect();
         if slow {
-            let decomps =
-                all_decompositions_slow::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads);
+            let decomps = all_decompositions_slow::<LockFreeAlgorithm<_>, _>(
+                &boundary_matrix,
+                &dimensions,
+                &cols_in_domain,
+                num_threads,
+            );
             decomps.all_diagrams()
         } else {
-            let decomps = all_decompositions::<LockFreeAlgorithm<_>>(annotated_matrix, num_threads);
+            let decomps = all_decompositions::<LockFreeAlgorithm<_>, _>(
+                &boundary_matrix,
+                &dimensions,
+                &cols_in_domain,
+                num_threads,
+            );
             // TODO: get the matrix of the map on persistence modules
             // as well as a basis for the matrix
             decomps.all_diagrams()
@@ -82,40 +84,26 @@ fn sixpack(
 ) -> (DiagramEnsemble, CylinderMetadata) {
     // We mark each map with the dimension of the domain column
     py.detach(|| {
-        let map = map
-            .into_iter()
-            .zip(domain_matrix.iter())
-            .map(|(image, domain_col)| VecColumn::from((domain_col.1, image)))
-            .collect();
-        let domain_matrix = domain_matrix
-            .into_iter()
-            .map(|(time, dimension, boundary)| (time, VecColumn::from((dimension, boundary))))
-            .collect();
-        let codomain_matrix = codomain_matrix
-            .into_iter()
-            .map(|(time, dimension, boundary)| (time, VecColumn::from((dimension, boundary))))
-            .collect();
-        let (cylinder, metadata) = build_cylinder(domain_matrix, codomain_matrix, map);
+        let (cylinder_boundary_matrix, metadata) =
+            build_cylinder(&domain_matrix, &codomain_matrix, &map);
         if slow {
-            let decomps = all_decompositions_slow::<LockFreeAlgorithm<_>>(cylinder, num_threads);
+            let decomps = all_decompositions_slow::<LockFreeAlgorithm<_>, _>(
+                &cylinder_boundary_matrix,
+                &metadata.dimensions,
+                &metadata.domain_indices,
+                num_threads,
+            );
             (decomps.all_diagrams(), metadata)
         } else {
-            let decomps = all_decompositions::<LockFreeAlgorithm<_>>(cylinder, num_threads);
+            let decomps = all_decompositions::<LockFreeAlgorithm<_>, _>(
+                &cylinder_boundary_matrix,
+                &metadata.dimensions,
+                &metadata.domain_indices,
+                num_threads,
+            );
             (decomps.all_diagrams(), metadata)
         }
     })
-}
-
-#[pyfunction]
-fn zero_overlap(matrix: Vec<(bool, usize, Vec<usize>)>) -> Vec<(usize, usize)> {
-    let annotated_matrix: Vec<AnnotatedColumn<VecColumn>> = matrix
-        .into_iter()
-        .map(|(in_domain, dimension, boundary)| AnnotatedColumn {
-            in_domain,
-            col: VecColumn::from((dimension, boundary)),
-        })
-        .collect();
-    compute_zero_overlap(&annotated_matrix)
 }
 
 /// A Python module implemented in Rust.
@@ -124,7 +112,6 @@ fn phimaker(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
     m.add_function(wrap_pyfunction!(sixpack_from_inclusion, m)?)?;
     m.add_function(wrap_pyfunction!(sixpack, m)?)?;
-    m.add_function(wrap_pyfunction!(zero_overlap, m)?)?;
     Ok(())
 }
 
@@ -139,19 +126,33 @@ mod tests {
     #[test]
     fn ensemble_works() {
         let file = File::open("examples/test_annotated.mat").unwrap();
-        let boundary_matrix: Vec<AnnotatedColumn<VecColumn>> = BufReader::new(file)
+        let mut boundary_matrix = Vec::<Vec<usize>>::new();
+        let mut cols_in_domain = Vec::<usize>::new();
+        let mut dimensions = Vec::<usize>::new();
+        BufReader::new(file)
             .lines()
-            .map(|l| {
-                let l = l.unwrap();
-                let l_vec: Vec<usize> = l.split(",").map(|c| c.parse().unwrap()).collect();
-                (l_vec[0] == 1, l_vec[1], l_vec)
-            })
-            .map(|(in_g, dimension, l_vec)| AnnotatedColumn {
-                col: VecColumn::from((dimension, l_vec[2..].to_owned())),
-                in_domain: in_g,
-            })
-            .collect();
-        let ensemble = all_decompositions::<LockFreeAlgorithm<_>>(boundary_matrix, 0);
+            .enumerate()
+            .for_each(|(idx, line)| {
+                let line = line.unwrap();
+                let line_items: Vec<usize> = line
+                    .split(",")
+                    .map(|number_string| number_string.parse().unwrap())
+                    .collect();
+                let in_domain = line_items[0] == 1;
+                let dimension = line_items[1];
+                let boundary = line_items.into_iter().skip(2).collect::<Vec<usize>>();
+                if in_domain {
+                    cols_in_domain.push(idx);
+                }
+                dimensions.push(dimension);
+                boundary_matrix.push(boundary);
+            });
+        let ensemble = all_decompositions::<LockFreeAlgorithm<_>, _>(
+            &boundary_matrix,
+            &dimensions,
+            &cols_in_domain,
+            0,
+        );
         print_ensemble(&ensemble);
         println!("{:?}", ensemble.all_diagrams());
         assert_eq!(true, true)

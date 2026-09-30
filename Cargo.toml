@@ -1,19 +1,24 @@
 [package]
 name = "phimaker"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
+description = "Compute kernel, cokernel, and image persistence from maps of F2 chain complexes."
+repository = "https://github.com/tomrchaplin/phimaker"
+license = "GPL-3.0-or-later"
+keywords = ["filtered chain complex", "persistence module", "persistent homology", "topological data analysis"]
+categories = ["mathematics", "science"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "phimaker"
 crate-type = ["cdylib"]
+name = "phimaker"
 
 [dependencies]
 atomic_refcell = "0.1.14"
 bincode = "1.3.3"
 crossbeam = "0.8.5"
 disjoint-sets = "0.4.2"
-itertools = "0.14.0" # check
+itertools = "0.14.0"  # check
 log = "0.4.34"
 lophat = { version = "0.11.0", default-features = false, features = ["local_thread_pool", "serde"] }
 pyo3 = { version = "0.29.2", features = ["extension-module"] }

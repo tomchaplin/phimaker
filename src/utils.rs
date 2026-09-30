@@ -32,13 +32,13 @@ pub fn print_ensemble<C: Column + Debug, Algo: DecompositionAlgo<C>>(
     ensemble: &DecompositionEnsemble<C, Algo>,
 ) {
     println!("D_f:");
-    print_decomp(&ensemble.cod);
+    print_decomp(&ensemble.d_cod);
     println!("D_g:");
-    print_decomp(&ensemble.dom);
+    print_decomp(&ensemble.d_dom);
     println!("D_im:");
-    print_decomp(&ensemble.im);
+    print_decomp(&ensemble.d_im);
     println!("D_ker:");
-    print_decomp(&ensemble.ker);
+    print_decomp(&ensemble.d_ker);
     println!("D_cok:");
-    print_decomp(&ensemble.cok);
+    print_decomp(&ensemble.d_cok);
 }
