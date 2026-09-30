@@ -253,7 +253,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cylinder_works() {
+    /// A square filled at times one and three has exactly one H1 kernel bar.
+    fn square_map_has_one_finite_kernel_bar() {
         let domain_matrix = vec![
             (0.0, 0, vec![]),
             (0.0, 0, vec![]),
@@ -295,9 +296,6 @@ mod tests {
         ];
         let (cyl_matrix, metadata) =
             build_cylinder(&domain_matrix, &codomain_matrix, &chain_morphism);
-        for (idx, (col, t)) in cyl_matrix.iter().zip(metadata.times.iter()).enumerate() {
-            println!("{idx}:{t} -> {col:?}");
-        }
         let ensemble = all_decompositions::<LockFreeAlgorithm<VecColumn>, _>(
             &cyl_matrix,
             &metadata.dimensions,
@@ -313,9 +311,11 @@ mod tests {
                 crate::diagrams::ExtendedUsize::Infinity => None,
             })
             .collect();
-        for pairing in &pairings {
-            println!("{pairing:?}");
-        }
+        assert_eq!(
+            ensemble.kernel.len(),
+            1,
+            "No additional essential kernel bars"
+        );
         assert_eq!(pairings.len(), 1);
         let first_pairing = pairings[0];
         let dgm_pt = (

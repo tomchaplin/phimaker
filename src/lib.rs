@@ -196,45 +196,4 @@ fn phimaker(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::utils::print_ensemble;
-
-    use super::*;
-    use std::fs::File;
-    use std::io::{BufRead, BufReader};
-
-    #[test]
-    fn ensemble_works() {
-        let file = File::open("examples/test_annotated.mat").unwrap();
-        let mut boundary_matrix = Vec::<Vec<usize>>::new();
-        let mut cols_in_domain = Vec::<usize>::new();
-        let mut dimensions = Vec::<usize>::new();
-        BufReader::new(file)
-            .lines()
-            .enumerate()
-            .for_each(|(idx, line)| {
-                let line = line.unwrap();
-                let line_items: Vec<usize> = line
-                    .split(",")
-                    .map(|number_string| number_string.parse().unwrap())
-                    .collect();
-                let in_domain = line_items[0] == 1;
-                let dimension = line_items[1];
-                let boundary = line_items.into_iter().skip(2).collect::<Vec<usize>>();
-                if in_domain {
-                    cols_in_domain.push(idx);
-                }
-                dimensions.push(dimension);
-                boundary_matrix.push(boundary);
-            });
-        let ensemble = all_decompositions::<LockFreeAlgorithm<_>, _>(
-            &boundary_matrix,
-            &dimensions,
-            &cols_in_domain,
-            0,
-        );
-        print_ensemble(&ensemble);
-        println!("{:?}", ensemble.all_diagrams());
-        assert_eq!(true, true)
-    }
-}
+mod tests;

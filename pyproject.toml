@@ -18,12 +18,7 @@ classifiers = [
 Repository = "https://github.com/tomrchaplin/phimaker"
 
 [dependency-groups]
-test = [
-  "gudhi>=3.13.0",
-  "matplotlib>=3.10.9",
-  "numpy>=2.2.6",
-  "polars>=1.44.2",
-]
+test = ["pytest>=8", "maturin~=1.0"]
 
 [build-system]
 requires = ["maturin~=1.0"]
@@ -93,3 +88,8 @@ split-on-trailing-comma = false
   "INP001",  # pylint: docs folder does not need __init__.py
   "D",  # pydocstyle: doc setup files do not need docs
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
+addopts = "-ra --strict-markers"
+xfail_strict = true

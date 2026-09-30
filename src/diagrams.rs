@@ -405,6 +405,7 @@ mod tests {
         utils::anti_transpose,
     };
 
+    /// A filled triangle checks finite and essential bars and anti-transpose recovery.
     #[test]
     fn diagrams_from_boundary_and_anti_transpose_agree() {
         // A filled triangle: two H_0 deaths, one H_1 death, one essential H_0 class.
@@ -446,6 +447,7 @@ mod tests {
         );
     }
 
+    /// An empty reduction must not underflow during anti-transpose recovery.
     #[test]
     fn empty_decomposition_has_empty_diagram() {
         let decomposition = SerialAlgorithm::<VecColumn>::init(None).decompose();
@@ -455,6 +457,7 @@ mod tests {
         );
     }
 
+    /// Infinity is larger than even the largest representable finite index.
     #[test]
     fn infinity_orders_after_all_finite_indices() {
         assert!(Finite(0) < Finite(1));
@@ -462,6 +465,7 @@ mod tests {
         assert_eq!(Infinity.cmp(&Infinity), std::cmp::Ordering::Equal);
     }
 
+    /// Both finite endpoints are reindexed; infinity and deterministic display survive.
     #[test]
     fn reindexing_preserves_essential_and_finite_intervals() {
         use crate::builders::compute_dom_first_permutation;

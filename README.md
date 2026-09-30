@@ -52,3 +52,10 @@ It uses filtration indices only. The general-map API `sixpack` takes timed
 complexes and returns mapping-cylinder metadata alongside its diagrams; use
 that metadata to interpret the returned indices. Inputs must be valid filtered
 chain complexes over F2; the API does not comprehensively validate them.
+
+## Tests
+
+Run `cargo test --locked` for the pure Rust suite. For Python, build the current
+extension and run pytest as described in [tests/README.md](tests/README.md).
+That document records each fixture's intent and the two known upstream
+slow-mode serialization failures.
