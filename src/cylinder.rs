@@ -48,7 +48,7 @@ pub struct CylinderMetadata {
     /// Original domain index to its degree-one-higher cylinder copy.
     pub domain_shift: Vec<usize>,
     /// Degree of each cylinder generator.
-    pub dimensions: Vec<usize>,
+    pub degrees: Vec<usize>,
 }
 
 /// Build the filtered mapping cylinder of a chain map A to B over F2.
@@ -97,7 +97,7 @@ pub fn build_cylinder<UsizeSlice: Deref<Target = [usize]>>(
     let mut codomain_idxs: Vec<usize> = Vec::with_capacity(codomain_size);
     let mut domain_shift_idxs: Vec<usize> = Vec::with_capacity(domain_size);
     let mut cylinder_matrix: Vec<Vec<usize>> = Vec::with_capacity(cylinder_size);
-    let mut dimensions = Vec::<usize>::with_capacity(cylinder_size);
+    let mut degrees = Vec::<usize>::with_capacity(cylinder_size);
     let mut times: Vec<f64> = Vec::with_capacity(cylinder_size);
 
     // Compare times then compare cell type
@@ -215,7 +215,7 @@ pub fn build_cylinder<UsizeSlice: Deref<Target = [usize]>>(
             }
         };
         cylinder_matrix.push(cylinder_col);
-        dimensions.push(dimension);
+        degrees.push(dimension);
         times.push(time);
         // Add to appropriate indexing vector
         match col_cell_type {
@@ -235,7 +235,7 @@ pub fn build_cylinder<UsizeSlice: Deref<Target = [usize]>>(
         domain_indices: domain_idxs,
         codomain_indices: codomain_idxs,
         domain_shift: domain_shift_idxs,
-        dimensions,
+        degrees,
     };
     debug!(
         "Built mapping cylinder with {} simplices.",
@@ -298,7 +298,7 @@ mod tests {
             build_cylinder(&domain_matrix, &codomain_matrix, &chain_morphism);
         let ensemble = all_decompositions::<LockFreeAlgorithm<VecColumn>, _>(
             &cyl_matrix,
-            &metadata.dimensions,
+            &metadata.degrees,
             &metadata.domain_indices,
             0,
         )

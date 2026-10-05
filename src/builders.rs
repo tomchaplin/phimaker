@@ -21,9 +21,9 @@ pub fn build_d_dom(
 ) -> impl Iterator<Item = VecColumn> {
     cols_in_dom.iter().map(|&idx| {
         let col = &d_cod[idx];
-        let dimension = col.dimension();
+        let degree = col.degree();
         let column = col.entries().permuted(dom_first_permutation).collect_vec();
-        VecColumn::from((dimension, column))
+        VecColumn::from((degree, column))
     })
 }
 
@@ -38,7 +38,7 @@ pub fn build_d_im(
 ) -> impl Iterator<Item = VecColumn> {
     d_cod.iter().map(|col| {
         VecColumn::from((
-            col.dimension(),
+            col.degree(),
             col.entries().permuted(dom_first_permutation).collect_vec(),
         ))
     })
@@ -58,7 +58,7 @@ pub fn build_d_rel(
         let idx = dom_first_permutation.inverse_map(idx_dom_first);
         let col = &d_cod[idx];
         VecColumn::from((
-            col.dimension(),
+            col.degree(),
             col.entries()
                 .filter_map(|row_idx| {
                     let row_idx_dom_first = dom_first_permutation.map(row_idx);
@@ -89,7 +89,7 @@ pub fn build_d_ker<Algo: Decomposition<VecColumn>>(
     decomp_cycle_idxs(d_im_decomposition).map(|idx| {
         let v_col = d_im_decomposition.get_v_col(idx).unwrap();
         VecColumn::from((
-            v_col.dimension(),
+            v_col.degree(),
             v_col.entries().permuted(mapping).collect_vec(),
         ))
     })
@@ -115,7 +115,7 @@ pub fn build_d_cok<Algo: Decomposition<VecColumn>>(
         let col_in_dom = idx_dom_first < sz_domain;
         if col_in_dom && d_dom_decomp.get_r_col(idx_dom_first).is_cycle() {
             VecColumn::from((
-                d_cod[idx].dimension(),
+                d_cod[idx].degree(),
                 d_dom_decomp
                     .get_v_col(idx_dom_first)
                     .unwrap()

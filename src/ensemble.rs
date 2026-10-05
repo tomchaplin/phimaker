@@ -197,7 +197,7 @@ pub fn decompose_rel<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>
 /// Compute all six decompositions of an inclusion A into B over F2.
 ///
 /// `boundary_matrix[j]` contains sorted, distinct nonzero row indices less than j.
-/// `dimensions` has one entry per column; boundaries lower degree by one and
+/// `degrees` has one entry per column; boundaries lower degree by one and
 /// square to zero. `cols_in_dom` contains distinct in-range indices closed under
 /// boundary. Its order is arbitrary and is normalized internally. Inputs are
 /// assumed valid, not comprehensively validated; violations may panic or produce
@@ -212,7 +212,7 @@ pub fn all_decompositions<
     UsizeSlice: Deref<Target = [usize]>,
 >(
     boundary_matrix: &[UsizeSlice],
-    dimensions: &[usize],
+    degrees: &[usize],
     cols_in_dom: &[usize],
     num_threads: usize,
 ) -> DecompositionEnsemble<VecColumn, Algo>
@@ -234,7 +234,7 @@ where
     let d_cod: Vec<VecColumn> = (0..sz_codomain)
         .map(|idx| {
             let column = boundary_matrix[idx].iter().copied().collect_vec();
-            VecColumn::from((dimensions[idx], column))
+            VecColumn::from((degrees[idx], column))
         })
         .collect();
 
@@ -308,7 +308,7 @@ pub fn to_file<Algo: Serialize>(algo: Algo) -> File {
 /// Compute all six decompositions of an inclusion A into B over F2.
 ///
 /// `boundary_matrix[j]` contains sorted, distinct nonzero row indices less than j.
-/// `dimensions` has one entry per column; boundaries lower degree by one and
+/// `degrees` has one entry per column; boundaries lower degree by one and
 /// square to zero. `cols_in_dom` contains distinct in-range indices closed under
 /// boundary. Its order is arbitrary and is normalized internally. Inputs are
 /// assumed valid, not comprehensively validated; violations may panic or produce
@@ -332,7 +332,7 @@ pub fn all_decompositions_slow<
     UsizeSlice: Deref<Target = [usize]>,
 >(
     boundary_matrix: &[UsizeSlice],
-    dimensions: &[usize],
+    degrees: &[usize],
     cols_in_dom: &[usize],
     num_threads: usize,
 ) -> FileEnsemble
@@ -355,7 +355,7 @@ where
     let d_cod: Vec<VecColumn> = (0..sz_codomain)
         .map(|idx| {
             let column = boundary_matrix[idx].iter().copied().collect_vec();
-            VecColumn::from((dimensions[idx], column))
+            VecColumn::from((degrees[idx], column))
         })
         .collect();
     let cod_decomp = decompose_cod::<Algo>(&d_cod, base_options);

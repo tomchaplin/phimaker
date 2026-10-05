@@ -12,7 +12,7 @@ def timed_bars(result: Any, metadata: Any, name: str) -> list[tuple[int, float, 
 	"""Remove cylinder-only zero-duration bars; retain degree and multiplicity."""
 	return sorted(
 		(
-			metadata.dimensions[b] - (name == "kernel"),
+			metadata.degrees[b] - (name == "kernel"),
 			metadata.times[b],
 			float("inf") if d is None else metadata.times[d],
 		)
@@ -37,7 +37,7 @@ def test_identity_chain_map(*, slow: bool) -> None:
 		for name, shift in (("domain_indices", 0), ("codomain_indices", 0), ("domain_shift", 1)):
 			index = getattr(metadata, name)[original]
 			assert metadata.times[index] == time
-			assert metadata.dimensions[index] == degree + shift
+			assert metadata.degrees[index] == degree + shift
 
 
 @pytest.mark.parametrize("slow", [False, True])
@@ -91,5 +91,5 @@ def test_empty_general_map() -> None:
 	result, metadata = sixpack([], [], [], num_threads=1)
 	for name in NAMES:
 		assert getattr(result, name) == {}
-	for name in ("times", "dimensions", "domain_indices", "codomain_indices", "domain_shift"):
+	for name in ("times", "degrees", "domain_indices", "codomain_indices", "domain_shift"):
 		assert getattr(metadata, name) == []

@@ -28,15 +28,15 @@ fn assert_diagrams(actual: &DiagramEnsemble, expected: [&[(usize, ExtendedUsize)
 
 fn diagrams(
     matrix: &[Vec<usize>],
-    dimensions: &[usize],
+    degrees: &[usize],
     domain: &[usize],
     slow: bool,
 ) -> DiagramEnsemble {
     if slow {
-        all_decompositions_slow::<LockFreeAlgorithm<_>, _>(matrix, dimensions, domain, 1)
+        all_decompositions_slow::<LockFreeAlgorithm<_>, _>(matrix, degrees, domain, 1)
             .all_diagrams()
     } else {
-        all_decompositions::<LockFreeAlgorithm<_>, _>(matrix, dimensions, domain, 1).all_diagrams()
+        all_decompositions::<LockFreeAlgorithm<_>, _>(matrix, degrees, domain, 1).all_diagrams()
     }
 }
 
@@ -243,7 +243,7 @@ fn builder_coordinates_and_permutation_roundtrip() {
     let entries = |columns: Vec<VecColumn>| {
         columns
             .iter()
-            .map(|c| (c.dimension(), c.entries().collect::<Vec<_>>()))
+            .map(|c| (c.degree(), c.entries().collect::<Vec<_>>()))
             .collect::<Vec<_>>()
     };
     assert_eq!(
@@ -287,7 +287,7 @@ fn identity_interval_cylinder_boundary() {
     assert_eq!(metadata.codomain_indices, vec![2, 3, 7]);
     assert_eq!(metadata.domain_shift, vec![4, 5, 8]);
     assert_eq!(metadata.times, vec![0., 0., 0., 0., 0., 0., 1., 1., 1.]);
-    assert_eq!(metadata.dimensions, vec![0, 0, 0, 0, 1, 1, 1, 1, 2]);
+    assert_eq!(metadata.degrees, vec![0, 0, 0, 0, 1, 1, 1, 1, 2]);
     assert_eq!(
         matrix,
         vec![
@@ -306,7 +306,7 @@ fn identity_interval_cylinder_boundary() {
         let mut twice = vec![false; matrix.len()];
         for &row in col {
             assert!(row < j);
-            assert_eq!(metadata.dimensions[row] + 1, metadata.dimensions[j]);
+            assert_eq!(metadata.degrees[row] + 1, metadata.degrees[j]);
             for &entry in &matrix[row] {
                 twice[entry] ^= true;
             }
@@ -321,10 +321,10 @@ fn zero_map_cylinder() {
     let point = vec![(0.0, 0, vec![])];
     let (matrix, metadata) = build_cylinder(&point, &point, &[vec![]]);
     assert_eq!(matrix, vec![vec![], vec![], vec![0]]);
-    assert_eq!(metadata.dimensions, vec![0, 0, 1]);
+    assert_eq!(metadata.degrees, vec![0, 0, 1]);
     let result = diagrams(
         &matrix,
-        &metadata.dimensions,
+        &metadata.degrees,
         &metadata.domain_indices,
         false,
     );
@@ -351,5 +351,5 @@ fn empty_cylinder() {
     assert!(metadata.domain_indices.is_empty());
     assert!(metadata.codomain_indices.is_empty());
     assert!(metadata.domain_shift.is_empty());
-    assert!(metadata.dimensions.is_empty());
+    assert!(metadata.degrees.is_empty());
 }

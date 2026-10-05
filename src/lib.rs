@@ -28,7 +28,7 @@ use pyo3::prelude::*;
 /// boundary_matrix : `list[list[int]]`
 ///     Boundary of each generator of B, as nonzero row indices over F2.
 ///     Column order defines filtration order; no filtration values are accepted.
-/// dimensions : `list[int]`
+/// degrees : `list[int]`
 ///     Nonnegative degree of each generator, one per boundary column.
 /// cols_in_domain : `list[int]`
 ///     Distinct indices of the generators of A in B. Any order is accepted.
@@ -53,8 +53,8 @@ use pyo3::prelude::*;
 /// (each row index is smaller than its column index). Boundaries lower degree by
 /// one and square to zero. Domain generators must be closed under the boundary.
 /// Inputs are assumed valid; these conditions are not comprehensively checked.
-/// The homological degree is `dimensions[birth]`, except for the kernel, where it is
-///  `dimensions[birth]` - 1 because its birth cell kills a domain class.
+/// The homological degree is `degrees[birth]`, except for the kernel, where it is
+///  `degrees[birth]` - 1 because its birth cell kills a domain class.
 /// The Python interpreter is released during computation.
 ///
 /// Limitations
@@ -72,11 +72,11 @@ use pyo3::prelude::*;
 /// True
 /// ```
 #[pyfunction]
-#[pyo3(signature = (boundary_matrix, dimensions, cols_in_domain, num_threads=0, slow=false))]
+#[pyo3(signature = (boundary_matrix, degrees, cols_in_domain, num_threads=0, slow=false))]
 pub fn sixpack_from_inclusion(
     py: Python<'_>,
     boundary_matrix: Vec<Vec<usize>>,
-    dimensions: Vec<usize>,
+    degrees: Vec<usize>,
     cols_in_domain: Vec<usize>,
     num_threads: usize,
     slow: bool,
@@ -85,7 +85,7 @@ pub fn sixpack_from_inclusion(
         if slow {
             let decomps = all_decompositions_slow::<LockFreeAlgorithm<_>, _>(
                 &boundary_matrix,
-                &dimensions,
+                &degrees,
                 &cols_in_domain,
                 num_threads,
             );
@@ -93,7 +93,7 @@ pub fn sixpack_from_inclusion(
         } else {
             let decomps = all_decompositions::<LockFreeAlgorithm<_>, _>(
                 &boundary_matrix,
-                &dimensions,
+                &degrees,
                 &cols_in_domain,
                 num_threads,
             );
@@ -129,8 +129,8 @@ pub fn sixpack_from_inclusion(
 ///     to locate input generators. Infinite deaths become None in Python.
 ///     Intervals with equal birth and death times are retained. Relative is the
 ///     homology of the cylinder modulo the domain (the mapping cone of the map).
-///     For kernel intervals the degree is `metadata.dimensions[birth]` - 1;
-///     for other intervals it is `metadata.dimensions[birth]`.
+///     For kernel intervals the degree is `metadata.degrees[birth]` - 1;
+///     for other intervals it is `metadata.degrees[birth]`.
 ///
 /// Assumptions
 /// -----------
@@ -169,7 +169,7 @@ pub fn sixpack(
         if slow {
             let decomps = all_decompositions_slow::<LockFreeAlgorithm<_>, _>(
                 &cylinder_boundary_matrix,
-                &metadata.dimensions,
+                &metadata.degrees,
                 &metadata.domain_indices,
                 num_threads,
             );
@@ -177,7 +177,7 @@ pub fn sixpack(
         } else {
             let decomps = all_decompositions::<LockFreeAlgorithm<_>, _>(
                 &cylinder_boundary_matrix,
-                &metadata.dimensions,
+                &metadata.degrees,
                 &metadata.domain_indices,
                 num_threads,
             );

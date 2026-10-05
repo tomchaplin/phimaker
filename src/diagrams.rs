@@ -1,14 +1,11 @@
 //! Birth-to-death dictionaries and extraction from reduced matrices.
 
 use bincode::deserialize_from;
-use std::{
-    collections::HashMap,
-    fmt::{self, Display},
-    fs::File,
-    io::BufReader,
-    ops::{Deref, DerefMut},
-};
+use std::{fs::File, io::BufReader};
 
+/// Shared birth-to-death diagrams and extended indices from LoPhat.
+pub use lophat::utils::{ExtendedUsize, PersistenceDiagram};
+use ExtendedUsize::{Finite, Infinity};
 use lophat::{
     algorithms::{Decomposition, DecompositionAlgo},
     columns::Column,
@@ -20,163 +17,6 @@ use crate::{
     ensemble::{DecompositionEnsemble, EnsembleMetadata, FileEnsemble},
     indexing::Permutation,
 };
-
-/// A nonnegative index or infinity.
-/// Infinity is greater than every finite index.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum ExtendedUsize {
-    /// A finite death column index.
-    Finite(usize),
-    /// An essential class that never dies.
-    Infinity,
-}
-
-use ExtendedUsize::{Finite, Infinity};
-
-impl Display for ExtendedUsize {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Finite(index) => write!(f, "{index}"),
-            Infinity => write!(f, "Inf"),
-        }
-    }
-}
-
-impl<'py> IntoPyObject<'py> for ExtendedUsize {
-    type Target = PyAny;
-    type Output = Bound<'py, PyAny>;
-    type Error = PyErr;
-
-    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        let index = match self {
-            Finite(index) => Some(index),
-            Infinity => None,
-        };
-        Ok(index.into_pyobject(py)?)
-    }
-}
-
-impl<'py> IntoPyObject<'py> for &ExtendedUsize {
-    type Target = PyAny;
-    type Output = Bound<'py, PyAny>;
-    type Error = PyErr;
-
-    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        (*self).into_pyobject(py)
-    }
-}
-
-/// Maps each generator's birth index to its death index, or infinity.
-/// Python receives a dictionary with `None` for infinite deaths.
-#[derive(Default, Debug, Clone, PartialEq, Eq, IntoPyObject, IntoPyObjectRef)]
-pub struct PersistenceDiagram(
-    /// Birth-to-death entries; keys identify generators uniquely.
-    pub HashMap<usize, ExtendedUsize>,
-);
-
-impl Deref for PersistenceDiagram {
-    type Target = HashMap<usize, ExtendedUsize>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for PersistenceDiagram {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Display for PersistenceDiagram {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Stable output without imposing an ordering on the underlying map.
-        let mut entries: Vec<_> = self.iter().collect();
-        entries.sort_unstable_by_key(|(birth, _)| **birth);
-        write!(f, "{{")?;
-        for (position, (birth, death)) in entries.into_iter().enumerate() {
-            if position > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{birth}: {death}")?;
-        }
-        write!(f, "}}")
-    }
-}
-
-impl FromIterator<(usize, ExtendedUsize)> for PersistenceDiagram {
-    fn from_iter<T: IntoIterator<Item = (usize, ExtendedUsize)>>(iter: T) -> Self {
-        PersistenceDiagram(iter.into_iter().collect())
-    }
-}
-impl PersistenceDiagram {
-    /// Extract pairings from a reduced square, strictly upper-triangular boundary matrix.
-    /// Requires a valid chain-complex reduction. V is not needed. Results use the
-    /// supplied matrix coordinates; reverse anti-transposed coordinates separately.
-    pub fn from_decomposition<C: Column>(decomposition: &impl Decomposition<C>) -> Self {
-        let mut diagram = Self((0..decomposition.n_cols()).map(|i| (i, Infinity)).collect());
-        for death in 0..decomposition.n_cols() {
-            if let Some(birth) = decomposition.get_r_col(death).pivot() {
-                diagram.insert(birth, Finite(death));
-                diagram.remove(&death);
-            }
-        }
-        diagram
-    }
-
-    /// Restore filtration indices after reducing an anti-transposed boundary matrix.
-    /// Finite pairs (b, d) become (n - 1 - d, n - 1 - b); essential birth b
-    /// becomes n - 1 - b. Every finite index must be less than `matrix_size`.
-    /// An empty diagram accepts size zero.
-    pub fn anti_transpose(self, matrix_size: usize) -> Self {
-        Self(
-            self.0
-                .into_iter()
-                .map(|(birth, death)| match death {
-                    Finite(death) => (matrix_size - 1 - death, Finite(matrix_size - 1 - birth)),
-                    Infinity => (matrix_size - 1 - birth, Infinity),
-                })
-                .collect(),
-        )
-    }
-
-    /// Apply the inverse permutation to every birth and finite death.
-    /// All indices must lie in the permutation range; infinity is unchanged.
-    pub fn unpermute_idxs(mut self, mapping: &impl Permutation) -> Self {
-        self.0 = self
-            .drain()
-            .map(|(birth, death)| {
-                let birth = mapping.inverse_map(birth);
-                let death = match death {
-                    ExtendedUsize::Finite(death) => {
-                        ExtendedUsize::Finite(mapping.inverse_map(death))
-                    }
-                    ExtendedUsize::Infinity => ExtendedUsize::Infinity,
-                };
-                (birth, death)
-            })
-            .collect();
-        self
-    }
-
-    /// Map every birth and finite death through f, leaving infinity unchanged.
-    /// To preserve distinct generators, f must be injective on births. Colliding
-    /// keys overwrite entries in unspecified order. No order validation is performed.
-    pub fn map_idxs<F: Fn(usize) -> usize>(mut self, f: F) -> Self {
-        self.0 = self
-            .drain()
-            .map(|(birth, death)| {
-                let birth = f(birth);
-                let death = match death {
-                    Finite(death) => ExtendedUsize::Finite(f(death)),
-                    Infinity => Infinity,
-                };
-                (birth, death)
-            })
-            .collect();
-        self
-    }
-}
 
 #[pyclass(get_all, from_py_object)]
 #[derive(Debug, Clone)]
@@ -327,7 +167,7 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
         DiagramEnsemble {
             domain: {
                 PersistenceDiagram::from_decomposition(&self.d_dom)
-                    .unpermute_idxs(&self.metadata.dom_first_permutation)
+                    .map_idxs(|idx| self.metadata.dom_first_permutation.inverse_map(idx))
             },
             relative: {
                 let f = |idx| {
@@ -373,7 +213,7 @@ impl FileEnsemble {
         let d_rel_decomp = from_file(&self.d_rel);
         DiagramEnsemble {
             domain: PersistenceDiagram::from_decomposition(&d_dom_decomp)
-                .unpermute_idxs(&self.metadata.dom_first_permutation),
+                .map_idxs(|idx| self.metadata.dom_first_permutation.inverse_map(idx)),
             codomain: PersistenceDiagram::from_decomposition(&d_cod_decomp)
                 .anti_transpose(self.metadata.sz_codomain),
             relative: {
@@ -468,13 +308,13 @@ mod tests {
     /// Both finite endpoints are reindexed; infinity and deterministic display survive.
     #[test]
     fn reindexing_preserves_essential_and_finite_intervals() {
-        use crate::builders::compute_dom_first_permutation;
+        use crate::{builders::compute_dom_first_permutation, indexing::Permutation};
 
         let sz_codomain = 4;
         let cols_in_dom = vec![1, 3];
         let mapping = compute_dom_first_permutation(sz_codomain, &cols_in_dom);
         let diagram =
-            PersistenceDiagram([(0, Finite(3)), (1, Infinity)].into()).unpermute_idxs(&mapping);
+            PersistenceDiagram([(0, Finite(3)), (1, Infinity)].into()).map_idxs(|idx| mapping.inverse_map(idx));
         assert_eq!(
             diagram,
             PersistenceDiagram([(1, Finite(2)), (3, Infinity)].into())
