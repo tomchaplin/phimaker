@@ -34,9 +34,12 @@ fn diagrams(
 ) -> DiagramEnsemble {
     if slow {
         all_decompositions_slow::<LockFreeAlgorithm<_>, _>(matrix, degrees, domain, 1)
+            .unwrap()
             .all_diagrams()
     } else {
-        all_decompositions::<LockFreeAlgorithm<_>, _>(matrix, degrees, domain, 1).all_diagrams()
+        all_decompositions::<LockFreeAlgorithm<_>, _>(matrix, degrees, domain, 1)
+            .unwrap()
+            .all_diagrams()
     }
 }
 
@@ -322,12 +325,7 @@ fn zero_map_cylinder() {
     let (matrix, metadata) = build_cylinder(&point, &point, &[vec![]]);
     assert_eq!(matrix, vec![vec![], vec![], vec![0]]);
     assert_eq!(metadata.degrees, vec![0, 0, 1]);
-    let result = diagrams(
-        &matrix,
-        &metadata.degrees,
-        &metadata.domain_indices,
-        false,
-    );
+    let result = diagrams(&matrix, &metadata.degrees, &metadata.domain_indices, false);
     assert_diagrams(
         &result,
         [
@@ -352,4 +350,179 @@ fn empty_cylinder() {
     assert!(metadata.codomain_indices.is_empty());
     assert!(metadata.domain_shift.is_empty());
     assert!(metadata.degrees.is_empty());
+}
+
+/// All Rust entry points reject malformed structure with the same typed error,
+/// before slow mode can reach the upstream empty-decomposition serializer.
+#[test]
+fn inclusion_validation_errors_are_shared() {
+    use crate::{InclusionError, sixpack_from_inclusion};
+    use InclusionError::*;
+
+    let cases = [
+        (
+            vec![vec![]],
+            vec![],
+            vec![],
+            DegreeCount {
+                expected: 1,
+                actual: 0,
+            },
+        ),
+        (
+            vec![vec![]],
+            vec![0, 1],
+            vec![],
+            DegreeCount {
+                expected: 1,
+                actual: 2,
+            },
+        ),
+        (
+            vec![vec![]],
+            vec![0],
+            vec![1],
+            DomainIndexOutOfBounds {
+                index: 1,
+                columns: 1,
+            },
+        ),
+        (
+            vec![],
+            vec![],
+            vec![0],
+            DomainIndexOutOfBounds {
+                index: 0,
+                columns: 0,
+            },
+        ),
+        (
+            vec![vec![0]],
+            vec![0],
+            vec![],
+            NonUpperTriangular { column: 0, row: 0 },
+        ),
+        (
+            vec![vec![], vec![usize::MAX]],
+            vec![0, 1],
+            vec![],
+            NonUpperTriangular {
+                column: 1,
+                row: usize::MAX,
+            },
+        ),
+        (
+            vec![vec![], vec![0]],
+            vec![0, 0],
+            vec![],
+            InvalidBoundaryDegree {
+                column: 1,
+                row: 0,
+                degree: 0,
+                boundary_degree: 0,
+            },
+        ),
+        (
+            vec![vec![], vec![0]],
+            vec![usize::MAX, 0],
+            vec![],
+            InvalidBoundaryDegree {
+                column: 1,
+                row: 0,
+                degree: 0,
+                boundary_degree: usize::MAX,
+            },
+        ),
+        (
+            vec![vec![], vec![0]],
+            vec![0, 1],
+            vec![1],
+            DomainNotClosed { column: 1, row: 0 },
+        ),
+    ];
+    for (matrix, degrees, domain, expected) in cases {
+        let fast = all_decompositions::<LockFreeAlgorithm<_>, _>(&matrix, &degrees, &domain, 1)
+            .err()
+            .expect("Invalid input must fail before reduction");
+        let slow =
+            all_decompositions_slow::<LockFreeAlgorithm<_>, _>(&matrix, &degrees, &domain, 1)
+                .err()
+                .expect("Invalid input must fail before serialization");
+        assert_eq!(fast, expected);
+        assert_eq!(slow, expected);
+        assert!(!expected.to_string().is_empty());
+        for slow in [false, true] {
+            assert_eq!(
+                sixpack_from_inclusion(&matrix, &degrees, &domain, 1, slow).unwrap_err(),
+                expected
+            );
+        }
+    }
+}
+
+/// Unsorted and repeated support indices mean the same nonzero entry, rather
+/// than repeated summands over F2. Normalization never mutates borrowed inputs.
+#[test]
+fn rust_inclusion_normalizes_supports_without_mutating_inputs() {
+    let matrix = vec![vec![], vec![], vec![1, 0, 1]];
+    let domain = vec![1, 1];
+    for slow in [false, true] {
+        let result = crate::sixpack_from_inclusion(&matrix, &[0, 0, 1], &domain, 1, slow).unwrap();
+        assert_diagrams(
+            &result,
+            [
+                &[(1, Infinity)],
+                &[(0, Infinity), (1, Finite(2))],
+                &[(1, Infinity)],
+                &[],
+                &[(0, Finite(2))],
+                &[(0, Finite(2))],
+            ],
+        );
+    }
+    assert_eq!(matrix, vec![vec![], vec![], vec![1, 0, 1]]);
+    assert_eq!(domain, vec![1, 1]);
+    let ensemble =
+        all_decompositions::<LockFreeAlgorithm<_>, _>(&matrix, &[0, 0, 1], &domain, 1).unwrap();
+    assert_eq!(ensemble.metadata.cols_in_dom, vec![1]);
+    assert_eq!(ensemble.metadata.sz_domain, 1);
+}
+
+/// The general-map Rust API delegates structural errors from the cylinder inclusion.
+#[test]
+fn rust_general_map_propagates_validation_errors() {
+    let malformed = vec![(0.0, 0, vec![]), (1.0, 0, vec![0])];
+    for slow in [false, true] {
+        // This input deliberately violates the degree requirement of a chain complex.
+        let error = crate::sixpack(&malformed, &malformed, &[vec![0], vec![1]], 1, slow)
+            .err()
+            .expect("The malformed cylinder must be rejected");
+        assert!(matches!(
+            error,
+            crate::InclusionError::InvalidBoundaryDegree { .. }
+        ));
+    }
+}
+
+/// Rust callers can use the general-map convenience function without Python.
+#[test]
+fn rust_general_map_identity_in_both_modes() {
+    let point = vec![(0.0, 0, vec![])];
+    for slow in [false, true] {
+        let (result, metadata) = crate::sixpack(&point, &point, &[vec![0]], 1, slow).unwrap();
+        assert_eq!(metadata.domain_indices, vec![0]);
+        assert_eq!(metadata.codomain_indices, vec![1]);
+        assert_eq!(metadata.domain_shift, vec![2]);
+        assert_diagrams(
+            &result,
+            [
+                &[(0, Infinity)],
+                &[(0, Infinity), (1, Finite(2))],
+                &[(0, Infinity)],
+                &[],
+                &[(1, Finite(2))],
+                &[(1, Finite(2))],
+            ],
+        );
+    }
 }

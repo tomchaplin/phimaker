@@ -14,7 +14,7 @@ use crate::indexing::{DensePermutation, Permutation, PermuteItems};
 ///
 /// `cols_in_dom` must be sorted, distinct, in range, and boundary-closed.
 /// The permutation maps these columns, in order, to the initial index block.
-pub fn build_d_dom(
+pub(crate) fn build_d_dom(
     d_cod: &[VecColumn],
     cols_in_dom: &[usize],
     dom_first_permutation: &impl Permutation,
@@ -32,7 +32,7 @@ pub fn build_d_dom(
 /// Columns retain the original codomain order. The domain-first permutation must
 /// preserve relative order within the domain and its complement. This matrix
 /// need not square to zero and must be reduced without clearing.
-pub fn build_d_im(
+pub(crate) fn build_d_im(
     d_cod: &[VecColumn],
     dom_first_permutation: &impl Permutation,
 ) -> impl Iterator<Item = VecColumn> {
@@ -48,7 +48,7 @@ pub fn build_d_im(
 /// The first `sz_domain` permuted indices must be exactly the boundary-closed
 /// domain. Remove those rows and columns and subtract `sz_domain` from remaining
 /// row indices. Local quotient index i corresponds to inverse_map(i + sz_domain).
-pub fn build_d_rel(
+pub(crate) fn build_d_rel(
     d_cod: &[VecColumn],
     dom_first_permutation: &impl Permutation,
     sz_domain: usize,
@@ -82,7 +82,7 @@ pub fn build_d_rel(
 ///
 /// # Panics
 /// Panics if the image decomposition did not retain V.
-pub fn build_d_ker<Algo: Decomposition<VecColumn>>(
+pub(crate) fn build_d_ker<Algo: Decomposition<VecColumn>>(
     d_im_decomposition: &Algo,
     mapping: &impl Permutation,
 ) -> impl Iterator<Item = VecColumn> {
@@ -104,7 +104,7 @@ pub fn build_d_ker<Algo: Decomposition<VecColumn>>(
 ///
 /// # Panics
 /// Panics if required V columns were not retained.
-pub fn build_d_cok<Algo: Decomposition<VecColumn>>(
+pub(crate) fn build_d_cok<Algo: Decomposition<VecColumn>>(
     d_cod: &[VecColumn],
     d_dom_decomp: &Algo,
     dom_first_mapping: &impl Permutation,
@@ -131,7 +131,7 @@ pub fn build_d_cok<Algo: Decomposition<VecColumn>>(
 
 /// Iterate over column indices with zero reduced R columns, in ascending order.
 /// This tests reduced columns, not whether the corresponding original boundary is zero.
-pub fn decomp_cycle_idxs<Algo: Decomposition<VecColumn>>(
+pub(crate) fn decomp_cycle_idxs<Algo: Decomposition<VecColumn>>(
     d_im_decomposition: &Algo,
 ) -> impl Iterator<Item = usize> {
     (0..d_im_decomposition.n_cols()).filter(|&idx| {
@@ -141,11 +141,11 @@ pub fn decomp_cycle_idxs<Algo: Decomposition<VecColumn>>(
 }
 
 /// Permutes row indices so that all rows of the domain appear before other rows.
+/// Requires sorted, unique, in-range domain indices from inclusion preparation.
 pub(crate) fn compute_dom_first_permutation(
     total_size: usize,
     cols_in_dom: &[usize],
 ) -> DensePermutation {
-    let cols_in_dom = cols_in_dom.iter().copied().sorted().collect::<Vec<_>>();
     let num_in_domain = cols_in_dom.len();
     let mut next_domain_idx = 0;
     let mut next_non_domain_idx = num_in_domain;
