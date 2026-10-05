@@ -308,6 +308,7 @@ dependencies = [
  "itertools",
  "log",
  "lophat",
+ "macro_rules_attribute",
  "pyo3",
  "pyo3-log",
  "rayon",

@@ -14,7 +14,10 @@ use lophat::{
 #[cfg(feature = "python-module")]
 use pyo3::prelude::*;
 
+#[cfg(all(feature = "python-module", not(any(doc, rust_analyzer))))]
+use crate::documentation::{macro_rules_apply, strip_rust_docs};
 use crate::{
+	documentation::python_doc,
 	ensemble::{DecompositionEnsemble, EnsembleMetadata, FileEnsemble},
 	indexing::Permutation,
 };
@@ -42,22 +45,74 @@ use crate::{
 /// assert!(diagrams.relative.is_empty());
 /// # Ok::<(), phimaker::errors::InclusionError>(())
 /// ```
+#[doc = python_doc!(
+r#"Six persistence diagrams returned by the computation functions.
+
+The ``domain``, ``codomain``, ``image``, ``kernel``, ``cokernel``, and ``relative``
+attributes are dictionaries mapping birth indices to death indices. A death of
+``None`` identifies a feature persisting beyond the supplied filtration. Dictionary
+order is unspecified; use birth keys for lookup.
+
+For :py:func:`~phimaker.sixpack_from_inclusion`, endpoints refer to the supplied
+codomain generators. For :py:func:`~phimaker.sixpack`, use the returned metadata
+to recover filtration times and degrees. A kernel interval has the degree of
+its birth generator minus one; other intervals have the birth-generator degree.
+
+Attributes are read-only, and each access returns an independent dictionary.
+Editing a dictionary does not change this result or later attribute accesses.
+
+Example::
+
+    >>> from phimaker import sixpack_from_inclusion
+    >>> result = sixpack_from_inclusion([[]], [0], [0])
+    >>> assert result.domain == {0: None}
+    >>> diagram = result.domain
+    >>> diagram.clear()
+    >>> assert result.domain == {0: None}"#
+)]
+#[cfg_attr(
+    all(feature = "python-module", not(any(doc, rust_analyzer))),
+    macro_rules_apply(strip_rust_docs!)
+)]
 #[cfg_attr(feature = "python-module", pyclass(get_all, from_py_object))]
 #[derive(Debug, Clone)]
 pub struct DiagramEnsemble {
 	/// Persistent homology of the codomain.
+	#[doc = python_doc!(
+    r#"Persistent homology of the codomain, as a birth-to-death dictionary."#
+    )]
 	pub codomain: PersistenceDiagram,
 	/// Persistent homology of the domain.
+	#[doc = python_doc!(
+    r#"Persistent homology of the domain, as a birth-to-death dictionary."#
+    )]
 	pub domain: PersistenceDiagram,
 	/// Image of the induced homology map.
+	#[doc = python_doc!(
+    r#"Image of the induced homology map, as a birth-to-death dictionary."#
+    )]
 	pub image: PersistenceDiagram,
 	/// Kernel of the induced homology map. Birth indices identify killing
 	/// cells, so the interval degree is the birth-cell degree minus one.
+	#[doc = python_doc!(
+    r#"Kernel of the induced homology map, as a birth-to-death dictionary.
+
+The degree of an interval is the degree of its birth generator minus one."#
+    )]
 	pub kernel: PersistenceDiagram,
 	/// Cokernel of the induced homology map.
+	#[doc = python_doc!(
+    r#"Cokernel of the induced homology map, as a birth-to-death dictionary."#
+    )]
 	pub cokernel: PersistenceDiagram,
 	/// Homology of the quotient complex; for a general map, homology of its
 	/// cone.
+	#[doc = python_doc!(
+    r#"Homology of the quotient complex, as a birth-to-death dictionary.
+
+For results from :py:func:`~phimaker.sixpack`, this is the homology of the
+mapping cone."#
+    )]
 	pub relative: PersistenceDiagram,
 }
 

@@ -21,12 +21,14 @@
 //! assert_eq!(diagrams.codomain[&1], Finite(2));
 //! # Ok::<(), phimaker::errors::InclusionError>(())
 //! ```
+#![recursion_limit = "1024"]
 #![warn(missing_docs)]
 #![allow(clippy::multiple_crate_versions)]
 
 mod builders;
 pub mod cylinder;
 pub mod diagrams;
+mod documentation;
 pub mod ensemble;
 pub mod errors;
 pub mod indexing;
@@ -175,5 +177,5 @@ pub fn sixpack<UsizeSlice: Deref<Target = [usize]>>(
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "python-module")]
+#[cfg(all(feature = "python-module", not(any(doc, rust_analyzer))))]
 mod python_bindings;

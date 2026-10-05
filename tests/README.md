@@ -69,6 +69,10 @@ RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
   anti-transpose recovery; stable display; serialization and explicit rewind.
 - **Python bindings:** dictionary lookup, missing-key behavior, independent
   getter copies, `None` for infinity, metadata, signatures, and docstrings.
+- **Documentation:** Python functions, shared classes, and properties expose
+  Python usage docs without Rust comments. Their examples run through Python's
+  doctest parser under pytest. Rust examples run as Cargo doctests; rustdoc is
+  checked with and without default features to ensure it shows Rust docs only.
 
 The meaningful old diagram tests are retained or expanded. The previous Rust
 `ensemble_works` test opened a nonexistent fixture path and asserted only
@@ -79,16 +83,25 @@ the square's diagonal had incorrectly been labeled degree two rather than one.
 Random timing/plotting scripts and their unused matrix fixture were removed.
 The existing Rust square test now also rules out extra essential kernel bars.
 
-## Known upstream limitation
+## Empty decompositions
 
-LoPhat 0.11.0 accesses column zero when serializing an empty decomposition.
-`test_known_limitations.py` records the empty-domain and empty-relative slow
-cases as strict expected failures. Only the specific PyO3 bounds panic is
-converted to the expected exception; another error still fails. Success is an
-unexpected pass and also fails, prompting removal of the marks after an
-upstream fix. The corresponding normal-mode edge cases are ordinary passing
-tests. All other slow-mode cases must pass normally.
+LoPhat 0.12.0 fixes empty-decomposition serialization.
+`test_known_limitations.py` now checks empty-domain and empty-relative slow-mode
+results against normal mode as ordinary passing regressions, without expected
+failure marks. Diagram extraction uses LoPhat's shared map representation.
 
-Malformed chain complexes are outside the documented API preconditions. The
-suite does not require validation errors the API does not promise, nor does it
-encode performance expectations for the deferred slow-path optimization.
+## Structural validation
+
+Rust tests check all `InclusionError` variants at both decomposition entry points
+and the Rust diagram convenience function. Python tests check conversion to
+`ValueError`, unchanged public function names, and propagation through the
+general-map wrapper. Both modes cover short/long degree lists, domain indices at
+and beyond the boundary size (including empty input), diagonal/out-of-range
+boundary rows, degree-zero and overflow edge cases, and domain closure.
+Normalization tests check unsorted/repeated supports and domain indices, exact
+six-diagram results, canonical metadata, and preservation of borrowed inputs.
+The existing unsorted-domain tests now exercise validation directly from Rust.
+
+Boundary squared zero and the full filtered chain-map identity remain caller
+preconditions. The suite does not require checks for those unchecked algebraic
+conditions, or performance expectations for the deferred slow-path optimization.

@@ -7,6 +7,9 @@ use log::debug;
 #[cfg(feature = "python-module")]
 use pyo3::prelude::*;
 
+use crate::documentation::python_doc;
+#[cfg(all(feature = "python-module", not(any(doc, rust_analyzer))))]
+use crate::documentation::{macro_rules_apply, strip_rust_docs};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum CylinderColType {
@@ -51,17 +54,58 @@ impl Ord for CylinderColType {
 /// assert_eq!(metadata.degrees[index], 0);
 /// # Ok::<(), phimaker::errors::InclusionError>(())
 /// ```
+#[doc = python_doc!(
+r#"Coordinates, degrees, and entrance times returned by :py:func:`~phimaker.sixpack`.
+
+Diagram endpoints identify columns in a mapping cylinder. Look up ``times[index]``
+and ``degrees[index]`` to recover the entrance time and degree of a column.
+``domain_indices[i]`` and ``codomain_indices[i]`` locate the original input
+generators; ``domain_shift[i]`` locates the degree-one-higher copy of domain
+generator ``i``. For kernel intervals, subtract one from the birth-column degree.
+
+Attributes are read-only and return independent lists. Editing a returned list
+does not change subsequent accesses.
+
+Example::
+
+    >>> from phimaker import sixpack
+    >>> point = [(2.0, 0, [])]
+    >>> result, metadata = sixpack(point, point, [[0]])
+    >>> birth = metadata.domain_indices[0]
+    >>> assert metadata.times[birth] == 2.0
+    >>> assert metadata.degrees[birth] == 0"#
+)]
+#[cfg_attr(
+    all(feature = "python-module", not(any(doc, rust_analyzer))),
+    macro_rules_apply(strip_rust_docs!)
+)]
 #[cfg_attr(feature = "python-module", pyclass(module = "phimaker", get_all))]
 pub struct CylinderMetadata {
 	/// Entrance time of each cylinder column.
+	#[doc = python_doc!(
+    r#"Entrance time of each cylinder column. Index this list by a diagram endpoint."#
+    )]
 	pub times: Vec<f64>,
 	/// Original domain generator index to cylinder column index.
+	#[doc = python_doc!(
+    r#"Cylinder column index for each original domain generator, in input order."#
+    )]
 	pub domain_indices: Vec<usize>,
 	/// Original codomain generator index to cylinder column index.
+	#[doc = python_doc!(
+    r#"Cylinder column index for each original codomain generator, in input order."#
+    )]
 	pub codomain_indices: Vec<usize>,
 	/// Original domain generator index to its degree-one-higher cylinder copy.
+	#[doc = python_doc!(
+    r#"Cylinder column index of the degree-one-higher copy of each domain generator."#
+    )]
 	pub domain_shift: Vec<usize>,
 	/// Degree of each cylinder generator.
+	#[doc = python_doc!(
+    r#"Degree of each cylinder generator. Kernel interval degree is one less than
+the degree at its birth index."#
+    )]
 	pub degrees: Vec<usize>,
 }
 
