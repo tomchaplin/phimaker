@@ -11,6 +11,9 @@
 Phimaker is a Rust library implementing the algorithm introduced in [[1]](#1) for computing persistent homology for kernels, images and cokernels.
 Python bindings are provided via PyO3.
 
+See [CHANGELOG.md](CHANGELOG.md) for changes since the last release and API
+migration notes.
+
 Install via
 ```
 pip install phimaker
