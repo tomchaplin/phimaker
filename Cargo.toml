@@ -3,15 +3,13 @@ name = "phimaker"
 version = "0.4.0"
 edition = "2024"
 description = "Compute kernel, cokernel, and image persistence from maps of F2 chain complexes."
-repository = "https://github.com/tomrchaplin/phimaker"
+readme = "README.md"
+homepage = "https://github.com/tomchaplin/phimaker"
+repository = "https://github.com/tomchaplin/phimaker"
 license = "GPL-3.0-or-later"
-keywords = [
-	"filtered chain complex",
-	"persistence module",
-	"persistent homology",
-	"topological data analysis"
-]
+keywords = ["chain-complex", "persistence-module", "persistent-homology", "topology"]
 categories = ["mathematics", "science"]
+exclude = ["docs/**/*", "scripts/**/*"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -37,6 +35,10 @@ tempfile = "3.27.0"
 [features]
 default = ["python-module"]
 python-module = ["dep:macro_rules_attribute", "dep:pyo3", "dep:pyo3-log", "lophat/python-module"]
+
+[lints.clippy]
+cargo = { level = "warn", priority = -1 }
+tabs_in_doc_comments = "allow"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(rust_analyzer)"] }
