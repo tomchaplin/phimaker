@@ -7,8 +7,9 @@ CI runs do not publish packages.
 
 ## Checks and wheel coverage
 
-The Rust workflow runs `cargo test --locked --no-default-features`, including
-doctests, without requiring Python. The Python workflow discovers stable CPython
+The Python package requires Python 3.12 or newer. The Rust workflow runs
+`cargo test --locked --no-default-features`, including doctests, without
+requiring Python. The Python workflow discovers stable CPython
 versions satisfying `pyproject.toml`'s `requires-python` using uv's interpreter
 catalogue, selecting the latest compatible patch of each minor. It excludes
 prereleases and the experimental Python 3.13 free-threaded variant; supported
@@ -24,10 +25,10 @@ Wheels are built and tested on native runners:
 | Windows | ARM64 | `windows-11-arm` |
 | macOS | ARM64 | `macos-latest` |
 
-Unavailable version/platform combinations are skipped; for example, uv has no
-native Windows ARM64 download for Python 3.10. An entirely missing platform fails
-matrix selection. Matrix regression tests use a synthetic catalogue and require
-no network access.
+Every selected Python minor and ABI variant must have a compatible download on
+every platform, matching LoPhat's matrix policy. Missing combinations fail matrix
+selection. Matrix regression tests use a synthetic catalogue and require no
+network access.
 
 Each build checks generated type stubs and the typing marker, installs its wheel
 with `--no-index --only-binary :all: --no-deps`, and runs pytest against the

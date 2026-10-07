@@ -31,7 +31,8 @@ def downloads(version: str, variant: str = "default") -> list[dict[str, str]]:
 def test_latest_stable_patch_and_supported_variants() -> None:
 	"""Ignore prereleases, unsupported minors and experimental 3.13t interpreters."""
 	catalogue = (
-		downloads("3.9.25")
+		downloads("3.11.15")
+		+ downloads("3.12.13")
 		+ downloads("3.13.1")
 		+ downloads("3.13.2")
 		+ downloads("3.13.2", "freethreaded")
@@ -39,33 +40,37 @@ def test_latest_stable_patch_and_supported_variants() -> None:
 		+ downloads("3.14.0", "freethreaded")
 		+ downloads("3.15.0rc2")
 	)
-	entries = matrix_module.make_matrix(catalogue, ">=3.10,<3.15")["include"]
-	assert len(entries) == 3 * len(matrix_module.PLATFORMS)
-	assert {entry["label"] for entry in entries} == {"3.13", "3.14", "3.14t"}
-	assert {entry["python"] for entry in entries} == {"3.13.2", "3.14.0", "3.14.0t"}
+	entries = matrix_module.make_matrix(catalogue, ">=3.12,<3.15")["include"]
+	assert len(entries) == 4 * len(matrix_module.PLATFORMS)
+	assert {entry["label"] for entry in entries} == {"3.12", "3.13", "3.14", "3.14t"}
+	assert {entry["python"] for entry in entries} == {"3.12.13", "3.13.2", "3.14.0", "3.14.0t"}
 	linux_t = next(
 		entry for entry in entries if entry["name"] == "linux-x64" and entry["label"] == "3.14t"
 	)
 	assert linux_t["interpreter"] == "/opt/python/cp314-cp314t/bin/python"
 
 
-def test_older_minor_missing_on_windows_arm() -> None:
-	"""Skip an unavailable 3.10 build while still testing newer native ARM interpreters."""
-	older = [
+@pytest.mark.parametrize("variant", ["default", "freethreaded"])
+def test_missing_interpreter_is_an_error(variant: str) -> None:
+	"""Every selected interpreter must exist on every platform, including its ABI variant."""
+	available_variant = [
 		entry
-		for entry in downloads("3.10.20")
+		for entry in downloads("3.14.0", variant)
 		if (entry["os"], entry["arch"]) != ("windows", "aarch64")
 	]
-	entries = matrix_module.make_matrix(older + downloads("3.11.15"), ">=3.10")["include"]
-	arm = [entry for entry in entries if entry["name"] == "windows-arm64"]
-	assert [entry["label"] for entry in arm] == ["3.11"]
-	assert len(entries) == 2 * len(matrix_module.PLATFORMS) - 1
+	other_variant = "freethreaded" if variant == "default" else "default"
+	catalogue = downloads("3.12.13") + available_variant + downloads("3.14.0", other_variant)
+	label = "3.14t" if variant == "freethreaded" else "3.14"
+	with pytest.raises(
+		ValueError, match=rf"No compatible Python {label} download for windows-arm64"
+	):
+		matrix_module.make_matrix(catalogue, ">=3.12")
 
 
 def test_missing_platform_is_an_error() -> None:
 	"""An entire missing platform must fail CI instead of silently shrinking coverage."""
-	with pytest.raises(ValueError, match="No supported CPython downloads"):
-		matrix_module.make_matrix(downloads("3.14.0")[:-1], ">=3.10")
+	with pytest.raises(ValueError, match=r"No compatible Python 3\.14 download for macos-arm64"):
+		matrix_module.make_matrix(downloads("3.14.0")[:-1], ">=3.12")
 
 
 def test_no_matching_stable_release() -> None:

@@ -7,9 +7,9 @@ import os
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
-import tomllib
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
@@ -96,7 +96,6 @@ def make_matrix(
 
 	entries = []
 	for platform in PLATFORMS:
-		platform_start = len(entries)
 		for minor in sorted(minors):
 			variants = ("default", "freethreaded") if minor in free_threaded else ("default",)
 			for variant in variants:
@@ -104,9 +103,8 @@ def make_matrix(
 				suffix = "t" if variant == "freethreaded" else ""
 				label = f"{minor[0]}.{minor[1]}{suffix}"
 				if key not in available:
-					# Older supported minors may not exist on newer platforms,
-					# such as CPython 3.10 on native Windows ARM64.
-					continue
+					msg = f"No compatible Python {label} download for {platform['name']}"
+					raise ValueError(msg)
 				tag = f"cp{minor[0]}{minor[1]}"
 				entries.append(
 					{
@@ -120,9 +118,6 @@ def make_matrix(
 						}[platform["os"]],
 					}
 				)
-		if len(entries) == platform_start:
-			msg = f"No supported CPython downloads for {platform['name']}"
-			raise ValueError(msg)
 	return {"include": entries}
 
 

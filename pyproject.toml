@@ -2,7 +2,7 @@
 name = "phimaker"
 version = "0.4.0"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = "GPL-3.0-or-later"
 license-files = ["COPYING"]
 authors = [{ name = "Thomas Chaplin" }, { name = "Abhinav Natarajan" }]

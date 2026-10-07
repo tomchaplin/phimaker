@@ -6,6 +6,11 @@ changes since `v0.3.0`.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- Raise the minimum supported Python version from 3.10 to 3.12, matching
+  LoPhat's Python requirement.
+
 ### Changed
 
 - Adapt LoPhat's Python wheel and Rust crate workflows. Every push, pull request,
@@ -14,9 +19,10 @@ changes since `v0.3.0`.
   the tested crate to crates.io.
 - Select stable CPython versions from `requires-python` and uv's interpreter
   catalogue, including supported free-threaded variants. Use native Linux and
-  Windows x64/ARM64 and macOS ARM64 runners. Skip unavailable platform/minor
-  combinations, such as Python 3.10 on Windows ARM64, but fail if an entire
-  platform is missing. Add matrix-selection regression tests.
+  Windows x64/ARM64 and macOS ARM64 runners. Match LoPhat's strict matrix policy:
+  every selected minor and ABI variant must be available on every platform.
+  Add matrix-selection regression tests and regenerate the lockfile for Python
+  3.12 and newer, removing dependencies needed only on older Python versions.
 - Replace the checked-in placeholder stub with stubs generated from declarative
   PyO3 exports, explicitly enable introspection metadata, and include `py.typed`.
   Export `DiagramEnsemble` and `CylinderMetadata` from Python so typed result

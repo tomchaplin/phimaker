@@ -8,7 +8,7 @@ comment explaining the invariant it checks.
 ## Running the suites
 
 From the repository root, install the Python test dependencies and build the
-local extension (requires Rust and Python >= 3.10):
+local extension (requires Rust and Python >= 3.12):
 
 ```sh
 uv sync --locked --group test
@@ -39,17 +39,17 @@ Check generated documentation with:
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
 ```
 
-The CI-only matrix tests use Python >= 3.11 and `packaging`, and do not import the
-extension. Run them separately from the Python API suite:
+The CI-only matrix tests use Python >= 3.12, `packaging`, and `pytest`, and do not
+import the extension. Run them separately from the Python API suite:
 
 ```sh
 uv run --no-project --python 3.13 --with packaging --with pytest pytest tests/ci
 ```
 
 They check version bounds, latest stable patch selection, exclusion of
-prereleases and experimental free-threaded interpreters, unavailable older
-Windows ARM64 builds, and failure when a whole platform is missing. The wheel
-workflow also checks generated public type declarations and the `py.typed`
+prereleases and experimental free-threaded interpreters, and failure when a
+selected interpreter or an entire platform is missing. The wheel workflow also
+checks generated public type declarations and the `py.typed`
 marker, installs the built wheel without rebuilding it, and runs `tests/python`
 against that installation. The Python suite verifies that the exported result
 classes match the objects returned by the functions.
