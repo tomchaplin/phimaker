@@ -1,4 +1,4 @@
-//! Structural input errors shared by the Rust inclusion APIs.
+//! Errors for inclusion inputs and persistence-map extraction.
 
 use std::{error::Error, fmt};
 
@@ -114,3 +114,73 @@ impl fmt::Display for InclusionError {
 }
 
 impl Error for InclusionError {}
+
+/// A persistence map could not be recovered from a diagram ensemble.
+///
+/// Returned by [`crate::diagrams::DiagramEnsemble::get_persistence_map`].
+/// Representative maps must be available and agree with their diagrams.
+/// Ensembles produced by the computation functions satisfy these requirements
+/// when their decompositions retain V. Modifying diagrams or representatives
+/// independently can make them inconsistent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PersistenceMapError {
+	/// A nonempty diagram has an empty representative map.
+	MissingRepresentatives {
+		/// Diagram requiring representatives: domain, codomain, or image.
+		diagram: &'static str,
+	},
+	/// Birth keys, supports, or interval endpoints are inconsistent.
+	InconsistentData {
+		/// Diagram containing inconsistent data.
+		diagram: &'static str,
+	},
+	/// A domain cycle is not in the span of the target representatives.
+	Unsolvable {
+		/// Target diagram: codomain or image.
+		target: &'static str,
+		/// Domain birth whose representative could not be expressed.
+		birth: usize,
+	},
+	/// A nonzero coefficient would outlive its source interval.
+	IncompatibleIntervals {
+		/// Target diagram: codomain or image.
+		target: &'static str,
+		/// Domain birth of the offending coefficient.
+		birth: usize,
+		/// Target birth of the offending coefficient.
+		target_birth: usize,
+	},
+}
+
+impl fmt::Display for PersistenceMapError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Self::MissingRepresentatives { diagram } => {
+				write!(f, "{diagram} representatives are unavailable")
+			},
+			Self::InconsistentData { diagram } => {
+				write!(f, "{diagram} diagram and representatives are inconsistent")
+			},
+			Self::Unsolvable { target, birth } => {
+				write!(
+					f,
+					"Domain representative at birth {birth} is not in the span of {target} \
+					 representatives"
+				)
+			},
+			Self::IncompatibleIntervals {
+				target,
+				birth,
+				target_birth,
+			} => {
+				write!(
+					f,
+					"{target} feature {target_birth} outlives domain feature {birth} despite a \
+					 nonzero map coefficient"
+				)
+			},
+		}
+	}
+}
+
+impl Error for PersistenceMapError {}

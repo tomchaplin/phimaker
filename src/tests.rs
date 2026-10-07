@@ -1,6 +1,9 @@
 //! Pure Rust regression tests: no Python interpreter or external fixture files.
 
-use std::io::{Seek, SeekFrom};
+use std::{
+	collections::HashMap,
+	io::{Seek, SeekFrom},
+};
 
 use lophat::{
 	algorithms::{Decomposition, DecompositionAlgo, LockFreeAlgorithm, SerialAlgorithm},
@@ -11,7 +14,7 @@ use crate::{
 	builders::{build_d_dom, build_d_im, build_d_rel, compute_dom_first_permutation},
 	cylinder::build_cylinder,
 	diagrams::{DiagramEnsemble, ExtendedUsize, ExtendedUsize::*, PersistenceDiagram, from_file},
-	ensemble::{all_decompositions, all_decompositions_slow, to_file},
+	ensemble::{FileEnsemble, all_decompositions, all_decompositions_slow, to_file},
 	indexing::Permutation,
 };
 
@@ -26,6 +29,195 @@ fn assert_diagrams(actual: &DiagramEnsemble, expected: [&[(usize, ExtendedUsize)
 	] {
 		assert_eq!(*diagram, pairs.iter().copied().collect(), "{name}");
 	}
+	for (diagram, representatives) in [
+		(&actual.domain, &actual.domain_representatives),
+		(&actual.codomain, &actual.codomain_representatives),
+		(&actual.image, &actual.image_representatives),
+	] {
+		assert_eq!(representatives.len(), diagram.len());
+		for (&birth, support) in representatives {
+			assert!(diagram.contains_key(&birth));
+			assert_eq!(support.iter().max(), Some(&birth));
+		}
+	}
+	let (to_codomain, to_image) = actual.get_persistence_map().unwrap();
+	for (mapping, target) in [(&to_codomain, &actual.codomain), (&to_image, &actual.image)] {
+		assert_eq!(mapping.len(), actual.domain.len());
+		for (&birth, coefficients) in mapping {
+			assert!(actual.domain.contains_key(&birth));
+			for &target_birth in coefficients {
+				assert!(target_birth <= birth);
+				assert!(Finite(birth) < target[&target_birth]);
+				assert!(target[&target_birth] <= actual.domain[&birth]);
+			}
+		}
+	}
+}
+
+/// A younger domain vertex maps to both a finite and an essential codomain
+/// feature. The next domain class maps to two finite codomain features.
+#[test]
+fn persistence_map_sums_codomain_features_in_both_modes() {
+	for slow in [false, true] {
+		let result = diagrams(
+			&[vec![], vec![], vec![], vec![0, 1], vec![0, 2], vec![1, 2]],
+			&[0, 0, 0, 1, 1, 1],
+			&[5, 2, 1],
+			slow,
+		);
+		let (to_codomain, to_image) = result.get_persistence_map().unwrap();
+		assert_eq!(
+			to_codomain,
+			HashMap::from([(1, vec![0, 1]), (2, vec![1, 2])])
+		);
+		assert_eq!(to_image, HashMap::from([(1, vec![1]), (2, vec![2])]));
+		assert_eq!(result.image[&2], Finite(4));
+	}
+}
+
+/// Domain and image death reductions choose different cycle bases. A domain
+/// finite feature can map to a sum of two image features, both dying earlier.
+#[test]
+fn persistence_map_sums_image_features_in_both_modes() {
+	for slow in [false, true] {
+		let result = diagrams(
+			&[
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![1, 2],
+				vec![2, 3],
+				vec![1, 3],
+				vec![2, 3],
+			],
+			&[0, 0, 0, 0, 1, 1, 1, 1],
+			&[7, 3, 1, 6, 2],
+			slow,
+		);
+		let expected = HashMap::from([(1, vec![1]), (2, vec![2]), (3, vec![2, 3])]);
+		assert_eq!(
+			result.get_persistence_map().unwrap(),
+			(expected.clone(), expected)
+		);
+		assert_eq!(result.domain[&3], Finite(6));
+		assert_eq!(result.image[&2], Finite(4));
+		assert_eq!(result.image[&3], Finite(5));
+	}
+}
+
+/// A dead target cycle is needed for exact chain expansion, then removed from
+/// the homology coefficients at the source birth. Removing it before solving
+/// would make the equation unsolvable.
+#[test]
+fn persistence_map_discards_previously_dead_targets() {
+	for slow in [false, true] {
+		let result = diagrams(
+			&[vec![], vec![], vec![0, 1], vec![], vec![0, 3], vec![1, 3]],
+			&[0, 0, 1, 0, 1, 1],
+			&[5, 3, 1],
+			slow,
+		);
+		let (to_codomain, to_image) = result.get_persistence_map().unwrap();
+		assert_eq!(to_codomain, HashMap::from([(1, vec![0, 1]), (3, vec![3])]));
+		assert_eq!(to_image, HashMap::from([(1, vec![1]), (3, vec![3])]));
+	}
+}
+
+/// Identity maps preserve finite and essential generators. Empty domains give
+/// empty maps even when their representatives are unavailable.
+#[test]
+fn persistence_maps_identity_and_empty() {
+	for slow in [false, true] {
+		let result = diagrams(&[vec![], vec![], vec![0, 1]], &[0, 0, 1], &[2, 0, 1], slow);
+		let expected = HashMap::from([(0, vec![0]), (1, vec![1])]);
+		assert_eq!(
+			result.get_persistence_map().unwrap(),
+			(expected.clone(), expected)
+		);
+		for result in [
+			diagrams(&[], &[], &[], slow),
+			diagrams(&[vec![]], &[0], &[], slow),
+		] {
+			assert_eq!(
+				result.get_persistence_map().unwrap(),
+				(HashMap::new(), HashMap::new())
+			);
+		}
+	}
+}
+
+/// Mutable Rust ensembles must report unavailable, incomplete, non-spanning,
+/// or incompatible data instead of returning a misleading persistence map.
+#[test]
+fn persistence_map_errors_and_normalized_supports() {
+	use crate::errors::PersistenceMapError::*;
+	let result = diagrams(&[vec![], vec![], vec![0, 1]], &[0, 0, 1], &[0, 1, 2], false);
+	let mut modified = result.clone();
+	modified.domain_representatives.clear();
+	assert_eq!(
+		modified.get_persistence_map(),
+		Err(MissingRepresentatives { diagram: "domain" })
+	);
+	for target in ["codomain", "image"] {
+		let mut modified = result.clone();
+		let reps = if target == "codomain" {
+			&mut modified.codomain_representatives
+		} else {
+			&mut modified.image_representatives
+		};
+		reps.clear();
+		assert_eq!(
+			modified.get_persistence_map(),
+			Err(MissingRepresentatives { diagram: target })
+		);
+	}
+	let mut modified = result.clone();
+	modified.codomain_representatives.remove(&0);
+	assert_eq!(
+		modified.get_persistence_map(),
+		Err(InconsistentData {
+			diagram: "codomain"
+		})
+	);
+	let mut modified = result.clone();
+	modified.domain_representatives.insert(1, vec![0]);
+	assert_eq!(
+		modified.get_persistence_map(),
+		Err(InconsistentData { diagram: "domain" })
+	);
+	let mut modified = result.clone();
+	modified.codomain.remove(&0);
+	modified.codomain_representatives.remove(&0);
+	assert_eq!(
+		modified.get_persistence_map(),
+		Err(Unsolvable {
+			target: "codomain",
+			birth: 0
+		})
+	);
+	let mut modified = result.clone();
+	modified.codomain.insert(1, Infinity);
+	assert_eq!(
+		modified.get_persistence_map(),
+		Err(IncompatibleIntervals {
+			target: "codomain",
+			birth: 1,
+			target_birth: 1
+		})
+	);
+	let mut modified = result.clone();
+	for reps in [
+		&mut modified.domain_representatives,
+		&mut modified.codomain_representatives,
+		&mut modified.image_representatives,
+	] {
+		for support in reps.values_mut() {
+			support.reverse();
+			support.push(support[0]);
+		}
+	}
+	assert_eq!(modified.get_persistence_map(), result.get_persistence_map());
 }
 
 fn diagrams(
@@ -114,6 +306,98 @@ fn codomain_coordinates_and_representatives_in_both_modes() {
 	check_codomain(&from_file(&stored.d_cod), &matrix, &degrees);
 	stored.d_cod.rewind().unwrap();
 	assert_eq!(stored.all_diagrams().codomain, expected);
+}
+
+/// A domain with gaps and unsorted indices has local birth 3 at original index
+/// 4. Its essential parallel-edge cycle becomes finite in the image. All
+/// representative keys and supports must be translated, and remain cycles.
+#[test]
+fn representative_coordinates_and_cycles_in_both_modes() {
+	let matrix = vec![vec![], vec![], vec![], vec![1, 2], vec![1, 2], vec![3, 4]];
+	let expected = HashMap::from([(1, vec![1]), (2, vec![1, 2]), (4, vec![3, 4])]);
+	for slow in [false, true] {
+		let result = diagrams(&matrix, &[0, 0, 0, 1, 1, 2], &[4, 2, 1, 3], slow);
+		assert_eq!(result.domain_representatives, expected);
+		assert_eq!(result.image_representatives, expected);
+		assert_eq!(result.domain[&4], Infinity);
+		assert_eq!(result.image[&4], Finite(5));
+		let mut codomain_expected = expected.clone();
+		codomain_expected.insert(0, vec![0]);
+		assert_eq!(result.codomain_representatives, codomain_expected);
+		for representatives in [
+			result.domain_representatives,
+			result.codomain_representatives,
+			result.image_representatives,
+		] {
+			for (birth, support) in representatives {
+				assert_eq!(support.iter().max(), Some(&birth));
+				let mut boundary = VecColumn::new_with_degree(0);
+				for index in support {
+					boundary.add_entries(matrix[index].iter().copied());
+				}
+				assert!(boundary.is_cycle());
+			}
+		}
+	}
+}
+
+/// The image essential representative must remain the younger domain vertex,
+/// even though image R pairs its row index and image V can use external cells.
+#[test]
+fn essential_image_representative_uses_domain_cycle() {
+	for slow in [false, true] {
+		let result = diagrams(&[vec![], vec![], vec![0, 1]], &[0, 0, 1], &[1], slow);
+		assert_eq!(result.image_representatives, HashMap::from([(1, vec![1])]));
+	}
+}
+
+/// Empty diagrams have empty representative maps, including when the
+/// decomposition has no columns and cannot report V availability.
+#[test]
+fn empty_representative_maps_in_both_modes() {
+	for slow in [false, true] {
+		let empty = diagrams(&[], &[], &[], slow);
+		assert!(empty.domain_representatives.is_empty());
+		assert!(empty.codomain_representatives.is_empty());
+		assert!(empty.image_representatives.is_empty());
+		let result = diagrams(&[vec![]], &[0], &[], slow);
+		assert!(result.domain_representatives.is_empty());
+		assert_eq!(
+			result.codomain_representatives,
+			HashMap::from([(0, vec![0])])
+		);
+		assert_eq!(result.image_representatives, HashMap::new());
+	}
+}
+
+/// Nonempty decompositions without V violate the extraction precondition in
+/// both modes. Do not silently return diagrams with missing representatives.
+#[test]
+fn representatives_unavailable_without_v_in_both_modes() {
+	let without_v = || {
+		SerialAlgorithm::<VecColumn>::init(Some(lophat::options::LoPhatOptions {
+			maintain_v: false,
+			..Default::default()
+		}))
+		.add_cols([VecColumn::from((0, vec![]))].into_iter())
+		.decompose()
+	};
+	let mut ensemble =
+		all_decompositions::<SerialAlgorithm<_>, _>(&[vec![]], &[0], &[0], 1).unwrap();
+	ensemble.d_cod = without_v();
+	ensemble.d_dom = without_v();
+	ensemble.d_im = without_v();
+	assert!(std::panic::catch_unwind(|| ensemble.all_diagrams()).is_err());
+	let stored = FileEnsemble {
+		d_cod: to_file(ensemble.d_cod),
+		d_dom: to_file(ensemble.d_dom),
+		d_im: to_file(ensemble.d_im),
+		d_cok: to_file(ensemble.d_cok),
+		d_ker: to_file(ensemble.d_ker),
+		d_rel: to_file(ensemble.d_rel),
+		metadata: ensemble.metadata,
+	};
+	assert!(std::panic::catch_unwind(|| stored.all_diagrams()).is_err());
 }
 
 /// Domain columns and permutation must agree even when input domain indices are

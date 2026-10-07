@@ -70,6 +70,18 @@ RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
   stable display; serialization and explicit rewind. A pair of parallel edges
   checks a nontrivial essential cycle, a finite H0 representative, and R = D V
   against the original boundary, including the serialized slow-mode result.
+  Representative tests also cover a domain with gaps and unsorted indices,
+  essential domain cycles killed in the image, essential image cycles supported
+  only in the domain, cycle boundaries, maximum support indices equal to births,
+  empty representative maps, and the requirement to retain V for nonempty
+  decompositions in both modes.
+- **Persistence maps:** sparse F2 back substitution over all combinations of a
+  small basis; sums of codomain or image features; dead target cycles needed for
+  exact expansion but omitted from homology coefficients; identity and empty maps;
+  zero general maps after equal-time cylinder cells enter; missing or inconsistent
+  representatives, non-spanning target bases, incompatible interval lifetimes,
+  and normalization of unsorted or repeated support indices. Both modes and
+  independent Python return copies are tested.
 - **Python bindings:** dictionary lookup, missing-key behavior, independent
   getter copies, `None` for infinity, metadata, signatures, and docstrings.
 - **Documentation:** Python functions, shared classes, and properties expose

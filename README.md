@@ -36,6 +36,34 @@ class born at index 0 and a class born at index 1 that dies at index 2.
 Use `diagram[birth]` to look up a death and `diagram.items()` to iterate over
 intervals. The former `.paired` and `.unpaired` attributes have been removed.
 
+`domain_representatives`, `codomain_representatives`, and `image_representatives`
+map each birth index to the generator indices whose sum over F2 gives a cycle.
+Keys and supports use the diagram coordinates; the maximum support index equals
+the feature's birth. Rust stores these as `HashMap<usize, Vec<usize>>`; Python exposes
+dictionaries of lists. Each map has exactly its diagram's birth keys, and an empty
+diagram has an empty representative map. Nonempty domain, codomain, and image
+decompositions must retain V when calling `all_diagrams`; the computation entry
+points do so automatically.
+
+Call `diagrams.get_persistence_map()` to obtain `(domain_to_codomain, domain_to_image)`.
+Each map associates every domain birth with a sorted list of target births whose
+binary coefficients are one. At a filtration index, use only intervals alive there;
+target features dead at the source birth are omitted. Rust returns a `Result`,
+with `PersistenceMapError` for unavailable or inconsistent representatives; Python
+returns two dictionaries and reports failures as `RuntimeError`. Empty domains yield
+two empty maps. These maps use the chosen representatives and diagram coordinates.
+For `sixpack`, use `metadata.times` to select intervals in the original filtration;
+the diagrams retain equal-time mapping-cylinder intervals.
+
+```python
+from phimaker import sixpack_from_inclusion
+
+diagrams = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [1])
+to_codomain, to_image = diagrams.get_persistence_map()
+assert to_codomain == {1: [0, 1]}
+assert to_image == {1: [1]}
+```
+
 ## References
 
 <a id="1">[1]</a>
@@ -81,7 +109,8 @@ gives its representative cycle; for an essential feature, use V column `birth`.
 Both diagram extraction modes read codomain pairs directly in these coordinates.
 The relative decomposition still uses anti-transposed quotient coordinates.
 Retaining codomain V adds memory use and increases the slow-mode file size.
-The Python convenience functions retain their existing return values.
+Python convenience functions expose the representative maps on the returned
+`DiagramEnsemble`.
 
 ## Tests
 
@@ -90,6 +119,6 @@ extension and run pytest as described in [tests/README.md](tests/README.md).
 That document records each fixture's intent, including slow-mode serialization
 regressions and executable documentation examples.
 
-The Cargo dependency uses LoPhat version 0.12.0.
+The Cargo dependency uses LoPhat version 0.13.0.
 Building with `python-module` also enables `lophat/python-module`, providing
 conversion of diagrams to dictionaries and infinite deaths to `None`.

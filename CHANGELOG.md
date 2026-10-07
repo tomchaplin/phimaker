@@ -1,10 +1,12 @@
 # Changelog
 
 This changelog records user-facing changes and development changes. New entries
-belong under **Unreleased** until a version is released. The current baseline is
-the last release, `v0.3.0`.
+belong under **Unreleased** until a version is released. Version 0.4.0 records
+changes since `v0.3.0`.
 
 ## [Unreleased]
+
+## [0.4.0] - 2026-10-07
 
 ### Breaking changes
 
@@ -39,6 +41,18 @@ the last release, `v0.3.0`.
 
 ### Added
 
+- `DiagramEnsemble.get_persistence_map()` returning sparse binary maps from domain
+  features to codomain and image features. Solve in the representative cycle bases
+  using private sparse F2 back substitution, then omit target features already dead
+  at the source birth. Include typed `PersistenceMapError` failures in Rust and
+  `RuntimeError` in Python, usage examples, and tests for both extraction modes.
+- Domain, codomain, and image representative maps on `DiagramEnsemble`, keyed
+  by birth index with cycle supports in diagram coordinates. Extract representatives
+  in both normal and slow modes using LoPhat's `diagram_with_reps`; translate domain
+  and image row indices back to original generator indices and use domain cycles
+  for essential image features. Store representatives as plain maps, with empty
+  maps for empty diagrams. Nonempty domain, codomain, and image decompositions
+  must retain V for diagram extraction.
 - A shared inclusion preparation step with typed `InclusionError` variants for
   degree-count mismatches, invalid domain indices, non-upper-triangular
   boundaries, incorrect boundary degrees, and domains not closed under boundary.
@@ -63,7 +77,7 @@ the last release, `v0.3.0`.
 
 ### Changed
 
-- Upgrade LoPhat from 0.11.0 to 0.12.0, use its shared diagram and extended-index
+- Upgrade LoPhat from 0.11.0 to 0.13.0, use its shared diagram and extended-index
   types, and adapt column access to `degree()`. Delegate Python dictionary and
   infinite-death conversion to LoPhat when `python-module` is enabled.
 - Upgrade PyO3 from 0.25.1 to the 0.29 series and pyo3-log from 0.12.4 to 0.13.4.
@@ -109,4 +123,5 @@ the last release, `v0.3.0`.
   and a Python extension stub. Update the test dependency group and document
   how to build the extension, run tests, and generate documentation.
 
-[Unreleased]: https://github.com/tomrchaplin/phimaker/compare/v0.3.0...dev
+[Unreleased]: https://github.com/tomchaplin/phimaker/compare/v0.4.0...dev
+[0.4.0]: https://github.com/tomchaplin/phimaker/compare/v0.3.0...v0.4.0

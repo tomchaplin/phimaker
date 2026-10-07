@@ -1,13 +1,13 @@
 //! Birth-to-death dictionaries and extraction from reduced matrices.
 
-use std::{fs::File, io::BufReader};
+use std::{collections::HashMap, fs::File, io::BufReader};
 
 use ExtendedUsize::{Finite, Infinity};
 use bincode::deserialize_from;
 /// Shared birth-to-death diagrams and extended indices from LoPhat.
 pub use lophat::utils::{ExtendedUsize, PersistenceDiagram};
 use lophat::{
-	algorithms::{Decomposition, DecompositionAlgo},
+	algorithms::{Decomposition, DecompositionAlgo, NoVMatrixError},
 	columns::Column,
 	utils::DecompositionFileFormat,
 };
@@ -19,12 +19,13 @@ use crate::documentation::{macro_rules_apply, strip_rust_docs};
 use crate::{
 	documentation::python_doc,
 	ensemble::{DecompositionEnsemble, EnsembleMetadata, FileEnsemble},
+	errors::PersistenceMapError,
 	indexing::Permutation,
 };
 
 /// Six persistence diagrams for an inclusion or filtered chain map over F2.
 ///
-/// Each field maps birth indices to death indices or
+/// Each diagram maps birth indices to death indices or
 /// [`ExtendedUsize::Infinity`]. Use the birth key for lookup or iterate over
 /// the map; iteration order is unspecified. Essential classes persist beyond
 /// the supplied filtration.
@@ -35,6 +36,14 @@ use crate::{
 /// interval is the birth-generator degree minus one; other interval degrees
 /// equal that degree.
 ///
+/// The domain, codomain, and image representative maps associate each birth
+/// with the generator indices whose sum is its cycle over F2. Their keys and
+/// entries use the same coordinates as the diagrams. If `b` is a feature's
+/// birth index in any of these diagrams, the maximum generator index in its
+/// representative equals `b`. Representatives are not necessarily minimal or
+/// unique, and support order is unspecified. Each representative map has
+/// exactly its diagram's birth keys; an empty diagram has an empty map.
+///
 /// # Example
 ///
 /// ```
@@ -42,6 +51,7 @@ use crate::{
 ///
 /// let diagrams = sixpack_from_inclusion(&[vec![]], &[0], &[0], 1, false)?;
 /// assert_eq!(diagrams.domain[&0], Infinity);
+/// assert_eq!(diagrams.domain_representatives[&0], vec![0]);
 /// assert!(diagrams.relative.is_empty());
 /// # Ok::<(), phimaker::errors::InclusionError>(())
 /// ```
@@ -58,14 +68,25 @@ codomain generators. For :py:func:`~phimaker.sixpack`, use the returned metadata
 to recover filtration times and degrees. A kernel interval has the degree of
 its birth generator minus one; other intervals have the birth-generator degree.
 
-Attributes are read-only, and each access returns an independent dictionary.
-Editing a dictionary does not change this result or later attribute accesses.
+The ``domain_representatives``, ``codomain_representatives``, and
+``image_representatives`` attributes map birth indices to lists of generator
+indices. Summing the listed generators over the field with two elements gives
+a representative cycle. Keys and entries use the same coordinates as the diagrams.
+If ``b`` is a feature's birth index in any of these diagrams, the maximum index
+in its representative is equal to ``b``. Representatives need not be minimal or
+unique. Each representative dictionary has exactly its diagram's birth keys.
+An empty diagram has an empty representative dictionary.
+
+Attributes are read-only. Each dictionary access returns an independent copy,
+including the lists in representative dictionaries. Editing a copy does not
+change this result or later attribute accesses. Support order is unspecified.
 
 Example::
 
     >>> from phimaker import sixpack_from_inclusion
     >>> result = sixpack_from_inclusion([[]], [0], [0])
     >>> assert result.domain == {0: None}
+    >>> assert result.domain_representatives == {0: [0]}
     >>> diagram = result.domain
     >>> diagram.clear()
     >>> assert result.domain == {0: None}"#
@@ -92,6 +113,39 @@ pub struct DiagramEnsemble {
     r#"Image of the induced homology map, as a birth-to-death dictionary."#
     )]
 	pub image: PersistenceDiagram,
+	/// Domain birth indices mapped to cycle supports in diagram coordinates.
+	/// Each listed generator has coefficient one over F2. An empty domain
+	/// diagram has an empty map.
+	#[doc = python_doc!(
+    r#"Domain representatives, as a dictionary from birth indices to generator lists.
+
+Sum the listed generators over the field with two elements to obtain a cycle.
+Indices use the domain diagram's coordinates. An empty domain diagram has an
+empty dictionary."#
+    )]
+	pub domain_representatives: HashMap<usize, Vec<usize>>,
+	/// Codomain birth indices mapped to cycle supports in diagram coordinates.
+	/// Each listed generator has coefficient one over F2. An empty codomain
+	/// diagram has an empty map.
+	#[doc = python_doc!(
+    r#"Codomain representatives, as a dictionary from birth indices to generator lists.
+
+Sum the listed generators over the field with two elements to obtain a cycle.
+Indices use the codomain diagram's coordinates. An empty codomain diagram has an
+empty dictionary."#
+    )]
+	pub codomain_representatives: HashMap<usize, Vec<usize>>,
+	/// Image birth indices mapped to cycle supports in diagram coordinates.
+	/// Supports contain only domain generators, each with coefficient one over
+	/// F2. An empty image diagram has an empty map.
+	#[doc = python_doc!(
+    r#"Image representatives, as a dictionary from birth indices to generator lists.
+
+Sum the listed generators over the field with two elements to obtain a cycle.
+Only domain generators occur, in the image diagram's coordinates. An empty image
+diagram has an empty dictionary."#
+    )]
+	pub image_representatives: HashMap<usize, Vec<usize>>,
 	/// Kernel of the induced homology map. Birth indices identify killing
 	/// cells, so the interval degree is the birth-cell degree minus one.
 	#[doc = python_doc!(
@@ -114,6 +168,165 @@ For results from :py:func:`~phimaker.sixpack`, this is the homology of the
 mapping cone."#
     )]
 	pub relative: PersistenceDiagram,
+}
+
+// Sum of two vectors over F2.
+// `left` and `right` specify the supports of the two vectors
+// i.e., the indices of non-zero coordinate entries.
+// This is identical to taking the symmetric difference of
+// the set of supports of the two vectors.
+fn xor_sorted(left: &[usize], right: &[usize]) -> Vec<usize> {
+	let mut out = Vec::with_capacity(left.len() + right.len());
+	let (mut i, mut j) = (0, 0);
+	while i < left.len() && j < right.len() {
+		match left[i].cmp(&right[j]) {
+			std::cmp::Ordering::Less => {
+				out.push(left[i]);
+				i += 1;
+			},
+			std::cmp::Ordering::Greater => {
+				out.push(right[j]);
+				j += 1;
+			},
+			std::cmp::Ordering::Equal => {
+				i += 1;
+				j += 1;
+			},
+		}
+	}
+	out.extend_from_slice(&left[i..]);
+	out.extend_from_slice(&right[j..]);
+	out
+}
+
+// Solve A x = b over F2 for a sparse basis with distinct pivots.
+// Each column of A and the vector b are specified by their support (indices of
+// non-zero entries). A must be supplied as a mapping 'pivot index -> support
+// of the column with that pivot'., including b, must be sorted
+// and duplicate-free. Back substitution visits strictly decreasing pivots.
+// Return None if b is outside the span; otherwise return the column keys of x.
+fn solve(a: &HashMap<usize, Vec<usize>>, b: &[usize]) -> Option<Vec<usize>> {
+	let mut residual = b.to_vec();
+	let mut solution = Vec::new();
+	while let Some(&pivot) = residual.last() {
+		let column = a.get(&pivot)?;
+		residual = xor_sorted(&residual, column);
+		solution.push(pivot);
+	}
+	solution.reverse();
+	Some(solution)
+}
+
+// Make sure that representative support is sorted and duplicate-free.
+// Normalize once for all right-hand sides and verify the pivot invariant that
+// makes the representative matrix triangular. This does not check cyclehood.
+fn prepare_representatives(
+	diagram: &PersistenceDiagram,
+	representatives: &HashMap<usize, Vec<usize>>,
+	name: &'static str,
+) -> Result<HashMap<usize, Vec<usize>>, PersistenceMapError> {
+	if !diagram.is_empty() && representatives.is_empty() {
+		return Err(PersistenceMapError::MissingRepresentatives { diagram: name });
+	}
+	let inconsistent = || PersistenceMapError::InconsistentData { diagram: name };
+	if representatives.len() != diagram.len() {
+		return Err(inconsistent());
+	}
+	representatives
+		.iter()
+		.map(|(&birth, support)| {
+			let death = diagram.get(&birth).ok_or_else(inconsistent)?;
+			let mut support = support.clone();
+			support.sort_unstable();
+			support.dedup();
+			if *death <= Finite(birth) || support.last() != Some(&birth) {
+				return Err(inconsistent());
+			}
+			Ok((birth, support))
+		})
+		.collect()
+}
+
+/// Source birth indices mapped to target births with coefficient one over F2.
+pub type PersistenceMap = HashMap<usize, Vec<usize>>;
+impl DiagramEnsemble {
+	/// Return the domain-to-codomain and domain-to-image persistence maps over
+	/// F2.
+	///
+	/// The pair is ordered `(domain_to_codomain, domain_to_image)`. Each map
+	/// has every domain birth as a key. Its value is a sorted list of
+	/// target births with coefficient one; an empty list denotes zero. Keys
+	/// use the diagram coordinates, including mapping-cylinder indices for
+	/// [`crate::sixpack`]. At a filtration index, use only source and
+	/// target intervals alive there. These coefficients are relative to
+	/// this ensemble's chosen representatives.
+	///
+	/// Use an ensemble from the computation functions with representatives
+	/// available. Domain and target cycles must share one generator basis and
+	/// describe a valid inclusion. Each support must have maximum index equal
+	/// to its birth. Support order does not matter, and repeated indices are
+	/// treated as repeated listings of the same generator. Target
+	/// cycles must span the domain cycles. Do not modify diagrams and
+	/// representatives independently. Cyclehood and homological degrees are
+	/// not checked here.
+	///
+	/// Target features dead at the source birth contribute zero and are
+	/// omitted. Every remaining coefficient satisfies `target_birth <=
+	/// source_birth < target_death <= source_death`, with infinity allowed
+	/// for deaths. An empty domain returns two empty maps without requiring
+	/// representatives.
+	///
+	/// # Errors
+	/// Returns [`PersistenceMapError`] for unavailable representatives,
+	/// inconsistent keys, supports or endpoints, an unsolvable cycle expansion,
+	/// or a coefficient incompatible with the interval lifetimes.
+	///
+	/// # Example
+	/// ```
+	/// use phimaker::sixpack_from_inclusion;
+	/// let diagrams =
+	/// 	sixpack_from_inclusion(&[vec![], vec![], vec![0, 1]], &[0, 0, 1], &[1], 1, false)?;
+	/// let (to_codomain, to_image) = diagrams.get_persistence_map()?;
+	/// assert_eq!(to_codomain[&1], vec![0, 1]);
+	/// assert_eq!(to_image[&1], vec![1]);
+	/// # Ok::<(), Box<dyn std::error::Error>>(())
+	/// ```
+	pub fn get_persistence_map(
+		&self,
+	) -> Result<(PersistenceMap, PersistenceMap), PersistenceMapError> {
+		if self.domain.is_empty() {
+			return Ok((HashMap::new(), HashMap::new()));
+		}
+		let source = prepare_representatives(&self.domain, &self.domain_representatives, "domain")?;
+		let compute = |target: &PersistenceDiagram, reps: &HashMap<usize, Vec<usize>>, name| {
+			let basis = prepare_representatives(target, reps, name)?;
+			source
+				.iter()
+				.map(|(&birth, support)| {
+					let mut coefficients =
+						solve(&basis, support).ok_or(PersistenceMapError::Unsolvable {
+							target: name,
+							birth,
+						})?;
+					coefficients.retain(|target_birth| target[target_birth] > Finite(birth));
+					for &target_birth in &coefficients {
+						if target[&target_birth] > self.domain[&birth] {
+							return Err(PersistenceMapError::IncompatibleIntervals {
+								target: name,
+								birth,
+								target_birth,
+							});
+						}
+					}
+					Ok((birth, coefficients))
+				})
+				.collect::<Result<HashMap<usize, Vec<usize>>, PersistenceMapError>>()
+		};
+		Ok((
+			compute(&self.codomain, &self.codomain_representatives, "codomain")?,
+			compute(&self.image, &self.image_representatives, "image")?,
+		))
+	}
 }
 
 fn is_kernel_birth<Decomp: Decomposition<C>, C: Column>(
@@ -183,11 +396,47 @@ fn kernel_diagram<Decomp: Decomposition<C>, C: Column>(
 	dgm
 }
 
-fn image_diagram<Decomp: Decomposition<C>, C: Column>(
+// Empty decompositions cannot report V availability, but need no
+// representatives. Nonempty decompositions must retain V to supply a complete
+// representative map.
+fn decomposition_with_reps<Decomp: Decomposition<C>, C: Column>(
+	decomposition: &Decomp,
+) -> (PersistenceDiagram, HashMap<usize, Vec<usize>>) {
+	let (diagram, representatives) = decomposition.diagram_with_reps();
+	let representatives = match representatives {
+		Ok(reps) => reps,
+		Err(NoVMatrixError::EmptyDecompositionError) => HashMap::new(),
+		Err(NoVMatrixError::VMatrixDiscardedError) => {
+			panic!("Representative extraction requires retained V")
+		},
+	};
+	(diagram, representatives)
+}
+
+fn domain_diagram_with_reps<Decomp: Decomposition<C>, C: Column>(
+	metadata: &EnsembleMetadata,
+	d_dom_decomp: &Decomp,
+) -> (PersistenceDiagram, HashMap<usize, Vec<usize>>) {
+	let (diagram, representatives) = decomposition_with_reps(d_dom_decomp);
+	let unpermute = |idx| metadata.dom_first_permutation.inverse_map(idx);
+	let representatives = representatives
+		.into_iter()
+		.map(|(birth, support)| {
+			(
+				unpermute(birth),
+				support.into_iter().map(unpermute).collect(),
+			)
+		})
+		.collect();
+	(diagram.map_idxs(unpermute), representatives)
+}
+
+fn image_diagram_with_reps<Decomp: Decomposition<C>, C: Column>(
 	metadata: &EnsembleMetadata,
 	d_dom_decomp: &Decomp,
 	d_im_decomp: &Decomp,
-) -> PersistenceDiagram {
+	domain_representatives: &HashMap<usize, Vec<usize>>,
+) -> (PersistenceDiagram, HashMap<usize, Vec<usize>>) {
 	let mut im_dgm = PersistenceDiagram::default();
 	(0..metadata.sz_codomain).for_each(|idx| {
 		if let Some(low_idx) = d_im_decomp.get_r_col(idx).pivot() {
@@ -205,7 +454,25 @@ fn image_diagram<Decomp: Decomposition<C>, C: Column>(
 			}
 		}
 	});
-	im_dgm
+	// Image R has domain-first rows and original columns. Only its finite
+	// representatives are usable here: image V may include non-domain cells.
+	let (_, reps) = decomposition_with_reps(d_im_decomp);
+	let representatives = im_dgm
+		.iter()
+		.map(|(&birth, &death)| {
+			let support = match death {
+				Finite(_) => {
+					reps[&metadata.dom_first_permutation.map(birth)]
+						.iter()
+						.map(|&idx| metadata.dom_first_permutation.inverse_map(idx))
+						.collect()
+				},
+				Infinity => domain_representatives[&birth].clone(),
+			};
+			(birth, support)
+		})
+		.collect();
+	(im_dgm, representatives)
 }
 
 fn cokernel_diagram<Decomp: Decomposition<C>, C: Column>(
@@ -245,6 +512,12 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 	/// [`ExtendedUsize::Infinity`]. For a mapping-cylinder inclusion, use
 	/// its metadata to recover entrance times. Calling this method again
 	/// returns the same diagrams.
+	/// Domain, codomain, and image representatives use original generator
+	/// indices. Empty diagrams have empty representative maps.
+	///
+	/// # Panics
+	/// Panics if a nonempty domain, codomain, or image decomposition did not
+	/// retain V. The computation entry points retain these matrices.
 	///
 	/// # Example
 	///
@@ -259,11 +532,22 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 	/// # Ok::<(), phimaker::errors::InclusionError>(())
 	/// ```
 	pub fn all_diagrams(&self) -> DiagramEnsemble {
+		let (domain, domain_representatives) =
+			domain_diagram_with_reps(&self.metadata, &self.d_dom);
+		let (codomain, codomain_representatives) = decomposition_with_reps(&self.d_cod);
+		let (image, image_representatives) = image_diagram_with_reps(
+			&self.metadata,
+			&self.d_dom,
+			&self.d_im,
+			&domain_representatives,
+		);
 		DiagramEnsemble {
-			domain: {
-				PersistenceDiagram::from_decomposition(&self.d_dom)
-					.map_idxs(|idx| self.metadata.dom_first_permutation.inverse_map(idx))
-			},
+			domain,
+			domain_representatives,
+			codomain,
+			codomain_representatives,
+			image,
+			image_representatives,
 			relative: {
 				let f = |idx| {
 					self.metadata
@@ -274,10 +558,8 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 					.anti_transpose(self.metadata.sz_codomain - self.metadata.sz_domain)
 					.map_idxs(f)
 			},
-			image: image_diagram(&self.metadata, &self.d_dom, &self.d_im),
 			kernel: kernel_diagram(&self.metadata, &self.d_ker, &self.d_dom, &self.d_im),
 			cokernel: cokernel_diagram(&self.metadata, &self.d_dom, &self.d_im, &self.d_cok),
-			codomain: PersistenceDiagram::from_decomposition(&self.d_cod),
 		}
 	}
 }
@@ -318,9 +600,13 @@ impl FileEnsemble {
 	/// Files must be positioned at the start of compatible decomposition data.
 	/// Reading advances every file cursor; rewind all six before calling again.
 	/// This call requires memory for all six decompositions.
+	/// Domain, codomain, and image representatives use original generator
+	/// indices. Empty diagrams have empty representative maps.
 	///
 	/// # Panics
-	/// Panics on read errors or incompatible or corrupt serialized data.
+	/// Panics on read errors or incompatible or corrupt serialized data, or if
+	/// a nonempty domain, codomain, or image decomposition did not retain V.
+	/// The computation entry points retain these matrices.
 	///
 	/// # Example
 	///
@@ -339,10 +625,22 @@ impl FileEnsemble {
 		let d_cok_decomp = from_file(&self.d_cok);
 		let d_ker_decomp = from_file(&self.d_ker);
 		let d_rel_decomp = from_file(&self.d_rel);
+		let (domain, domain_representatives) =
+			domain_diagram_with_reps(&self.metadata, &d_dom_decomp);
+		let (codomain, codomain_representatives) = decomposition_with_reps(&d_cod_decomp);
+		let (image, image_representatives) = image_diagram_with_reps(
+			&self.metadata,
+			&d_dom_decomp,
+			&d_im_decomp,
+			&domain_representatives,
+		);
 		DiagramEnsemble {
-			domain: PersistenceDiagram::from_decomposition(&d_dom_decomp)
-				.map_idxs(|idx| self.metadata.dom_first_permutation.inverse_map(idx)),
-			codomain: PersistenceDiagram::from_decomposition(&d_cod_decomp),
+			domain,
+			domain_representatives,
+			codomain,
+			codomain_representatives,
+			image,
+			image_representatives,
 			relative: {
 				let f = |idx| {
 					self.metadata
@@ -353,7 +651,6 @@ impl FileEnsemble {
 					.anti_transpose(self.metadata.sz_codomain - self.metadata.sz_domain)
 					.map_idxs(f)
 			},
-			image: image_diagram(&self.metadata, &d_dom_decomp, &d_im_decomp),
 			kernel: kernel_diagram(&self.metadata, &d_ker_decomp, &d_dom_decomp, &d_im_decomp),
 			cokernel: cokernel_diagram(&self.metadata, &d_dom_decomp, &d_im_decomp, &d_cok_decomp),
 		}
@@ -362,6 +659,8 @@ impl FileEnsemble {
 
 #[cfg(test)]
 mod tests {
+	use std::collections::HashMap;
+
 	use lophat::{
 		algorithms::{DecompositionAlgo, SerialAlgorithm},
 		columns::VecColumn,
@@ -371,7 +670,30 @@ mod tests {
 	use super::{
 		ExtendedUsize::{Finite, Infinity},
 		PersistenceDiagram,
+		solve,
+		xor_sorted,
 	};
+
+	/// Solve every combination of a sparse triangular basis, including zero;
+	/// missing pivots detect right-hand sides outside its column span.
+	#[test]
+	fn sparse_f2_solve() {
+		let a = HashMap::from([(2, vec![0, 2]), (4, vec![1, 2, 4]), (7, vec![0, 4, 7])]);
+		for mask in 0..8 {
+			let mut b = Vec::new();
+			let mut expected = Vec::new();
+			for (bit, key) in [2, 4, 7].into_iter().enumerate() {
+				if mask & (1 << bit) != 0 {
+					b = xor_sorted(&b, &a[&key]);
+					expected.push(key);
+				}
+			}
+			assert_eq!(solve(&a, &b), Some(expected));
+		}
+		assert_eq!(solve(&a, &[0]), None);
+		assert_eq!(solve(&HashMap::new(), &[]), Some(vec![]));
+		assert_eq!(solve(&HashMap::new(), &[1]), None);
+	}
 
 	/// A filled triangle checks finite and essential bars and anti-transpose
 	/// recovery.

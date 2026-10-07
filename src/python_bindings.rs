@@ -1,12 +1,56 @@
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::{
+	exceptions::{PyRuntimeError, PyValueError},
+	prelude::*,
+};
 
 use crate::{
 	cylinder::CylinderMetadata,
-	diagrams::DiagramEnsemble,
+	diagrams::{DiagramEnsemble, PersistenceMap},
 	documentation::python_doc,
 	sixpack,
 	sixpack_from_inclusion,
 };
+
+#[pymethods]
+impl DiagramEnsemble {
+	#[doc = python_doc!(
+r#"Return the domain-to-codomain and domain-to-image persistence maps over F2.
+
+:returns: ``(domain_to_codomain, domain_to_image)``. Each dictionary maps a domain
+    birth to a sorted list of target births whose coefficients are one. An empty
+    list represents zero. Each call returns fresh dictionaries and lists.
+
+Indices use the diagram coordinates, including mapping-cylinder indices for
+:py:func:`~phimaker.sixpack`. At a filtration index, use only source and target
+intervals alive there. Coefficients refer to the chosen representative cycles.
+Target features dead at the source birth are omitted. Each remaining coefficient
+satisfies ``target_birth <= source_birth < target_death <= source_death``, where
+an essential death is interpreted as infinity.
+
+Representative maps must be available, share the same generator coordinates,
+and come from a valid inclusion. Supports must have maximum index equal to their
+birth. Support order does not matter; repeated indices identify the same generator
+and are ignored. Cyclehood and homological degrees are not checked.
+An empty domain returns two empty dictionaries.
+
+:raises RuntimeError: If required representatives are unavailable or inconsistent,
+    a source cycle cannot be expressed in the target basis, or interval lifetimes
+    are incompatible with a nonzero coefficient.
+
+Example::
+
+    >>> from phimaker import sixpack_from_inclusion
+    >>> result = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [1])
+    >>> to_codomain, to_image = result.get_persistence_map()
+    >>> assert to_codomain == {1: [0, 1]}
+    >>> assert to_image == {1: [1]}"#
+    )]
+	#[pyo3(name = "get_persistence_map")]
+	fn py_get_persistence_map(&self, py: Python<'_>) -> PyResult<(PersistenceMap, PersistenceMap)> {
+		py.detach(|| self.get_persistence_map())
+			.map_err(|error| PyRuntimeError::new_err(error.to_string()))
+	}
+}
 #[doc = python_doc!(
 r#"Compute six persistence diagrams for an inclusion of filtered chain complexes over F2.
 

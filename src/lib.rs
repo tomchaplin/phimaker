@@ -177,5 +177,5 @@ pub fn sixpack<UsizeSlice: Deref<Target = [usize]>>(
 #[cfg(test)]
 mod tests;
 
-#[cfg(all(feature = "python-module", not(any(doc, rust_analyzer))))]
+#[cfg(feature = "python-module")]
 mod python_bindings;
