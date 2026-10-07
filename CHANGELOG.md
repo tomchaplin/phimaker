@@ -1,38 +1,12 @@
 # Changelog
 
-This changelog records user-facing changes and development changes. New entries
-belong under **Unreleased** until a version is released. Version 0.4.0 records
-changes since `v0.3.0`.
+This changelog records user-facing changes and development changes. Version
+0.4.0 is being prepared and has not yet been released; it records changes
+since `v0.3.0`.
 
 ## [Unreleased]
 
-### Breaking changes
-
-- Raise the minimum supported Python version from 3.10 to 3.12, matching
-  LoPhat's Python requirement.
-
-### Changed
-
-- Adapt LoPhat's Python wheel and Rust crate workflows. Every push, pull request,
-  and manual dispatch runs Rust tests and builds, installs, and tests each Python
-  wheel. A published GitHub release uploads tested wheels to PyPI and publishes
-  the tested crate to crates.io.
-- Select stable CPython versions from `requires-python` and uv's interpreter
-  catalogue, including supported free-threaded variants. Use native Linux and
-  Windows x64/ARM64 and macOS ARM64 runners. Match LoPhat's strict matrix policy:
-  every selected minor and ABI variant must be available on every platform.
-  Add matrix-selection regression tests and regenerate the lockfile for Python
-  3.12 and newer, removing dependencies needed only on older Python versions.
-- Replace the checked-in placeholder stub with stubs generated from declarative
-  PyO3 exports, explicitly enable introspection metadata, and include `py.typed`.
-  Export `DiagramEnsemble` and `CylinderMetadata` from Python so typed result
-  objects can be imported. Check public declarations in every built wheel.
-- Include the README in Python package metadata and correct its repository URL.
-  Document publishing credentials and platform coverage. The copied workflows
-  publish wheels only; they no longer build a source distribution, Intel macOS,
-  PyPy, musllinux, or the other architectures from the previous wheel matrix.
-
-## [0.4.0] - 2026-10-07
+## [0.4.0] - Unreleased
 
 ### Breaking changes
 
@@ -63,7 +37,8 @@ changes since `v0.3.0`.
   builders and individual reduction helpers internal implementation details.
 - Remove `zero_overlap` and its implementation module, and remove the washboard
   submodule and Python interface.
-- Require Python 3.10 or newer and move the Rust crate to edition 2024.
+- Require Python 3.12 or newer, matching LoPhat's Python requirement, and
+  move the Rust crate to edition 2024.
 
 ### Added
 
@@ -103,6 +78,24 @@ changes since `v0.3.0`.
 
 ### Changed
 
+- Adapt LoPhat's Python wheel and Rust crate workflows. Every push, pull request,
+  and manual dispatch runs Rust tests and builds, installs, and tests each Python
+  wheel. A published GitHub release uploads tested wheels to PyPI and publishes
+  the tested crate to crates.io.
+- Select stable CPython versions from `requires-python` and uv's interpreter
+  catalogue, including supported free-threaded variants. Use native Linux and
+  Windows x64/ARM64 and macOS ARM64 runners. Match LoPhat's strict matrix policy:
+  every selected minor and ABI variant must be available on every platform.
+  Add matrix-selection regression tests and regenerate the lockfile for Python
+  3.12 and newer, removing dependencies needed only on older Python versions.
+- Replace the checked-in placeholder stub with stubs generated from declarative
+  PyO3 exports, explicitly enable introspection metadata, and include `py.typed`.
+  Export `DiagramEnsemble` and `CylinderMetadata` from Python so typed result
+  objects can be imported. Check public declarations in every built wheel.
+- Include the README in Python package metadata and correct its repository URL.
+  Document publishing credentials and platform coverage. The copied workflows
+  publish wheels only; they no longer build a source distribution, Intel macOS,
+  PyPy, musllinux, or the other architectures from the previous wheel matrix.
 - Upgrade LoPhat from 0.11.0 to 0.13.0, use its shared diagram and extended-index
   types, and adapt column access to `degree()`. Delegate Python dictionary and
   infinite-death conversion to LoPhat when `python-module` is enabled.
@@ -146,8 +139,8 @@ changes since `v0.3.0`.
   Preserve Python docstring indentation while allowing Rust documentation to be
   formatted. Add scratch-file ignore rules.
 - Configure locked release builds with Maturin, stub generation through uv,
-  and a Python extension stub. Update the test dependency group and document
-  how to build the extension, run tests, and generate documentation.
+  and generated Python extension stubs. Update the test dependency group and
+  document how to build the extension, run tests, and generate documentation.
 
 [Unreleased]: https://github.com/tomchaplin/phimaker/compare/v0.4.0...dev
-[0.4.0]: https://github.com/tomchaplin/phimaker/compare/v0.3.0...v0.4.0
+[0.4.0]: https://github.com/tomchaplin/phimaker/compare/v0.3.0...dev
