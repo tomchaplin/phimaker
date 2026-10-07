@@ -3,7 +3,7 @@
 use std::io::{Seek, SeekFrom};
 
 use lophat::{
-	algorithms::{DecompositionAlgo, LockFreeAlgorithm, SerialAlgorithm},
+	algorithms::{Decomposition, DecompositionAlgo, LockFreeAlgorithm, SerialAlgorithm},
 	columns::{Column, VecColumn},
 };
 
@@ -64,6 +64,56 @@ fn either_endpoint_into_interval() {
 			);
 		}
 	}
+}
+
+/// Forward codomain R and retained V use original generator indices in memory
+/// and after serialization. Parallel edges give a nontrivial essential cycle.
+#[test]
+fn codomain_coordinates_and_representatives_in_both_modes() {
+	fn check_codomain(
+		codomain: &impl Decomposition<VecColumn>,
+		matrix: &[Vec<usize>],
+		degrees: &[usize],
+	) {
+		assert_eq!(codomain.n_cols(), matrix.len());
+		assert_eq!(codomain.has_v(), Ok(()));
+		for (column, &degree) in degrees.iter().enumerate() {
+			let v = codomain.get_v_col(column).unwrap();
+			let mut reconstructed = VecColumn::new_with_degree(degree);
+			for index in v.entries() {
+				reconstructed.add_entries(matrix[index].iter().copied());
+			}
+			assert_eq!(
+				*codomain.get_r_col(column),
+				reconstructed,
+				"R = D V at {column}"
+			);
+		}
+		assert_eq!(
+			codomain.get_r_col(2).entries().collect::<Vec<_>>(),
+			vec![0, 1]
+		);
+		assert_eq!(
+			codomain.get_v_col(3).unwrap().entries().collect::<Vec<_>>(),
+			vec![2, 3]
+		);
+	}
+
+	let matrix = vec![vec![], vec![], vec![0, 1], vec![0, 1]];
+	let degrees = [0, 0, 1, 1];
+	let expected: PersistenceDiagram = [(0, Infinity), (1, Finite(2)), (3, Infinity)]
+		.into_iter()
+		.collect();
+	let ensemble =
+		all_decompositions::<LockFreeAlgorithm<_>, _>(&matrix, &degrees, &[1], 1).unwrap();
+	check_codomain(&ensemble.d_cod, &matrix, &degrees);
+	assert_eq!(ensemble.all_diagrams().codomain, expected);
+
+	let mut stored =
+		all_decompositions_slow::<LockFreeAlgorithm<_>, _>(&matrix, &degrees, &[1], 1).unwrap();
+	check_codomain(&from_file(&stored.d_cod), &matrix, &degrees);
+	stored.d_cod.rewind().unwrap();
+	assert_eq!(stored.all_diagrams().codomain, expected);
 }
 
 /// Domain columns and permutation must agree even when input domain indices are

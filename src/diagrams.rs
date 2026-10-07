@@ -125,7 +125,7 @@ fn is_kernel_birth<Decomp: Decomposition<C>, C: Column>(
 	if in_dom {
 		return false;
 	}
-	// Note: we use d_im here because d_cod is anti-transposed
+	// Zero/nonzero column status agrees with the codomain reduction.
 	let negative_in_cod = d_im_decomp.get_r_col(idx).is_boundary();
 	if !negative_in_cod {
 		return false;
@@ -152,7 +152,7 @@ fn is_kernel_death<Decomp: Decomposition<C>, C: Column>(
 	if !negative_in_dom {
 		return false;
 	}
-	// Note: we use d_im here because d_cod is anti-transposed
+	// Zero/nonzero column status agrees with the codomain reduction.
 	let negative_in_cod = d_im_decomp.get_r_col(idx).is_boundary();
 	if negative_in_cod {
 		return false;
@@ -277,8 +277,7 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 			image: image_diagram(&self.metadata, &self.d_dom, &self.d_im),
 			kernel: kernel_diagram(&self.metadata, &self.d_ker, &self.d_dom, &self.d_im),
 			cokernel: cokernel_diagram(&self.metadata, &self.d_dom, &self.d_im, &self.d_cok),
-			codomain: PersistenceDiagram::from_decomposition(&self.d_cod)
-				.anti_transpose(self.metadata.sz_codomain),
+			codomain: PersistenceDiagram::from_decomposition(&self.d_cod),
 		}
 	}
 }
@@ -343,8 +342,7 @@ impl FileEnsemble {
 		DiagramEnsemble {
 			domain: PersistenceDiagram::from_decomposition(&d_dom_decomp)
 				.map_idxs(|idx| self.metadata.dom_first_permutation.inverse_map(idx)),
-			codomain: PersistenceDiagram::from_decomposition(&d_cod_decomp)
-				.anti_transpose(self.metadata.sz_codomain),
+			codomain: PersistenceDiagram::from_decomposition(&d_cod_decomp),
 			relative: {
 				let f = |idx| {
 					self.metadata

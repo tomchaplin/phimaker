@@ -74,6 +74,15 @@ Boundary supports and domain indices can be in any order, and repeated indices
 are treated as repeated listings of the same element, not summed modulo two.
 The Rust library is built as an `rlib` alongside the Python extension.
 
+For reduced matrices, use `all_decompositions` or `all_decompositions_slow`.
+Their codomain result `d_cod` retains both R and V in original input generator
+coordinates. For a finite codomain feature `(birth, death)`, R column `death`
+gives its representative cycle; for an essential feature, use V column `birth`.
+Both diagram extraction modes read codomain pairs directly in these coordinates.
+The relative decomposition still uses anti-transposed quotient coordinates.
+Retaining codomain V adds memory use and increases the slow-mode file size.
+The Python convenience functions retain their existing return values.
+
 ## Tests
 
 Run `cargo test --locked` for the pure Rust suite. For Python, build the current

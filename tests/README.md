@@ -66,7 +66,10 @@ RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
 - **Rust helpers:** direct cylinder boundaries, degree shifts, tie ordering,
   strict upper triangularity and boundary squared zero; domain/image/relative
   coordinate conventions; permutation inversion; finite/infinite endpoints;
-  anti-transpose recovery; stable display; serialization and explicit rewind.
+  anti-transpose recovery; forward codomain coordinates and retained V;
+  stable display; serialization and explicit rewind. A pair of parallel edges
+  checks a nontrivial essential cycle, a finite H0 representative, and R = D V
+  against the original boundary, including the serialized slow-mode result.
 - **Python bindings:** dictionary lookup, missing-key behavior, independent
   getter copies, `None` for infinity, metadata, signatures, and docstrings.
 - **Documentation:** Python functions, shared classes, and properties expose

@@ -72,6 +72,11 @@ pub struct EnsembleMetadata {
 /// directly, follow the coordinate conventions documented on each field and use
 /// `metadata` to translate indices. Repeated diagram extraction is supported.
 ///
+/// The codomain retains R and V in original input coordinates. A finite
+/// codomain feature `(birth, death)` is represented by R column `death`; an
+/// essential feature is represented by V column `birth`. Column entries name
+/// the original input generators.
+///
 /// # Example
 ///
 /// ```
@@ -87,7 +92,7 @@ where
 	C: Column,
 	Algo: DecompositionAlgo<C>,
 {
-	/// Anti-transposed codomain decomposition.
+	/// Codomain decomposition in original input coordinates, retaining V.
 	pub d_cod: Algo::Decomposition,
 	/// Domain decomposition in local domain coordinates, retaining V.
 	pub d_dom: Algo::Decomposition,
@@ -124,7 +129,7 @@ where
 /// # Ok::<(), phimaker::errors::InclusionError>(())
 /// ```
 pub struct FileEnsemble {
-	/// Anti-transposed codomain decomposition.
+	/// Codomain decomposition in original input coordinates, retaining V.
 	pub d_cod: File,
 	/// Domain decomposition in local domain coordinates, retaining V.
 	pub d_dom: File,
@@ -140,20 +145,19 @@ pub struct FileEnsemble {
 	pub metadata: EnsembleMetadata,
 }
 
-/// Reduce the anti-transpose of a square codomain boundary matrix.
-/// Returned indices are reversed dual coordinates; undo with
-/// [`crate::diagrams::PersistenceDiagram::anti_transpose`]. Options pass
-/// through.
+/// Reduce the original square codomain boundary matrix, retaining V.
+/// R and V use original generator indices; other options pass through.
 fn decompose_cod<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
 	d_cod: &[VecColumn],
 	base_options: Algo::Options,
 ) -> Algo::Decomposition {
 	// Decompose D_cod
-	// D_cod is a chain complex so can compute anti-transpose instead
-	let d_cod_anti_transpose = anti_transpose(d_cod);
-	let out = Algo::init(Some(base_options))
-		.add_cols(d_cod_anti_transpose.into_iter())
-		.decompose();
+	let out = Algo::init(Some(LoPhatOptions {
+		maintain_v: true,
+		..base_options
+	}))
+	.add_cols(d_cod.iter().cloned())
+	.decompose();
 	debug!("Decomposed d_cod");
 	out
 }

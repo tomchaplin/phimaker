@@ -26,6 +26,10 @@ the last release, `v0.3.0`.
 - Make Rust `sixpack`, `sixpack_from_inclusion`, `all_decompositions`, and
   `all_decompositions_slow` return `Result<_, InclusionError>`. Convenience
   functions borrow their inputs and no longer require a Python interpreter.
+- Store `DecompositionEnsemble.d_cod` and `FileEnsemble.d_cod` in original
+  input coordinates instead of anti-transposed coordinates. Consumers of raw
+  codomain decompositions must stop reversing indices. Extracted codomain
+  diagrams retain their original coordinates.
 - Replace `VectorMapping`, `IndexMapping`, annotated-column helpers, and row
   reordering abstractions with permutation-based index translation. Make matrix
   builders and individual reduction helpers internal implementation details.
@@ -69,6 +73,11 @@ the last release, `v0.3.0`.
 - Simplify inclusion inputs and index handling, preserve original codomain
   indices in inclusion diagrams, and document metadata-based translation of
   general-map diagram endpoints from mapping-cylinder indices.
+- Reduce the codomain boundary directly and retain V in both normal and slow
+  modes, making R death columns and essential V birth columns available for
+  representative-cycle extraction. Read codomain diagrams directly from this
+  reduction; only the relative reduction remains anti-transposed. Retaining V
+  adds memory use and increases serialized codomain data size.
 - Add GPL-3.0-or-later licensing, the license text, and package author,
   repository, and classification metadata. Update the Maturin CI action.
 
