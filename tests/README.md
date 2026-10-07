@@ -39,6 +39,21 @@ Check generated documentation with:
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
 ```
 
+The CI-only matrix tests use Python >= 3.11 and `packaging`, and do not import the
+extension. Run them separately from the Python API suite:
+
+```sh
+uv run --no-project --python 3.13 --with packaging --with pytest pytest tests/ci
+```
+
+They check version bounds, latest stable patch selection, exclusion of
+prereleases and experimental free-threaded interpreters, unavailable older
+Windows ARM64 builds, and failure when a whole platform is missing. The wheel
+workflow also checks generated public type declarations and the `py.typed`
+marker, installs the built wheel without rebuilding it, and runs `tests/python`
+against that installation. The Python suite verifies that the exported result
+classes match the objects returned by the functions.
+
 ## Coverage and intended answers
 
 - **A vertex in an interval:** codomain pairing is always `{0: infinity, 1: 2}`,

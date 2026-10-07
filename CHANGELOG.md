@@ -6,6 +6,26 @@ changes since `v0.3.0`.
 
 ## [Unreleased]
 
+### Changed
+
+- Adapt LoPhat's Python wheel and Rust crate workflows. Every push, pull request,
+  and manual dispatch runs Rust tests and builds, installs, and tests each Python
+  wheel. A published GitHub release uploads tested wheels to PyPI and publishes
+  the tested crate to crates.io.
+- Select stable CPython versions from `requires-python` and uv's interpreter
+  catalogue, including supported free-threaded variants. Use native Linux and
+  Windows x64/ARM64 and macOS ARM64 runners. Skip unavailable platform/minor
+  combinations, such as Python 3.10 on Windows ARM64, but fail if an entire
+  platform is missing. Add matrix-selection regression tests.
+- Replace the checked-in placeholder stub with stubs generated from declarative
+  PyO3 exports, explicitly enable introspection metadata, and include `py.typed`.
+  Export `DiagramEnsemble` and `CylinderMetadata` from Python so typed result
+  objects can be imported. Check public declarations in every built wheel.
+- Include the README in Python package metadata and correct its repository URL.
+  Document publishing credentials and platform coverage. The copied workflows
+  publish wheels only; they no longer build a source distribution, Intel macOS,
+  PyPy, musllinux, or the other architectures from the previous wheel matrix.
+
 ## [0.4.0] - 2026-10-07
 
 ### Breaking changes

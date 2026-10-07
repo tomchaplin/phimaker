@@ -122,3 +122,17 @@ regressions and executable documentation examples.
 The Cargo dependency uses LoPhat version 0.13.0.
 Building with `python-module` also enables `lophat/python-module`, providing
 conversion of diagrams to dictionaries and infinite deaths to `None`.
+
+## CI and releases
+
+Every push, pull request, and manual workflow dispatch runs the Rust tests and
+builds and tests Python wheels on native Linux and Windows x64/ARM64 runners and
+macOS ARM64. The matrix selects stable CPython versions allowed by
+`requires-python`, including supported free-threaded variants where available.
+Each wheel includes generated type stubs and is installed before pytest runs.
+`DiagramEnsemble` and `CylinderMetadata` are importable from `phimaker` for typed
+results.
+
+Publishing a GitHub release runs these checks again and publishes the tested
+wheels to PyPI and the crate to crates.io. See [docs/releasing.md](docs/releasing.md)
+for credentials, platform coverage, and the release procedure.
