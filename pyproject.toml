@@ -1,6 +1,7 @@
 [project]
 name = "phimaker"
 version = "0.4.0"
+readme = "README.md"
 requires-python = ">=3.10"
 license = "GPL-3.0-or-later"
 license-files = ["COPYING"]
@@ -15,7 +16,7 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/tomrchaplin/phimaker"
+Repository = "https://github.com/tomchaplin/phimaker"
 
 [dependency-groups]
 test = ["maturin~=1.0", "pytest>=8"]

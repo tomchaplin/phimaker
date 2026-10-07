@@ -4,7 +4,16 @@ import doctest
 from typing import Any
 
 import pytest
-from phimaker import sixpack, sixpack_from_inclusion
+from phimaker import CylinderMetadata, DiagramEnsemble, sixpack, sixpack_from_inclusion
+
+
+def test_result_class_exports() -> None:
+	"""Declared class exports match returned objects and make typed results importable."""
+	result, metadata = sixpack([(0.0, 0, [])], [(0.0, 0, [])], [[0]])
+	assert type(result) is DiagramEnsemble
+	assert type(metadata) is CylinderMetadata
+	assert DiagramEnsemble.__module__ == "phimaker"
+	assert CylinderMetadata.__module__ == "phimaker"
 
 
 def test_binding_documentation() -> None:

@@ -95,7 +95,10 @@ Example::
     all(feature = "python-module", not(any(doc, rust_analyzer))),
     macro_rules_apply(strip_rust_docs!)
 )]
-#[cfg_attr(feature = "python-module", pyclass(get_all, from_py_object))]
+#[cfg_attr(
+	feature = "python-module",
+	pyclass(module = "phimaker", get_all, from_py_object)
+)]
 #[derive(Debug, Clone)]
 pub struct DiagramEnsemble {
 	/// Persistent homology of the codomain.

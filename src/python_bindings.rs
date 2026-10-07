@@ -209,9 +209,17 @@ or ``sixpack`` for a general chain map. Results contain domain, codomain, image,
 kernel, cokernel, and relative persistence diagrams."#
 )]
 #[pymodule]
-fn phimaker(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-	pyo3_log::init();
-	m.add_function(wrap_pyfunction!(py_sixpack_from_inclusion, m)?)?;
-	m.add_function(wrap_pyfunction!(py_sixpack, m)?)?;
-	Ok(())
+mod phimaker {
+	use pyo3::prelude::*;
+
+	#[pymodule_export]
+	use super::{py_sixpack, py_sixpack_from_inclusion};
+	#[pymodule_export]
+	use crate::{cylinder::CylinderMetadata, diagrams::DiagramEnsemble};
+
+	#[pymodule_init]
+	fn init(_module: &Bound<'_, PyModule>) -> PyResult<()> {
+		pyo3_log::init();
+		Ok(())
+	}
 }
