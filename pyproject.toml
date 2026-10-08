@@ -19,6 +19,11 @@ classifiers = [
 Repository = "https://github.com/tomchaplin/phimaker"
 
 [dependency-groups]
+dev = [
+	"pyrefly>=1.3.2",
+	"ruff>=0.16.10",
+	"tombi>=1.7.3",
+]
 test = ["maturin~=1.0", "pytest>=8"]
 
 [build-system]
