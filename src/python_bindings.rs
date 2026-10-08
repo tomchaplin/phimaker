@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use pyo3::{
 	exceptions::{PyRuntimeError, PyValueError},
 	prelude::*,
@@ -5,51 +7,93 @@ use pyo3::{
 
 use crate::{
 	cylinder::CylinderMetadata,
-	diagrams::{DiagramEnsemble, PersistenceMap},
+	diagrams::{DiagramEnsemble, PersistenceDiagram, PersistenceMap},
 	documentation::python_doc,
+	get_persistence_map,
 	sixpack,
 	sixpack_from_inclusion,
 };
 
-#[pymethods]
-impl DiagramEnsemble {
-	#[doc = python_doc!(
-r#"Return the domain-to-codomain and domain-to-image persistence maps over F2.
+#[doc = python_doc!(
+r#"Compute a persistence-module map over F2 in the supplied cycle bases.
 
-:returns: ``(domain_to_codomain, domain_to_image)``. Each dictionary maps a domain
-    birth to a sorted list of target births whose coefficients are one. An empty
-    list represents zero. Each call returns fresh dictionaries and lists.
+:param source: Source birth-to-death dictionary; ``None`` denotes an essential death.
+:param source_representatives: Source births mapped to lists of cycle generator indices.
+:param target: Target birth-to-death dictionary, using the same endpoint convention.
+:param target_representatives: Target births mapped to lists of cycle generator indices.
+:param generator_map: Source generator indices mapped to lists of target generators
+    with coefficient one. Missing entries implicitly map to zero; an empty list
+    also denotes zero. Entries unused by source representatives are ignored.
+:returns: A dictionary mapping every source birth to a sorted list of target
+    births with coefficient one. An empty list denotes zero. Each call returns
+    an independent dictionary and lists; inputs are not modified.
 
-Indices use the diagram coordinates, including mapping-cylinder indices for
-:py:func:`~phimaker.sixpack`. At a filtration index, use only source and target
-intervals alive there. Coefficients refer to the chosen representative cycles.
-Target features dead at the source birth are omitted. Each remaining coefficient
-satisfies ``target_birth <= source_birth < target_death <= source_death``, where
-an essential death is interpreted as infinity.
+All source and target births and deaths must use one common ordered filtration
+index scale. Independently numbered complexes must be reindexed before calling;
+a generator map alone does not establish how their filtration indices compare.
+This requirement cannot be checked from these inputs. Source representatives
+and map keys use the source generator basis; target representatives and map
+values use the target generator basis.
 
-Representative maps must be available, share the same generator coordinates,
-and come from a valid inclusion. Supports must have maximum index equal to their
-birth. Support order does not matter; repeated indices identify the same generator
-and are ignored. Cyclehood and homological degrees are not checked.
-An empty domain returns two empty dictionaries.
+Representative dictionaries must have exactly their diagram's birth keys. Each
+support must have maximum index equal to its birth, and finite deaths must be
+strictly later than births. Supports and individual mapping columns may be in
+any order. Repeated indices within a column identify the same nonzero entry and
+are ignored. Overlaps between distinct mapped columns cancel when added over F2.
 
-:raises RuntimeError: If required representatives are unavailable or inconsistent,
-    a source cycle cannot be expressed in the target basis, or interval lifetimes
-    are incompatible with a nonzero coefficient.
+Representatives must be cycles and the generator map must preserve degree,
+filtration, and boundaries. Cyclehood, degrees, and the chain-map identity are
+not checked. Mapped cycles must lie in the span of target representatives.
+An empty source returns an empty dictionary without inspecting representatives.
+Target features dead at the source birth are omitted after cycle expansion.
+Every retained coefficient satisfies
+``target_birth <= source_birth < target_death <= source_death``, with ``None``
+interpreted as infinity. At a filtration index, use only intervals alive there.
+The call blocks until results are ready; other Python threads can run meanwhile.
+
+:raises RuntimeError: If representatives are unavailable or inconsistent, a
+    mapped cycle cannot be expressed in the target basis, or a nonzero
+    coefficient has incompatible interval lifetimes.
+:raises TypeError: If an argument has an incompatible type or a diagram has an
+    invalid key or endpoint. Diagram conversion retains the underlying error
+    as its cause.
+:raises OverflowError: If a representative or mapping index is negative or
+    exceeds the supported integer range.
 
 Example::
 
-    >>> from phimaker import sixpack_from_inclusion
-    >>> result = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [1])
-    >>> to_codomain, to_image = result.get_persistence_map()
-    >>> assert to_codomain == {1: [0, 1]}
-    >>> assert to_image == {1: [1]}"#
-    )]
-	#[pyo3(name = "get_persistence_map")]
-	fn py_get_persistence_map(&self, py: Python<'_>) -> PyResult<(PersistenceMap, PersistenceMap)> {
-		py.detach(|| self.get_persistence_map())
-			.map_err(|error| PyRuntimeError::new_err(error.to_string()))
-	}
+    >>> from phimaker import get_persistence_map, sixpack_from_inclusion
+    >>> diagrams = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [1])
+    >>> get_persistence_map(
+    ...     diagrams.domain, diagrams.domain_representatives,
+    ...     diagrams.codomain, diagrams.codomain_representatives, {1: [1]},
+    ... )
+    {1: [0, 1]}
+    >>> get_persistence_map(
+    ...     diagrams.domain, diagrams.domain_representatives,
+    ...     diagrams.image, diagrams.image_representatives, {1: [1]},
+    ... )
+    {1: [1]}"#
+)]
+#[pyfunction(name = "get_persistence_map")]
+fn py_get_persistence_map(
+	py: Python<'_>,
+	source: PersistenceDiagram,
+	source_representatives: HashMap<usize, Vec<usize>>,
+	target: PersistenceDiagram,
+	target_representatives: HashMap<usize, Vec<usize>>,
+	generator_map: HashMap<usize, Vec<usize>>,
+) -> PyResult<PersistenceMap> {
+	py.detach(|| {
+		get_persistence_map(
+			&source,
+			&source_representatives,
+			&target,
+			&target_representatives,
+			&generator_map,
+		)
+	})
+	.map_err(|error| PyRuntimeError::new_err(error.to_string()))
 }
 #[doc = python_doc!(
 r#"Compute six persistence diagrams for an inclusion of filtered chain complexes over F2.
@@ -213,7 +257,7 @@ mod phimaker {
 	use pyo3::prelude::*;
 
 	#[pymodule_export]
-	use super::{py_sixpack, py_sixpack_from_inclusion};
+	use super::{py_get_persistence_map, py_sixpack, py_sixpack_from_inclusion};
 	#[pymodule_export]
 	use crate::{cylinder::CylinderMetadata, diagrams::DiagramEnsemble};
 

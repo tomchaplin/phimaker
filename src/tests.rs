@@ -13,10 +13,48 @@ use lophat::{
 use crate::{
 	builders::{build_d_dom, build_d_im, build_d_rel, compute_dom_first_permutation},
 	cylinder::build_cylinder,
-	diagrams::{DiagramEnsemble, ExtendedUsize, ExtendedUsize::*, PersistenceDiagram, from_file},
+	diagrams::{
+		DiagramEnsemble,
+		ExtendedUsize,
+		ExtendedUsize::*,
+		PersistenceDiagram,
+		PersistenceMap,
+		from_file,
+	},
 	ensemble::{FileEnsemble, all_decompositions, all_decompositions_slow, to_file},
+	errors::PersistenceMapError,
+	get_persistence_map,
 	indexing::Permutation,
 };
+
+// Compare both inclusion targets using the standalone API and identity
+// generator images.
+fn persistence_maps(
+	result: &DiagramEnsemble,
+) -> Result<(PersistenceMap, PersistenceMap), PersistenceMapError> {
+	let generator_map = result
+		.domain_representatives
+		.values()
+		.flatten()
+		.map(|&index| (index, vec![index]))
+		.collect();
+	Ok((
+		get_persistence_map(
+			&result.domain,
+			&result.domain_representatives,
+			&result.codomain,
+			&result.codomain_representatives,
+			&generator_map,
+		)?,
+		get_persistence_map(
+			&result.domain,
+			&result.domain_representatives,
+			&result.image,
+			&result.image_representatives,
+			&generator_map,
+		)?,
+	))
+}
 
 fn assert_diagrams(actual: &DiagramEnsemble, expected: [&[(usize, ExtendedUsize)]; 6]) {
 	for (name, diagram, pairs) in [
@@ -40,7 +78,7 @@ fn assert_diagrams(actual: &DiagramEnsemble, expected: [&[(usize, ExtendedUsize)
 			assert_eq!(support.iter().max(), Some(&birth));
 		}
 	}
-	let (to_codomain, to_image) = actual.get_persistence_map().unwrap();
+	let (to_codomain, to_image) = persistence_maps(actual).unwrap();
 	for (mapping, target) in [(&to_codomain, &actual.codomain), (&to_image, &actual.image)] {
 		assert_eq!(mapping.len(), actual.domain.len());
 		for (&birth, coefficients) in mapping {
@@ -65,7 +103,7 @@ fn persistence_map_sums_codomain_features_in_both_modes() {
 			&[5, 2, 1],
 			slow,
 		);
-		let (to_codomain, to_image) = result.get_persistence_map().unwrap();
+		let (to_codomain, to_image) = persistence_maps(&result).unwrap();
 		assert_eq!(
 			to_codomain,
 			HashMap::from([(1, vec![0, 1]), (2, vec![1, 2])])
@@ -97,7 +135,7 @@ fn persistence_map_sums_image_features_in_both_modes() {
 		);
 		let expected = HashMap::from([(1, vec![1]), (2, vec![2]), (3, vec![2, 3])]);
 		assert_eq!(
-			result.get_persistence_map().unwrap(),
+			persistence_maps(&result).unwrap(),
 			(expected.clone(), expected)
 		);
 		assert_eq!(result.domain[&3], Finite(6));
@@ -118,7 +156,7 @@ fn persistence_map_discards_previously_dead_targets() {
 			&[5, 3, 1],
 			slow,
 		);
-		let (to_codomain, to_image) = result.get_persistence_map().unwrap();
+		let (to_codomain, to_image) = persistence_maps(&result).unwrap();
 		assert_eq!(to_codomain, HashMap::from([(1, vec![0, 1]), (3, vec![3])]));
 		assert_eq!(to_image, HashMap::from([(1, vec![1]), (3, vec![3])]));
 	}
@@ -132,7 +170,7 @@ fn persistence_maps_identity_and_empty() {
 		let result = diagrams(&[vec![], vec![], vec![0, 1]], &[0, 0, 1], &[2, 0, 1], slow);
 		let expected = HashMap::from([(0, vec![0]), (1, vec![1])]);
 		assert_eq!(
-			result.get_persistence_map().unwrap(),
+			persistence_maps(&result).unwrap(),
 			(expected.clone(), expected)
 		);
 		for result in [
@@ -140,7 +178,7 @@ fn persistence_maps_identity_and_empty() {
 			diagrams(&[vec![]], &[0], &[], slow),
 		] {
 			assert_eq!(
-				result.get_persistence_map().unwrap(),
+				persistence_maps(&result).unwrap(),
 				(HashMap::new(), HashMap::new())
 			);
 		}
@@ -156,8 +194,8 @@ fn persistence_map_errors_and_normalized_supports() {
 	let mut modified = result.clone();
 	modified.domain_representatives.clear();
 	assert_eq!(
-		modified.get_persistence_map(),
-		Err(MissingRepresentatives { diagram: "domain" })
+		persistence_maps(&modified),
+		Err(MissingRepresentatives { diagram: "source" })
 	);
 	for target in ["codomain", "image"] {
 		let mut modified = result.clone();
@@ -168,40 +206,38 @@ fn persistence_map_errors_and_normalized_supports() {
 		};
 		reps.clear();
 		assert_eq!(
-			modified.get_persistence_map(),
-			Err(MissingRepresentatives { diagram: target })
+			persistence_maps(&modified),
+			Err(MissingRepresentatives { diagram: "target" })
 		);
 	}
 	let mut modified = result.clone();
 	modified.codomain_representatives.remove(&0);
 	assert_eq!(
-		modified.get_persistence_map(),
-		Err(InconsistentData {
-			diagram: "codomain"
-		})
+		persistence_maps(&modified),
+		Err(InconsistentData { diagram: "target" })
 	);
 	let mut modified = result.clone();
 	modified.domain_representatives.insert(1, vec![0]);
 	assert_eq!(
-		modified.get_persistence_map(),
-		Err(InconsistentData { diagram: "domain" })
+		persistence_maps(&modified),
+		Err(InconsistentData { diagram: "source" })
 	);
 	let mut modified = result.clone();
 	modified.codomain.remove(&0);
 	modified.codomain_representatives.remove(&0);
 	assert_eq!(
-		modified.get_persistence_map(),
+		persistence_maps(&modified),
 		Err(Unsolvable {
-			target: "codomain",
+			target: "target",
 			birth: 0
 		})
 	);
 	let mut modified = result.clone();
 	modified.codomain.insert(1, Infinity);
 	assert_eq!(
-		modified.get_persistence_map(),
+		persistence_maps(&modified),
 		Err(IncompatibleIntervals {
-			target: "codomain",
+			target: "target",
 			birth: 1,
 			target_birth: 1
 		})
@@ -217,7 +253,7 @@ fn persistence_map_errors_and_normalized_supports() {
 			support.push(support[0]);
 		}
 	}
-	assert_eq!(modified.get_persistence_map(), result.get_persistence_map());
+	assert_eq!(persistence_maps(&modified), persistence_maps(&result));
 }
 
 fn diagrams(

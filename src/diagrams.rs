@@ -1,6 +1,10 @@
 //! Birth-to-death dictionaries and extraction from reduced matrices.
 
-use std::{collections::HashMap, fs::File, io::BufReader};
+use std::{
+	collections::{HashMap, HashSet},
+	fs::File,
+	io::BufReader,
+};
 
 use ExtendedUsize::{Finite, Infinity};
 use bincode::deserialize_from;
@@ -205,7 +209,7 @@ fn xor_sorted(left: &[usize], right: &[usize]) -> Vec<usize> {
 // Solve A x = b over F2 for a sparse basis with distinct pivots.
 // Each column of A and the vector b are specified by their support (indices of
 // non-zero entries). A must be supplied as a mapping 'pivot index -> support
-// of the column with that pivot'., including b, must be sorted
+// of the column with that pivot. All supports, including b, must be sorted
 // and duplicate-free. Back substitution visits strictly decreasing pivots.
 // Return None if b is outside the span; otherwise return the column keys of x.
 fn solve(a: &HashMap<usize, Vec<usize>>, b: &[usize]) -> Option<Vec<usize>> {
@@ -252,84 +256,120 @@ fn prepare_representatives(
 
 /// Source birth indices mapped to target births with coefficient one over F2.
 pub type PersistenceMap = HashMap<usize, Vec<usize>>;
-impl DiagramEnsemble {
-	/// Return the domain-to-codomain and domain-to-image persistence maps over
-	/// F2.
-	///
-	/// The pair is ordered `(domain_to_codomain, domain_to_image)`. Each map
-	/// has every domain birth as a key. Its value is a sorted list of
-	/// target births with coefficient one; an empty list denotes zero. Keys
-	/// use the diagram coordinates, including mapping-cylinder indices for
-	/// [`crate::sixpack`]. At a filtration index, use only source and
-	/// target intervals alive there. These coefficients are relative to
-	/// this ensemble's chosen representatives.
-	///
-	/// Use an ensemble from the computation functions with representatives
-	/// available. Domain and target cycles must share one generator basis and
-	/// describe a valid inclusion. Each support must have maximum index equal
-	/// to its birth. Support order does not matter, and repeated indices are
-	/// treated as repeated listings of the same generator. Target
-	/// cycles must span the domain cycles. Do not modify diagrams and
-	/// representatives independently. Cyclehood and homological degrees are
-	/// not checked here.
-	///
-	/// Target features dead at the source birth contribute zero and are
-	/// omitted. Every remaining coefficient satisfies `target_birth <=
-	/// source_birth < target_death <= source_death`, with infinity allowed
-	/// for deaths. An empty domain returns two empty maps without requiring
-	/// representatives.
-	///
-	/// # Errors
-	/// Returns [`PersistenceMapError`] for unavailable representatives,
-	/// inconsistent keys, supports or endpoints, an unsolvable cycle expansion,
-	/// or a coefficient incompatible with the interval lifetimes.
-	///
-	/// # Example
-	/// ```
-	/// use phimaker::sixpack_from_inclusion;
-	/// let diagrams =
-	/// 	sixpack_from_inclusion(&[vec![], vec![], vec![0, 1]], &[0, 0, 1], &[1], 1, false)?;
-	/// let (to_codomain, to_image) = diagrams.get_persistence_map()?;
-	/// assert_eq!(to_codomain[&1], vec![0, 1]);
-	/// assert_eq!(to_image[&1], vec![1]);
-	/// # Ok::<(), Box<dyn std::error::Error>>(())
-	/// ```
-	pub fn get_persistence_map(
-		&self,
-	) -> Result<(PersistenceMap, PersistenceMap), PersistenceMapError> {
-		if self.domain.is_empty() {
-			return Ok((HashMap::new(), HashMap::new()));
+/// Compute a persistence-module map over F2 in the supplied cycle bases.
+///
+/// Returns a map with every source birth as a key and a sorted list of target
+/// births with coefficient one as its value. An empty list denotes zero.
+/// Apply `generator_map` to each source representative before expressing it in
+/// the target representative basis. Overlaps between generator images cancel
+/// over F2. Missing generator-map entries implicitly map to zero; unused
+/// entries are ignored. Inputs are not modified.
+///
+/// # Input contract
+/// All source and target birth and death indices must use **one common ordered
+/// filtration index scale**. Independently numbered complexes must be reindexed
+/// before calling this function; a generator map alone does not establish how
+/// their filtration indices compare. This requirement cannot be checked from
+/// the supplied data. Source supports and map keys use the source generator
+/// basis; target supports and map values use the target generator basis.
+///
+/// Each representative map must have exactly its diagram's birth keys. Every
+/// cycle support must have maximum index equal to its birth, and finite deaths
+/// must be strictly later than births. Supports and individual generator-map
+/// columns may be unsorted; repeated indices within a column are repeated
+/// listings of one nonzero entry and are ignored. Repetitions across distinct
+/// mapped columns cancel when those columns are added.
+///
+/// Representatives must be cycles, target representatives must span the mapped
+/// source cycles, and the generator map must describe a degree-preserving
+/// filtered chain map. Cyclehood, degrees, and the chain-map identity are not
+/// checked. An empty source returns an empty map without inspecting the
+/// representative data.
+///
+/// Target features dead at the source birth are omitted after exact cycle
+/// expansion. Every retained coefficient satisfies `target_birth <=
+/// source_birth < target_death <= source_death`, with infinity allowed for
+/// deaths. At a filtration index, use only intervals alive there.
+///
+/// # Errors
+/// Returns [`PersistenceMapError`] for unavailable or inconsistent
+/// representatives, invalid interval endpoints, a mapped cycle outside the
+/// target span, or a coefficient incompatible with the interval lifetimes.
+///
+/// # Example
+/// ```
+/// use phimaker::{get_persistence_map, sixpack_from_inclusion};
+/// let diagrams =
+/// 	sixpack_from_inclusion(&[vec![], vec![], vec![0, 1]], &[0, 0, 1], &[1], 1, false)?;
+/// let generator_map = [(1, vec![1])].into_iter().collect();
+/// let to_codomain = get_persistence_map(
+/// 	&diagrams.domain,
+/// 	&diagrams.domain_representatives,
+/// 	&diagrams.codomain,
+/// 	&diagrams.codomain_representatives,
+/// 	&generator_map,
+/// )?;
+/// assert_eq!(to_codomain[&1], vec![0, 1]);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn get_persistence_map(
+	source: &PersistenceDiagram,
+	source_representatives: &HashMap<usize, Vec<usize>>,
+	target: &PersistenceDiagram,
+	target_representatives: &HashMap<usize, Vec<usize>>,
+	generator_map: &HashMap<usize, Vec<usize>>,
+) -> Result<PersistenceMap, PersistenceMapError> {
+	if source.is_empty() {
+		return Ok(HashMap::new());
+	}
+	let source_reps = prepare_representatives(source, source_representatives, "source")?;
+	let basis = prepare_representatives(target, target_representatives, "target")?;
+	// Normalize the map of generators by sorting and de-duplicating the
+	// supports.
+	let mut columns = HashMap::new();
+	for &generator in source_reps.values().flatten() {
+		if let Some(image) = generator_map.get(&generator) {
+			columns.entry(generator).or_insert_with(|| {
+				let mut image = image.clone();
+				image.sort_unstable();
+				image.dedup();
+				image
+			});
 		}
-		let source = prepare_representatives(&self.domain, &self.domain_representatives, "domain")?;
-		let compute = |target: &PersistenceDiagram, reps: &HashMap<usize, Vec<usize>>, name| {
-			let basis = prepare_representatives(target, reps, name)?;
-			source
-				.iter()
-				.map(|(&birth, support)| {
-					let mut coefficients =
-						solve(&basis, support).ok_or(PersistenceMapError::Unsolvable {
-							target: name,
-							birth,
-						})?;
-					coefficients.retain(|target_birth| target[target_birth] > Finite(birth));
-					for &target_birth in &coefficients {
-						if target[&target_birth] > self.domain[&birth] {
-							return Err(PersistenceMapError::IncompatibleIntervals {
-								target: name,
-								birth,
-								target_birth,
-							});
+	}
+	source_reps
+		.iter()
+		.map(|(&birth, support)| {
+			let mut mapped = HashSet::new();
+			for generator in support {
+				if let Some(image) = columns.get(generator) {
+					for &index in image {
+						if !mapped.insert(index) {
+							mapped.remove(&index);
 						}
 					}
-					Ok((birth, coefficients))
-				})
-				.collect::<Result<HashMap<usize, Vec<usize>>, PersistenceMapError>>()
-		};
-		Ok((
-			compute(&self.codomain, &self.codomain_representatives, "codomain")?,
-			compute(&self.image, &self.image_representatives, "image")?,
-		))
-	}
+				}
+			}
+			let mut mapped: Vec<_> = mapped.into_iter().collect();
+			mapped.sort_unstable();
+			let mut coefficients =
+				solve(&basis, &mapped).ok_or(PersistenceMapError::Unsolvable {
+					target: "target",
+					birth,
+				})?;
+			coefficients.retain(|target_birth| target[target_birth] > Finite(birth));
+			for &target_birth in &coefficients {
+				if target_birth > birth || target[&target_birth] > source[&birth] {
+					return Err(PersistenceMapError::IncompatibleIntervals {
+						target: "target",
+						birth,
+						target_birth,
+					});
+				}
+			}
+			Ok((birth, coefficients))
+		})
+		.collect()
 }
 
 fn is_kernel_birth<Decomp: Decomposition<C>, C: Column>(

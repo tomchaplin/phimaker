@@ -39,14 +39,22 @@ since `v0.3.0`.
   submodule and Python interface.
 - Require Python 3.12 or newer, matching LoPhat's Python requirement, and
   move the Rust crate to edition 2024.
+- Replace `DiagramEnsemble.get_persistence_map()` with the standalone Rust and
+  Python function `get_persistence_map`. Supply source and target diagrams,
+  their representatives, and a generator map; call it separately for the
+  domain-to-codomain and domain-to-image maps.
 
 ### Added
 
-- `DiagramEnsemble.get_persistence_map()` returning sparse binary maps from domain
-  features to codomain and image features. Solve in the representative cycle bases
-  using private sparse F2 back substitution, then omit target features already dead
-  at the source birth. Include typed `PersistenceMapError` failures in Rust and
-  `RuntimeError` in Python, usage examples, and tests for both extraction modes.
+- Standalone `get_persistence_map(source, source_representatives, target,
+  target_representatives, generator_map)` for sparse binary persistence maps
+  between supplied cycle bases. Apply generator images over F2 before sparse
+  back substitution; missing entries implicitly map to zero. Normalize repeated
+  listings within columns, cancel overlaps between distinct images, and omit
+  target features already dead at the source birth. Require a common filtration
+  index scale and reject coefficients born too late or dying too late. Include
+  typed `PersistenceMapError` failures in Rust, `RuntimeError` in Python, usage
+  examples, and Rust/Python tests for arbitrary mappings and both extraction modes.
 - Domain, codomain, and image representative maps on `DiagramEnsemble`, keyed
   by birth index with cycle supports in diagram coordinates. Extract representatives
   in both normal and slow modes using LoPhat's `diagram_with_reps`; translate domain
@@ -91,14 +99,20 @@ since `v0.3.0`.
 - Replace the checked-in placeholder stub with stubs generated from declarative
   PyO3 exports, explicitly enable introspection metadata, and include `py.typed`.
   Export `DiagramEnsemble` and `CylinderMetadata` from Python so typed result
-  objects can be imported. Check public declarations in every built wheel.
+  objects can be imported. Check public declarations in every built wheel,
+  including the standalone persistence-map function and its diagram input types.
 - Include the README in Python package metadata and correct its repository URL.
   Document publishing credentials and platform coverage. The copied workflows
   publish wheels only; they no longer build a source distribution, Intel macOS,
   PyPy, musllinux, or the other architectures from the previous wheel matrix.
-- Upgrade LoPhat from 0.11.0 to 0.13.0, use its shared diagram and extended-index
+- Upgrade LoPhat from 0.11.0 to 0.14.0, use its shared diagram and extended-index
   types, and adapt column access to `degree()`. Delegate Python dictionary and
-  infinite-death conversion to LoPhat when `python-module` is enabled.
+  infinite-death conversion to LoPhat when `python-module` is enabled. Accept
+  Python diagram dictionaries through its new `FromPyObject` implementations.
+- Label persistence-map errors by source and target. Preserve `RuntimeError`
+  for inconsistent diagrams, representatives, or maps; malformed Python diagram
+  dictionaries raise `TypeError` with the underlying conversion error as their
+  cause.
 - Upgrade PyO3 from 0.25.1 to the 0.29 series and pyo3-log from 0.12.4 to 0.13.4.
   Update compatible Rust dependencies and the lockfile, including atomic_refcell,
   crossbeam, log, rayon, serde, serde_json, and tempfile. Python computations
@@ -141,6 +155,9 @@ since `v0.3.0`.
 - Configure locked release builds with Maturin, stub generation through uv,
   and generated Python extension stubs. Update the test dependency group and
   document how to build the extension, run tests, and generate documentation.
+- Temporarily resolve LoPhat 0.14.0 from the sibling `../lophat` checkout while
+  its release is unpublished. After publishing LoPhat, remove the dependency's
+  `path` and regenerate the registry lockfile before standalone CI or release.
 
-[Unreleased]: https://github.com/tomchaplin/phimaker/compare/v0.4.0...dev
-[0.4.0]: https://github.com/tomchaplin/phimaker/compare/v0.3.0...dev
+[Unreleased]: https://github.com/tomchaplin/phimaker/compare/v0.4.0...main
+[0.4.0]: https://github.com/tomchaplin/phimaker/compare/v0.3.0...main

@@ -115,18 +115,18 @@ impl fmt::Display for InclusionError {
 
 impl Error for InclusionError {}
 
-/// A persistence map could not be recovered from a diagram ensemble.
+/// A persistence map could not be recovered from diagrams and a generator map.
 ///
-/// Returned by [`crate::diagrams::DiagramEnsemble::get_persistence_map`].
+/// Returned by [`crate::get_persistence_map`].
 /// Representative maps must be available and agree with their diagrams.
-/// Ensembles produced by the computation functions satisfy these requirements
-/// when their decompositions retain V. Modifying diagrams or representatives
-/// independently can make them inconsistent.
+/// Representative extraction requires retained V. Modifying diagrams or
+/// representatives independently can make them inconsistent. Interval indices
+/// must share a common filtration scale; the map must be a filtered chain map.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PersistenceMapError {
 	/// A nonempty diagram has an empty representative map.
 	MissingRepresentatives {
-		/// Diagram requiring representatives: domain, codomain, or image.
+		/// Diagram requiring representatives: source or target.
 		diagram: &'static str,
 	},
 	/// Birth keys, supports, or interval endpoints are inconsistent.
@@ -134,18 +134,18 @@ pub enum PersistenceMapError {
 		/// Diagram containing inconsistent data.
 		diagram: &'static str,
 	},
-	/// A domain cycle is not in the span of the target representatives.
+	/// A mapped source cycle is not in the span of the target representatives.
 	Unsolvable {
-		/// Target diagram: codomain or image.
+		/// Target diagram label.
 		target: &'static str,
-		/// Domain birth whose representative could not be expressed.
+		/// Source birth whose representative could not be expressed.
 		birth: usize,
 	},
-	/// A nonzero coefficient would outlive its source interval.
+	/// A nonzero coefficient is born after or outlives its source interval.
 	IncompatibleIntervals {
-		/// Target diagram: codomain or image.
+		/// Target diagram label.
 		target: &'static str,
-		/// Domain birth of the offending coefficient.
+		/// Source birth of the offending coefficient.
 		birth: usize,
 		/// Target birth of the offending coefficient.
 		target_birth: usize,
@@ -164,7 +164,7 @@ impl fmt::Display for PersistenceMapError {
 			Self::Unsolvable { target, birth } => {
 				write!(
 					f,
-					"Domain representative at birth {birth} is not in the span of {target} \
+					"Mapped source representative at birth {birth} is not in the span of {target} \
 					 representatives"
 				)
 			},
@@ -175,8 +175,8 @@ impl fmt::Display for PersistenceMapError {
 			} => {
 				write!(
 					f,
-					"{target} feature {target_birth} outlives domain feature {birth} despite a \
-					 nonzero map coefficient"
+					"{target} feature {target_birth} has an incompatible lifetime with source \
+					 feature {birth} despite a nonzero map coefficient"
 				)
 			},
 		}

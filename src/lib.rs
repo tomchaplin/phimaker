@@ -38,6 +38,7 @@ use std::ops::Deref;
 
 use cylinder::{CylinderMetadata, build_cylinder};
 use diagrams::DiagramEnsemble;
+pub use diagrams::{PersistenceMap, get_persistence_map};
 pub use ensemble::{all_decompositions, all_decompositions_slow};
 use errors::InclusionError;
 use lophat::algorithms::LockFreeAlgorithm;

@@ -95,7 +95,11 @@ classes match the objects returned by the functions.
   exact expansion but omitted from homology coefficients; identity and empty maps;
   zero general maps after equal-time cylinder cells enter; missing or inconsistent
   representatives, non-spanning target bases, incompatible interval lifetimes,
-  and normalization of unsorted or repeated support indices. Both modes and
+  and normalization of unsorted or repeated support indices. Standalone Rust
+  integration tests and Python tests also cover non-identity generator images,
+  F2 cancellation, missing images as zero, ignored unused images, future-born
+  target coefficients, unchanged inputs, and diagram dictionary extraction
+  with contextual type and integer range errors. Both extraction modes and
   independent Python return copies are tested.
 - **Python bindings:** dictionary lookup, missing-key behavior, independent
   getter copies, `None` for infinity, metadata, signatures, and docstrings.
@@ -135,3 +139,11 @@ The existing unsorted-domain tests now exercise validation directly from Rust.
 Boundary squared zero and the full filtered chain-map identity remain caller
 preconditions. The suite does not require checks for those unchecked algebraic
 conditions, or performance expectations for the deferred slow-path optimization.
+
+## Local LoPhat 0.14 development
+
+Until LoPhat 0.14.0 is published, the Cargo dependency includes both its version
+and the sibling checkout path `../lophat`. This makes the new diagram conversion
+available for local tests. Remove the path and regenerate the Cargo lockfile
+against crates.io after publishing LoPhat, before running standalone CI or
+releasing Phimaker. Published crate manifests use the declared registry version.

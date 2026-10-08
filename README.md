@@ -46,21 +46,55 @@ diagram has an empty representative map. Nonempty domain, codomain, and image
 decompositions must retain V when calling `all_diagrams`; the computation entry
 points do so automatically.
 
-Call `diagrams.get_persistence_map()` to obtain `(domain_to_codomain, domain_to_image)`.
-Each map associates every domain birth with a sorted list of target births whose
-binary coefficients are one. At a filtration index, use only intervals alive there;
-target features dead at the source birth are omitted. Rust returns a `Result`,
-with `PersistenceMapError` for unavailable or inconsistent representatives; Python
-returns two dictionaries and reports failures as `RuntimeError`. Empty domains yield
-two empty maps. These maps use the chosen representatives and diagram coordinates.
-For `sixpack`, use `metadata.times` to select intervals in the original filtration;
-the diagrams retain equal-time mapping-cylinder intervals.
+Call `get_persistence_map(source, source_representatives, target,
+target_representatives, generator_map)` for one persistence-module map. The
+result maps every source birth to a sorted list of target births with binary
+coefficient one. The generator map sends each source generator to a list of
+target generators. Missing entries implicitly map to zero, and overlaps between
+distinct mapped columns cancel over F2. Repeated listings within one supplied
+column are ignored. Inputs are not modified.
+
+Both diagrams must use one common ordered filtration index scale. Independently
+numbered complexes must be reindexed before calling; the generator map does not
+establish how their filtration indices compare. This is a caller contract.
+Representatives must be cycles and the mapping must describe a degree-preserving
+filtered chain map. These algebraic requirements are not checked. Representative
+keys, maximum support indices, interval endpoints, solvability, and coefficient
+lifetimes are checked. Each retained coefficient satisfies
+`target_birth <= source_birth < target_death <= source_death`. Targets already
+dead at the source birth contribute zero after exact cycle expansion.
+
+Rust returns a `Result` with `PersistenceMapError`; Python reports semantic
+failures as `RuntimeError`. Python diagrams are ordinary birth-to-death
+dictionaries, with `None` for essential deaths. An empty source gives an empty
+map. At a filtration index, use only intervals alive there. For `sixpack`, use
+`metadata.times` to select intervals in the original filtration; the diagrams
+retain equal-time mapping-cylinder intervals.
+
+For inclusion results, use identity images for the generators appearing in
+source representatives and call the function separately for each target:
 
 ```python
-from phimaker import sixpack_from_inclusion
+from phimaker import get_persistence_map, sixpack_from_inclusion
 
 diagrams = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [1])
-to_codomain, to_image = diagrams.get_persistence_map()
+generator_map = {
+	index: [index] for support in diagrams.domain_representatives.values() for index in support
+}
+to_codomain = get_persistence_map(
+	diagrams.domain,
+	diagrams.domain_representatives,
+	diagrams.codomain,
+	diagrams.codomain_representatives,
+	generator_map,
+)
+to_image = get_persistence_map(
+	diagrams.domain,
+	diagrams.domain_representatives,
+	diagrams.image,
+	diagrams.image_representatives,
+	generator_map,
+)
 assert to_codomain == {1: [0, 1]}
 assert to_image == {1: [1]}
 ```
@@ -81,8 +115,9 @@ examples. Inline `///` comments supply Rust documentation, while separate
 feature-gated `#[doc = python_doc!(...)]` attributes supply Python docstrings.
 Shared classes retain Rust comments for rustdoc and rust-analyzer; Python builds
 strip those comments so only Python usage documentation appears in `help()`.
-Use `help(phimaker.sixpack_from_inclusion)` or `help(phimaker.sixpack)` after
-building/installing the extension for Python examples.
+Use `help(phimaker.sixpack_from_inclusion)`, `help(phimaker.sixpack)`, or
+`help(phimaker.get_persistence_map)` after building/installing the extension
+for Python examples.
 
 The inclusion API takes boundary columns, degrees, and domain column indices.
 It uses filtration indices only. The general-map API `sixpack` takes timed
@@ -120,7 +155,7 @@ extension and run pytest as described in [tests/README.md](tests/README.md).
 That document records each fixture's intent, including slow-mode serialization
 regressions and executable documentation examples.
 
-The Cargo dependency uses LoPhat version 0.13.0.
+The Cargo dependency uses LoPhat version 0.14.0.
 Building with `python-module` also enables `lophat/python-module`, providing
 conversion of diagrams to dictionaries and infinite deaths to `None`.
 
