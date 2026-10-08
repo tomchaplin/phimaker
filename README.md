@@ -20,6 +20,55 @@ Install via
 pip install phimaker
 ```
 
+## Development environment and source builds
+
+Install [Rust through rustup](https://rustup.rs/),
+[uv](https://docs.astral.sh/uv/getting-started/installation/), and
+[Lefthook](https://lefthook.dev/installation/). A native C linker is also
+required (for example, the build tools for your operating system).
+
+This checkout currently resolves LoPhat 0.14.0 from `../lophat`. Clone
+[LoPhat](https://github.com/tomchaplin/lophat) alongside Phimaker and check out
+`v0.14.0` or a compatible newer revision before building. See
+[the local dependency notes](tests/README.md#local-lophat-014-development).
+
+Run the following commands from the repository root:
+
+```sh
+rustup toolchain install stable
+rustup toolchain install nightly --component rustfmt
+uv python pin 3.12
+uv sync --locked --group test
+lefthook install
+```
+
+uv creates `.venv`, installs the development and test tools, and builds the
+Python extension from source. Python 3.12 or newer is required; pin another
+supported version if desired. The Git pre-commit hooks run nightly
+rustfmt, Tombi, and Ruff, and stage their formatting changes. You can also run
+them manually with `lefthook run pre-commit`.
+
+Rebuild the extension and its generated type stubs after Rust or docstring
+changes, then run the Python tests:
+
+```sh
+uv run --no-sync maturin develop --locked --generate-stubs
+uv run --no-sync python -m pytest
+```
+
+Build a distributable wheel into `dist/` with:
+
+```sh
+uv run --no-sync maturin build --locked --release --generate-stubs --out dist
+```
+
+For the Rust library without Python bindings, use:
+
+```sh
+cargo build --locked --release --no-default-features
+cargo test --locked --no-default-features
+```
+
 ## Persistence diagrams
 
 `DiagramEnsemble` exposes the diagrams as `domain`, `codomain`, `image`,
@@ -109,7 +158,25 @@ Society for Industrial and Applied Mathematics.
 
 ## API documentation
 
-Run `cargo doc --no-deps --open` to build the Rust API reference. The public
+Install the Python documentation dependencies into the project environment,
+rebuild the extension, and generate the HTML reference:
+
+```sh
+uv sync --locked --group test --group docs
+uv run --no-sync maturin develop --locked --generate-stubs
+uv run --no-sync python docs/build.py
+```
+
+Open `docs/_build/html/index.html` in a browser. Sphinx reads the installed
+extension's docstrings, so rebuild the extension after changing them. The build
+script treats warnings as errors. The equivalent Sphinx command is:
+
+```sh
+uv run --no-sync python -m sphinx -W --keep-going -b html docs docs/_build/html
+```
+
+Run `cargo doc --locked --no-default-features --no-deps --open` to build and open
+the Rust API reference at `target/doc/phimaker/index.html`. The public
 functions document input assumptions and index coordinates, with runnable Rust
 examples. Inline `///` comments supply Rust documentation, while separate
 feature-gated `#[doc = python_doc!(...)]` attributes supply Python docstrings.

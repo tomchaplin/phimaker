@@ -24,6 +24,7 @@ dev = [
 	"ruff>=0.16.10",
 	"tombi>=1.7.3",
 ]
+docs = ["sphinx>=8", "sphinx-rtd-theme>=3"]
 test = ["maturin~=1.0", "pytest>=8"]
 
 [build-system]

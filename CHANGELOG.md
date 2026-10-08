@@ -146,6 +146,10 @@ since `v0.3.0`.
 
 ### Development
 
+- Document uv environment setup, Lefthook installation, source builds, and
+  local Rust and Python documentation builds. Add a locked Sphinx dependency
+  group and a Python API reference with a build script that treats warnings
+  as errors.
 - Remove plotting and random timing scripts, unused matrix fixtures, and
   washboard-specific examples. Keep separate Cargo and pytest suites that need
   no plotting dependencies or external data.
