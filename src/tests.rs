@@ -466,7 +466,10 @@ fn unsorted_domain_with_finite_classes() {
 /// remain valid.
 #[test]
 fn empty_and_identity_inclusions() {
-	assert_diagrams(&diagrams(&[], &[], &[], false), [&[]; 6]);
+	assert_diagrams(
+		&diagrams(&[], &[], &[], false),
+		[&[] as &[(usize, ExtendedUsize)]; 6],
+	);
 	assert_diagrams(
 		&diagrams(&[vec![]], &[0], &[], false),
 		[
@@ -827,8 +830,7 @@ fn inclusion_validation_errors_are_shared() {
 			.expect("Invalid input must fail before reduction");
 		let slow =
 			all_decompositions_slow::<LockFreeAlgorithm<_>, _>(&matrix, &degrees, &domain, 1)
-				.err()
-				.expect("Invalid input must fail before serialization");
+				.expect_err("Invalid input must fail before serialization");
 		assert_eq!(fast, expected);
 		assert_eq!(slow, expected);
 		assert!(!expected.to_string().is_empty());
