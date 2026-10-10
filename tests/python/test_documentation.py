@@ -31,6 +31,8 @@ def test_binding_documentation() -> None:
 		assert "Example::" in documentation
 		assert "num_threads=0" in function.__text_signature__
 		assert "slow=False" in function.__text_signature__
+		assert "get_representatives=False" in function.__text_signature__
+		assert ":param get_representatives:" in documentation
 		assert "Rust" not in documentation
 		assert "PyResult" not in documentation
 		assert "LoPhat" not in documentation
@@ -50,11 +52,16 @@ def test_shared_class_and_property_documentation() -> None:
 		documentation = getattr(type(result), name).__doc__
 		assert "dictionary" in documentation
 		assert "[`" not in documentation
-	for name in ("domain_representatives", "codomain_representatives", "image_representatives"):
+	for name in (
+		"domain_representatives",
+		"codomain_representatives",
+		"image_representatives",
+		"kernel_representatives",
+	):
 		documentation = getattr(type(result), name).__doc__
 		assert "dictionary" in documentation
 		assert "empty dictionary" in documentation
-		assert "None" not in documentation
+		assert "None" in documentation
 		assert "HashMap" not in documentation
 		assert "V matrix" not in documentation
 	assert "maximum index" in type(result).__doc__

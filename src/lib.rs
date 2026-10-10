@@ -16,8 +16,14 @@
 //! ```
 //! use phimaker::{diagrams::ExtendedUsize::Finite, sixpack_from_inclusion};
 //!
-//! let diagrams =
-//! 	sixpack_from_inclusion(&[vec![], vec![], vec![0, 1]], &[0, 0, 1], &[1], 1, false)?;
+//! let diagrams = sixpack_from_inclusion(
+//! 	&[vec![], vec![], vec![0, 1]],
+//! 	&[0, 0, 1],
+//! 	&[1],
+//! 	false,
+//! 	1,
+//! 	false,
+//! )?;
 //! assert_eq!(diagrams.codomain[&1], Finite(2));
 //! # Ok::<(), phimaker::errors::InclusionError>(())
 //! ```
@@ -63,6 +69,11 @@ use lophat::algorithms::LockFreeAlgorithm;
 /// memory for all six results. Empty inputs, domains, and quotients are
 /// supported.
 ///
+/// Set `get_representatives` to true to extract domain, codomain, image, and
+/// kernel cycles. Otherwise their representative fields are `None`, and
+/// extraction is skipped. Requested empty diagrams have `Some` of an empty map.
+/// Reductions still retain the matrices used by the six-diagram algorithm.
+///
 /// # Errors
 /// Returns [`InclusionError`] for mismatched degree counts, out-of-range domain
 /// indices, boundary rows not less than their column, boundaries that do not
@@ -81,8 +92,14 @@ use lophat::algorithms::LockFreeAlgorithm;
 /// 	sixpack_from_inclusion,
 /// };
 ///
-/// let diagrams =
-/// 	sixpack_from_inclusion(&[vec![], vec![], vec![0, 1]], &[0, 0, 1], &[1], 1, false)?;
+/// let diagrams = sixpack_from_inclusion(
+/// 	&[vec![], vec![], vec![0, 1]],
+/// 	&[0, 0, 1],
+/// 	&[1],
+/// 	false,
+/// 	1,
+/// 	false,
+/// )?;
 /// assert_eq!(diagrams.domain[&1], Infinity);
 /// assert_eq!(diagrams.codomain[&1], Finite(2));
 /// assert!(diagrams.kernel.is_empty());
@@ -92,6 +109,7 @@ pub fn sixpack_from_inclusion<UsizeSlice: Deref<Target = [usize]>>(
 	boundary_matrix: &[UsizeSlice],
 	degrees: &[usize],
 	cols_in_domain: &[usize],
+	get_representatives: bool,
 	num_threads: usize,
 	slow: bool,
 ) -> Result<DiagramEnsemble, InclusionError> {
@@ -102,7 +120,7 @@ pub fn sixpack_from_inclusion<UsizeSlice: Deref<Target = [usize]>>(
 			cols_in_domain,
 			num_threads,
 		)?
-		.all_diagrams())
+		.all_diagrams(get_representatives))
 	} else {
 		Ok(all_decompositions::<LockFreeAlgorithm<_>, _>(
 			boundary_matrix,
@@ -110,7 +128,7 @@ pub fn sixpack_from_inclusion<UsizeSlice: Deref<Target = [usize]>>(
 			cols_in_domain,
 			num_threads,
 		)?
-		.all_diagrams())
+		.all_diagrams(get_representatives))
 	}
 }
 
@@ -132,7 +150,7 @@ pub fn sixpack_from_inclusion<UsizeSlice: Deref<Target = [usize]>>(
 /// its index arrays to locate the original generators. Equal-time intervals
 /// are retained. Relative means homology of the mapping cone. Kernel degree is
 /// `metadata.degrees[birth] - 1`; other degrees are `metadata.degrees[birth]`.
-/// Thread counts and `slow` have the same meaning as in
+/// Thread counts, `slow`, and `get_representatives` have the same meaning as in
 /// [`sixpack_from_inclusion`].
 ///
 /// # Errors
@@ -151,7 +169,7 @@ pub fn sixpack_from_inclusion<UsizeSlice: Deref<Target = [usize]>>(
 /// use phimaker::sixpack;
 ///
 /// let point = vec![(0.0, 0, vec![])];
-/// let (diagrams, metadata) = sixpack(&point, &point, &[vec![0]], 1, false)?;
+/// let (diagrams, metadata) = sixpack(&point, &point, &[vec![0]], false, 1, false)?;
 /// let birth = metadata.domain_indices[0];
 /// assert!(diagrams.domain.contains_key(&birth));
 /// assert_eq!(metadata.times[birth], 0.0);
@@ -161,6 +179,7 @@ pub fn sixpack<UsizeSlice: Deref<Target = [usize]>>(
 	domain_matrix: &[(f64, usize, UsizeSlice)],
 	codomain_matrix: &[(f64, usize, UsizeSlice)],
 	map: &[UsizeSlice],
+	get_representatives: bool,
 	num_threads: usize,
 	slow: bool,
 ) -> Result<(DiagramEnsemble, CylinderMetadata), InclusionError> {
@@ -169,6 +188,7 @@ pub fn sixpack<UsizeSlice: Deref<Target = [usize]>>(
 		&boundary_matrix,
 		&metadata.degrees,
 		&metadata.domain_indices,
+		get_representatives,
 		num_threads,
 		slow,
 	)?;

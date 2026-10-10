@@ -88,11 +88,23 @@ classes match the objects returned by the functions.
   Representative tests also cover a domain with gaps and unsorted indices,
   essential domain cycles killed in the image, essential image cycles supported
   only in the domain, cycle boundaries, maximum support indices equal to births,
-  empty representative maps, and the requirement to retain V for nonempty
-  decompositions in both modes.
+  requested empty representative maps, and the requirement to retain V for
+  nonempty decompositions when representatives are requested. Optional extraction
+  tests verify that both flags give identical diagrams, that skipped extraction
+  returns `None` even for empty diagrams, and that requesting empty maps works in
+  both modes. Diagram-only extraction is tested with V absent separately from
+  each relevant decomposition, including serialized results and cursor rewinds.
+  Python tests check the default, explicit flags, and forwarding through both
+  convenience functions; persistence-map tests opt in to cycle extraction.
 - **Persistence maps:** sparse F2 back substitution over all combinations of a
   small basis; sums of codomain or image features; dead target cycles needed for
   exact expansion but omitted from homology coefficients; identity and empty maps;
+  image-to-codomain inclusions with hand-derived coefficients, pointwise F2 rank,
+  and domain-to-image-to-codomain factorization at every filtration index. These
+  cover different representative bases, dead targets, empty images, and identity
+  and zero-map cylinders in both modes. Composition uses only intervals alive at
+  each index; a separate regression checks that nonzero maps between `[2, 4)`,
+  `[1, 3)`, and `[0, 2)` compose to zero despite a nonzero ordinary matrix product;
   zero general maps after equal-time cylinder cells enter; missing or inconsistent
   representatives, non-spanning target bases, incompatible interval lifetimes,
   and normalization of unsorted or repeated support indices. Standalone Rust
@@ -101,6 +113,16 @@ classes match the objects returned by the functions.
   target coefficients, unchanged inputs, and diagram dictionary extraction
   with contextual type and integer range errors. Both extraction modes and
   independent Python return copies are tested.
+- **Kernel representatives:** finite and essential cycles use only domain
+  generators preceding their kernel birth. A finite two-class fixture requires
+  the kernel death basis rather than the image boundary at birth. Both modes
+  check exact supports, cyclehood and degree, independence modulo domain
+  boundaries, membership in codomain boundaries, pointwise kernel-to-domain
+  injectivity, and the zero composite into codomain homology. Optional flags,
+  empty maps, copied Python getters, and a zero-map cylinder are covered.
+  Standalone persistence-map tests allow earlier-supported cycles on either
+  side, reduce independent target cycles sharing a pivot, and reject future
+  target features, future support generators, and dependent target cycles.
 - **Python bindings:** dictionary lookup, missing-key behavior, independent
   getter copies, `None` for infinity, metadata, signatures, and docstrings.
 - **Documentation:** Python functions, shared classes, and properties expose

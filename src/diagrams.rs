@@ -11,7 +11,7 @@ use bincode::deserialize_from;
 /// Shared birth-to-death diagrams and extended indices from LoPhat.
 pub use lophat::utils::{ExtendedUsize, PersistenceDiagram};
 use lophat::{
-	algorithms::{Decomposition, DecompositionAlgo, NoVMatrixError},
+	algorithms::{Decomposition, DecompositionAlgo},
 	columns::Column,
 	utils::DecompositionFileFormat,
 };
@@ -40,22 +40,28 @@ use crate::{
 /// interval is the birth-generator degree minus one; other interval degrees
 /// equal that degree.
 ///
-/// The domain, codomain, and image representative maps associate each birth
-/// with the generator indices whose sum is its cycle over F2. Their keys and
-/// entries use the same coordinates as the diagrams. If `b` is a feature's
-/// birth index in any of these diagrams, the maximum generator index in its
-/// representative equals `b`. Representatives are not necessarily minimal or
+/// The domain, codomain, image, and kernel representative maps associate each
+/// birth with the generator indices whose sum is its cycle over F2 when
+/// requested. They are `None` when `get_representatives` is false. Their keys
+/// and entries use the same coordinates as the diagrams. Domain, codomain, and
+/// image representatives have maximum generator index equal to their birth.
+/// Kernel representatives contain only domain generators with indices strictly
+/// less than their kernel birth. Representatives are not necessarily minimal or
 /// unique, and support order is unspecified. Each representative map has
-/// exactly its diagram's birth keys; an empty diagram has an empty map.
+/// exactly its diagram's birth keys; a requested empty diagram has `Some` of
+/// an empty map. Skipping extraction still returns `None` for empty diagrams.
 ///
 /// # Example
 ///
 /// ```
 /// use phimaker::{diagrams::ExtendedUsize::Infinity, sixpack_from_inclusion};
 ///
-/// let diagrams = sixpack_from_inclusion(&[vec![]], &[0], &[0], 1, false)?;
+/// let diagrams = sixpack_from_inclusion(&[vec![]], &[0], &[0], true, 1, false)?;
 /// assert_eq!(diagrams.domain[&0], Infinity);
-/// assert_eq!(diagrams.domain_representatives[&0], vec![0]);
+/// assert_eq!(
+/// 	diagrams.domain_representatives.as_ref().unwrap()[&0],
+/// 	vec![0]
+/// );
 /// assert!(diagrams.relative.is_empty());
 /// # Ok::<(), phimaker::errors::InclusionError>(())
 /// ```
@@ -72,14 +78,18 @@ codomain generators. For :py:func:`~phimaker.sixpack`, use the returned metadata
 to recover filtration times and degrees. A kernel interval has the degree of
 its birth generator minus one; other intervals have the birth-generator degree.
 
-The ``domain_representatives``, ``codomain_representatives``, and
-``image_representatives`` attributes map birth indices to lists of generator
-indices. Summing the listed generators over the field with two elements gives
-a representative cycle. Keys and entries use the same coordinates as the diagrams.
-If ``b`` is a feature's birth index in any of these diagrams, the maximum index
-in its representative is equal to ``b``. Representatives need not be minimal or
+The ``domain_representatives``, ``codomain_representatives``,
+``image_representatives``, and ``kernel_representatives`` attributes are ``None`` unless
+``get_representatives=True`` was requested. When requested, they map birth
+indices to lists of generator indices. Summing the listed generators over the
+field with two elements gives a representative cycle. Keys and entries use the
+same coordinates as the diagrams.
+For domain, codomain, and image features, the maximum index in a representative
+equals the feature's birth. Kernel representatives use only domain generators,
+with indices strictly less than the kernel birth. Representatives need not be minimal or
 unique. Each representative dictionary has exactly its diagram's birth keys.
-An empty diagram has an empty representative dictionary.
+A requested empty diagram has an empty representative dictionary. If extraction
+was skipped, its representative attribute is still ``None``.
 
 Attributes are read-only. Each dictionary access returns an independent copy,
 including the lists in representative dictionaries. Editing a copy does not
@@ -88,9 +98,10 @@ change this result or later attribute accesses. Support order is unspecified.
 Example::
 
     >>> from phimaker import sixpack_from_inclusion
-    >>> result = sixpack_from_inclusion([[]], [0], [0])
+    >>> result = sixpack_from_inclusion([[]], [0], [0], get_representatives=True)
     >>> assert result.domain == {0: None}
     >>> assert result.domain_representatives == {0: [0]}
+    >>> assert result.kernel_representatives == {}
     >>> diagram = result.domain
     >>> diagram.clear()
     >>> assert result.domain == {0: None}"#
@@ -110,49 +121,61 @@ pub struct DiagramEnsemble {
     r#"Persistent homology of the codomain, as a birth-to-death dictionary."#
     )]
 	pub codomain: PersistenceDiagram,
+
+	/// Codomain birth indices mapped to cycle supports in diagram coordinates.
+	/// Each listed generator has coefficient one over F2. An empty codomain
+	/// diagram has `Some` of an empty map when requested, or `None` when
+	/// representative extraction is disabled.
+	#[doc = python_doc!(
+    r#"Codomain representatives, as a dictionary from birth indices to generator lists.
+
+Sum the listed generators over the field with two elements to obtain a cycle.
+Indices use the codomain diagram's coordinates. When requested, an empty codomain
+diagram has an empty dictionary. ``None`` means representative extraction was
+skipped."#
+    )]
+	pub codomain_representatives: Option<HashMap<usize, Vec<usize>>>,
+
 	/// Persistent homology of the domain.
 	#[doc = python_doc!(
     r#"Persistent homology of the domain, as a birth-to-death dictionary."#
     )]
 	pub domain: PersistenceDiagram,
+
+	/// Domain birth indices mapped to cycle supports in diagram coordinates.
+	/// Each listed generator has coefficient one over F2. An empty domain
+	/// diagram has `Some` of an empty map when requested, or `None` when
+	/// representative extraction is disabled.
+	#[doc = python_doc!(
+    r#"Domain representatives, as a dictionary from birth indices to generator lists.
+
+Sum the listed generators over the field with two elements to obtain a cycle.
+Indices use the domain diagram's coordinates. When requested, an empty domain
+diagram has an empty dictionary. ``None`` means representative extraction was
+skipped."#
+    )]
+	pub domain_representatives: Option<HashMap<usize, Vec<usize>>>,
+
 	/// Image of the induced homology map.
 	#[doc = python_doc!(
     r#"Image of the induced homology map, as a birth-to-death dictionary."#
     )]
 	pub image: PersistenceDiagram,
-	/// Domain birth indices mapped to cycle supports in diagram coordinates.
-	/// Each listed generator has coefficient one over F2. An empty domain
-	/// diagram has an empty map.
-	#[doc = python_doc!(
-    r#"Domain representatives, as a dictionary from birth indices to generator lists.
 
-Sum the listed generators over the field with two elements to obtain a cycle.
-Indices use the domain diagram's coordinates. An empty domain diagram has an
-empty dictionary."#
-    )]
-	pub domain_representatives: HashMap<usize, Vec<usize>>,
-	/// Codomain birth indices mapped to cycle supports in diagram coordinates.
-	/// Each listed generator has coefficient one over F2. An empty codomain
-	/// diagram has an empty map.
-	#[doc = python_doc!(
-    r#"Codomain representatives, as a dictionary from birth indices to generator lists.
-
-Sum the listed generators over the field with two elements to obtain a cycle.
-Indices use the codomain diagram's coordinates. An empty codomain diagram has an
-empty dictionary."#
-    )]
-	pub codomain_representatives: HashMap<usize, Vec<usize>>,
 	/// Image birth indices mapped to cycle supports in diagram coordinates.
 	/// Supports contain only domain generators, each with coefficient one over
-	/// F2. An empty image diagram has an empty map.
+	/// F2. A requested empty image diagram has `Some` of an empty map;
+	/// `None` means representative extraction was disabled.
 	#[doc = python_doc!(
     r#"Image representatives, as a dictionary from birth indices to generator lists.
 
 Sum the listed generators over the field with two elements to obtain a cycle.
-Only domain generators occur, in the image diagram's coordinates. An empty image
-diagram has an empty dictionary."#
+Only domain generators occur, in the image diagram's coordinates. When requested,
+an empty image diagram has an empty dictionary. ``None`` means representative
+extraction was skipped."#
     )]
-	pub image_representatives: HashMap<usize, Vec<usize>>,
+	pub image_representatives: Option<HashMap<usize, Vec<usize>>>,
+
 	/// Kernel of the induced homology map. Birth indices identify killing
 	/// cells, so the interval degree is the birth-cell degree minus one.
 	#[doc = python_doc!(
@@ -161,11 +184,31 @@ diagram has an empty dictionary."#
 The degree of an interval is the degree of its birth generator minus one."#
     )]
 	pub kernel: PersistenceDiagram,
+
+	/// Kernel birth indices mapped to cycles supported in the domain.
+	/// Supports use the diagram's ambient generator coordinates and contain
+	/// only indices strictly less than the kernel birth. Each listed generator
+	/// has coefficient one over F2. A requested empty kernel diagram has `Some`
+	/// of an empty map; `None` means representative extraction was disabled.
+	#[doc = python_doc!(
+    r#"Kernel representatives, as a dictionary from birth indices to generator lists.
+
+Sum the listed generators over the field with two elements to obtain a domain
+cycle that is zero in codomain homology. Supports use the diagram's ambient
+coordinates and contain only domain generators, with indices strictly less than
+the kernel birth. When requested, an empty kernel diagram has an empty dictionary.
+``None`` means representative extraction was skipped. Use these representatives
+with :py:func:`~phimaker.get_persistence_map` and the identity map to
+compute the kernel-to-domain inclusion."#
+    )]
+	pub kernel_representatives: Option<HashMap<usize, Vec<usize>>>,
+
 	/// Cokernel of the induced homology map.
 	#[doc = python_doc!(
     r#"Cokernel of the induced homology map, as a birth-to-death dictionary."#
     )]
 	pub cokernel: PersistenceDiagram,
+
 	/// Homology of the quotient complex; for a general map, homology of its
 	/// cone.
 	#[doc = python_doc!(
@@ -182,7 +225,7 @@ mapping cone."#
 // i.e., the indices of non-zero coordinate entries.
 // This is identical to taking the symmetric difference of
 // the set of supports of the two vectors.
-fn xor_sorted(left: &[usize], right: &[usize]) -> Vec<usize> {
+fn sum_mod2(left: &[usize], right: &[usize]) -> Vec<usize> {
 	let mut out = Vec::with_capacity(left.len() + right.len());
 	let (mut i, mut j) = (0, 0);
 	while i < left.len() && j < right.len() {
@@ -217,21 +260,29 @@ fn solve(a: &HashMap<usize, Vec<usize>>, b: &[usize]) -> Option<Vec<usize>> {
 	let mut solution = Vec::new();
 	while let Some(&pivot) = residual.last() {
 		let column = a.get(&pivot)?;
-		residual = xor_sorted(&residual, column);
+		residual = sum_mod2(&residual, column);
 		solution.push(pivot);
 	}
 	solution.reverse();
 	Some(solution)
 }
 
-// Make sure that representative support is sorted and duplicate-free.
-// Normalize once for all right-hand sides and verify the pivot invariant that
-// makes the representative matrix triangular. This does not check cyclehood.
+type PersistenceRepresentatives = HashMap<usize, Vec<usize>>;
+
+// Make sure that the support of a homology representative is sorted and
+// duplicate-free. Verify that the support of a representative is born at or
+// before the birth time of the feature itself.
+//
+// A feature may be born after every generator in its cycle. For example,
+// a kernel feature is represented by a cycle in the domain, but is only born
+// when that cycle dies in the codomain.
+//
+// This function does not check whether representatives form cycles.
 fn prepare_representatives(
 	diagram: &PersistenceDiagram,
 	representatives: &HashMap<usize, Vec<usize>>,
 	name: &'static str,
-) -> Result<HashMap<usize, Vec<usize>>, PersistenceMapError> {
+) -> Result<PersistenceRepresentatives, PersistenceMapError> {
 	if !diagram.is_empty() && representatives.is_empty() {
 		return Err(PersistenceMapError::MissingRepresentatives { diagram: name });
 	}
@@ -246,12 +297,46 @@ fn prepare_representatives(
 			let mut support = support.clone();
 			support.sort_unstable();
 			support.dedup();
-			if *death <= Finite(birth) || support.last() != Some(&birth) {
+			if *death <= Finite(birth) || support.is_empty() || support.last() > Some(&birth) {
 				return Err(inconsistent());
 			}
 			Ok((birth, support))
 		})
 		.collect()
+}
+
+// Given an ordered set of linearly independent representative cycles as columns
+// of an upper-triangular matrix M, run left-to-right column operations on M so
+// that the map taking a column to its pivot is injective. This gives a new set
+// of representatives. Returns both the new set of representative cycles, and
+// the expansion of each new representative cycle in terms of the original set.
+// This does NOT compute an automorphism of a persistence module; it only
+// computes an automorphism of the cycle space.
+fn prepare_target_basis(
+	representatives: &HashMap<usize, Vec<usize>>,
+) -> Result<(PersistenceRepresentatives, PersistenceRepresentatives), PersistenceMapError> {
+	let mut ordered: Vec<_> = representatives.iter().collect();
+	ordered.sort_unstable_by_key(|&(birth, _)| *birth);
+	let mut new_representatives: HashMap<usize, Vec<usize>> = HashMap::new();
+	let mut new_to_old_mapping: HashMap<usize, Vec<usize>> = HashMap::new();
+	for (&birth, support) in ordered {
+		let mut residual = support.clone();
+		let mut coefficients = vec![birth];
+		loop {
+			let pivot = *residual
+				.last()
+				.ok_or(PersistenceMapError::InconsistentData { diagram: "target" })?;
+			if let Some(column) = new_representatives.get(&pivot) {
+				residual = sum_mod2(&residual, column);
+				coefficients = sum_mod2(&coefficients, &new_to_old_mapping[&pivot]);
+			} else {
+				new_representatives.insert(pivot, residual);
+				new_to_old_mapping.insert(pivot, coefficients);
+				break;
+			}
+		}
+	}
+	Ok((new_representatives, new_to_old_mapping))
 }
 
 /// Source birth indices mapped to target births with coefficient one over F2.
@@ -273,16 +358,23 @@ pub type PersistenceMap = HashMap<usize, Vec<usize>>;
 /// the supplied data. Source supports and map keys use the source generator
 /// basis; target supports and map values use the target generator basis.
 ///
+/// Supply representative maps explicitly. When using a [`DiagramEnsemble`],
+/// request `get_representatives = true` and borrow the maps from their `Some`
+/// values before calling this function.
+///
 /// Each representative map must have exactly its diagram's birth keys. Every
-/// cycle support must have maximum index equal to its birth, and finite deaths
-/// must be strictly later than births. Supports and individual generator-map
+/// cycle support must be nonempty and use indices no greater than its feature's
+/// birth. A feature may be born after all generators in its representative;
+/// its birth need not equal the maximum support index. Finite deaths must be
+/// strictly later than births. Supports and individual generator-map
 /// columns may be unsorted; repeated indices within a column are repeated
 /// listings of one nonzero entry and are ignored. Repetitions across distinct
 /// mapped columns cancel when those columns are added.
 ///
-/// Representatives must be cycles, target representatives must span the mapped
-/// source cycles, and the generator map must describe a degree-preserving
-/// filtered chain map. Cyclehood, degrees, and the chain-map identity are not
+/// Representatives must be cycles. Target representatives must be linearly
+/// independent as chain vectors and span the mapped source cycles. The
+/// generator map must describe a degree-preserving filtered chain map.
+/// Cyclehood, degrees, and the chain-map identity are not
 /// checked. An empty source returns an empty map without inspecting the
 /// representative data.
 ///
@@ -290,6 +382,10 @@ pub type PersistenceMap = HashMap<usize, Vec<usize>>;
 /// expansion. Every retained coefficient satisfies `target_birth <=
 /// source_birth < target_death <= source_death`, with infinity allowed for
 /// deaths. At a filtration index, use only intervals alive there.
+///
+/// Features can map to target features born earlier; equal births are not
+/// required. Only target features already born and still alive at the source
+/// birth can have nonzero coefficients.
 ///
 /// # Errors
 /// Returns [`PersistenceMapError`] for unavailable or inconsistent
@@ -299,18 +395,40 @@ pub type PersistenceMap = HashMap<usize, Vec<usize>>;
 /// # Example
 /// ```
 /// use phimaker::{get_persistence_map, sixpack_from_inclusion};
-/// let diagrams =
-/// 	sixpack_from_inclusion(&[vec![], vec![], vec![0, 1]], &[0, 0, 1], &[1], 1, false)?;
+/// let diagrams = sixpack_from_inclusion(
+/// 	&[vec![], vec![], vec![0, 1]],
+/// 	&[0, 0, 1],
+/// 	&[1],
+/// 	true,
+/// 	1,
+/// 	false,
+/// )?;
 /// let generator_map = [(1, vec![1])].into_iter().collect();
 /// let to_codomain = get_persistence_map(
 /// 	&diagrams.domain,
-/// 	&diagrams.domain_representatives,
+/// 	diagrams.domain_representatives.as_ref().unwrap(),
 /// 	&diagrams.codomain,
-/// 	&diagrams.codomain_representatives,
+/// 	diagrams.codomain_representatives.as_ref().unwrap(),
 /// 	&generator_map,
 /// )?;
 /// assert_eq!(to_codomain[&1], vec![0, 1]);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+///
+/// A kernel feature may be born after all generators in its domain cycle:
+///
+/// ```
+/// use phimaker::{diagrams::ExtendedUsize::Finite, get_persistence_map};
+/// let source = [(4, Finite(5))].into_iter().collect();
+/// let target = [(2, Finite(5))].into_iter().collect();
+/// let source_reps = [(4, vec![1, 2])].into_iter().collect();
+/// let target_reps = [(2, vec![1, 2])].into_iter().collect();
+/// let identity = [(1, vec![1]), (2, vec![2])].into_iter().collect();
+/// assert_eq!(
+/// 	get_persistence_map(&source, &source_reps, &target, &target_reps, &identity)?[&4],
+/// 	vec![2]
+/// );
+/// # Ok::<(), phimaker::errors::PersistenceMapError>(())
 /// ```
 pub fn get_persistence_map(
 	source: &PersistenceDiagram,
@@ -323,7 +441,8 @@ pub fn get_persistence_map(
 		return Ok(HashMap::new());
 	}
 	let source_reps = prepare_representatives(source, source_representatives, "source")?;
-	let basis = prepare_representatives(target, target_representatives, "target")?;
+	let target_reps = prepare_representatives(target, target_representatives, "target")?;
+	let (basis, features) = prepare_target_basis(&target_reps)?;
 	// Normalize the map of generators by sorting and de-duplicating the
 	// supports.
 	let mut columns = HashMap::new();
@@ -352,11 +471,14 @@ pub fn get_persistence_map(
 			}
 			let mut mapped: Vec<_> = mapped.into_iter().collect();
 			mapped.sort_unstable();
-			let mut coefficients =
-				solve(&basis, &mapped).ok_or(PersistenceMapError::Unsolvable {
-					target: "target",
-					birth,
-				})?;
+			let pivots = solve(&basis, &mapped).ok_or(PersistenceMapError::Unsolvable {
+				target: "target",
+				birth,
+			})?;
+			let mut coefficients = Vec::new();
+			for pivot in pivots {
+				coefficients = sum_mod2(&coefficients, &features[&pivot]);
+			}
 			coefficients.retain(|target_birth| target[target_birth] > Finite(birth));
 			for &target_birth in &coefficients {
 				if target_birth > birth || target[&target_birth] > source[&birth] {
@@ -439,47 +561,112 @@ fn kernel_diagram<Decomp: Decomposition<C>, C: Column>(
 	dgm
 }
 
-// Empty decompositions cannot report V availability, but need no
-// representatives. Nonempty decompositions must retain V to supply a complete
-// representative map.
+// Apply the original domain boundary using D = R V^{-1}, without rebuilding D
+// or computing an inverse. V is upper triangular with diagonal entries one.
+fn boundary_of_chain<Decomp: Decomposition<C>, C: Column>(
+	decomposition: &Decomp,
+	mut support: Vec<usize>,
+) -> Vec<usize> {
+	let mut boundary = Vec::new();
+	while let Some(&pivot) = support.last() {
+		let v = decomposition
+			.get_v_col(pivot)
+			.expect("Kernel representative extraction requires retained domain V");
+		support = sum_mod2(&support, &v.entries().collect::<Vec<_>>());
+		boundary = sum_mod2(
+			&boundary,
+			&decomposition.get_r_col(pivot).entries().collect::<Vec<_>>(),
+		);
+	}
+	boundary
+}
+
+fn kernel_representatives<Decomp: Decomposition<C>, C: Column>(
+	metadata: &EnsembleMetadata,
+	diagram: &PersistenceDiagram,
+	ker: &Decomp,
+	d_dom_decomp: &Decomp,
+	d_im_decomp: &Decomp,
+) -> HashMap<usize, Vec<usize>> {
+	diagram
+		.iter()
+		.map(|(&birth, &death)| {
+			let support = match death {
+				Infinity => d_im_decomp.get_r_col(birth).entries().collect::<Vec<_>>(),
+				Finite(death) => {
+					// The kernel column z = a + w is a codomain cycle, with
+					// domain part a and outside part w. The pivot of w is the
+					// kernel birth, so w is available then. Since D z = 0,
+					// D a = D w is a domain cycle available at birth that
+					// bounds in the domain at death. Using the death column
+					// preserves the kernel interval basis.
+					let ker_idx = metadata.kernel_mapping[&death];
+					let domain_part = ker
+						.get_r_col(ker_idx)
+						.entries()
+						.filter(|&idx| idx < metadata.sz_domain)
+						.collect();
+					boundary_of_chain(d_dom_decomp, domain_part)
+				},
+			};
+			let support = support
+				.into_iter()
+				.map(|idx| metadata.dom_first_permutation.inverse_map(idx))
+				.collect();
+			(birth, support)
+		})
+		.collect()
+}
+
+// LoPhat supplies an empty map for an empty decomposition. Nonempty
+// decompositions must retain V to supply a complete representative map.
 fn decomposition_with_reps<Decomp: Decomposition<C>, C: Column>(
 	decomposition: &Decomp,
 ) -> (PersistenceDiagram, HashMap<usize, Vec<usize>>) {
 	let (diagram, representatives) = decomposition.diagram_with_reps();
-	let representatives = match representatives {
-		Ok(reps) => reps,
-		Err(NoVMatrixError::EmptyDecompositionError) => HashMap::new(),
-		Err(NoVMatrixError::VMatrixDiscardedError) => {
-			panic!("Representative extraction requires retained V")
-		},
-	};
+	let representatives = representatives.expect("Representative extraction requires retained V");
 	(diagram, representatives)
 }
 
-fn domain_diagram_with_reps<Decomp: Decomposition<C>, C: Column>(
+// Skip all representative extraction and allocation when it was not requested.
+fn decomposition_diagram<Decomp: Decomposition<C>, C: Column>(
+	decomposition: &Decomp,
+	get_representatives: bool,
+) -> (PersistenceDiagram, Option<HashMap<usize, Vec<usize>>>) {
+	if get_representatives {
+		let (diagram, representatives) = decomposition_with_reps(decomposition);
+		(diagram, Some(representatives))
+	} else {
+		(decomposition.diagram(), None)
+	}
+}
+
+fn domain_diagram<Decomp: Decomposition<C>, C: Column>(
 	metadata: &EnsembleMetadata,
 	d_dom_decomp: &Decomp,
-) -> (PersistenceDiagram, HashMap<usize, Vec<usize>>) {
-	let (diagram, representatives) = decomposition_with_reps(d_dom_decomp);
+	get_representatives: bool,
+) -> (PersistenceDiagram, Option<HashMap<usize, Vec<usize>>>) {
+	let (diagram, representatives) = decomposition_diagram(d_dom_decomp, get_representatives);
 	let unpermute = |idx| metadata.dom_first_permutation.inverse_map(idx);
-	let representatives = representatives
-		.into_iter()
-		.map(|(birth, support)| {
-			(
-				unpermute(birth),
-				support.into_iter().map(unpermute).collect(),
-			)
-		})
-		.collect();
+	let representatives = representatives.map(|r| {
+		r.into_iter()
+			.map(|(birth, support)| {
+				(
+					unpermute(birth),
+					support.into_iter().map(unpermute).collect(),
+				)
+			})
+			.collect()
+	});
 	(diagram.map_idxs(unpermute), representatives)
 }
 
-fn image_diagram_with_reps<Decomp: Decomposition<C>, C: Column>(
+fn image_diagram<Decomp: Decomposition<C>, C: Column>(
 	metadata: &EnsembleMetadata,
 	d_dom_decomp: &Decomp,
 	d_im_decomp: &Decomp,
-	domain_representatives: &HashMap<usize, Vec<usize>>,
-) -> (PersistenceDiagram, HashMap<usize, Vec<usize>>) {
+	domain_representatives: &Option<HashMap<usize, Vec<usize>>>,
+) -> (PersistenceDiagram, Option<HashMap<usize, Vec<usize>>>) {
 	let mut im_dgm = PersistenceDiagram::default();
 	(0..metadata.sz_codomain).for_each(|idx| {
 		if let Some(low_idx) = d_im_decomp.get_r_col(idx).pivot() {
@@ -499,22 +686,24 @@ fn image_diagram_with_reps<Decomp: Decomposition<C>, C: Column>(
 	});
 	// Image R has domain-first rows and original columns. Only its finite
 	// representatives are usable here: image V may include non-domain cells.
-	let (_, reps) = decomposition_with_reps(d_im_decomp);
-	let representatives = im_dgm
-		.iter()
-		.map(|(&birth, &death)| {
-			let support = match death {
-				Finite(_) => {
-					reps[&metadata.dom_first_permutation.map(birth)]
-						.iter()
-						.map(|&idx| metadata.dom_first_permutation.inverse_map(idx))
-						.collect()
-				},
-				Infinity => domain_representatives[&birth].clone(),
-			};
-			(birth, support)
-		})
-		.collect();
+	let representatives = domain_representatives.as_ref().map(|dom_reprs| {
+		let (_, reps) = decomposition_with_reps(d_im_decomp);
+		im_dgm
+			.iter()
+			.map(|(&birth, &death)| {
+				let support = match death {
+					Finite(_) => {
+						reps[&metadata.dom_first_permutation.map(birth)]
+							.iter()
+							.map(|&idx| metadata.dom_first_permutation.inverse_map(idx))
+							.collect()
+					},
+					Infinity => dom_reprs[&birth].clone(),
+				};
+				(birth, support)
+			})
+			.collect()
+	});
 	(im_dgm, representatives)
 }
 
@@ -555,12 +744,16 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 	/// [`ExtendedUsize::Infinity`]. For a mapping-cylinder inclusion, use
 	/// its metadata to recover entrance times. Calling this method again
 	/// returns the same diagrams.
-	/// Domain, codomain, and image representatives use original generator
-	/// indices. Empty diagrams have empty representative maps.
+	/// Domain, codomain, image, and kernel representatives use original
+	/// generator indices when `get_representatives` is true. Requested
+	/// empty diagrams have `Some` of an empty map. When false, all four
+	/// representative maps are `None`, and no representative extraction is
+	/// performed.
 	///
 	/// # Panics
-	/// Panics if a nonempty domain, codomain, or image decomposition did not
-	/// retain V. The computation entry points retain these matrices.
+	/// Panics if representatives are requested and a nonempty domain, codomain,
+	/// or image decomposition did not retain V. The computation entry points
+	/// retain these matrices.
 	///
 	/// # Example
 	///
@@ -569,21 +762,33 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 	/// use phimaker::all_decompositions;
 	///
 	/// let ensemble = all_decompositions::<LockFreeAlgorithm<_>, _>(&[vec![]], &[0], &[0], 1)?;
-	/// let diagrams = ensemble.all_diagrams();
+	/// let diagrams = ensemble.all_diagrams(false);
 	/// assert_eq!(diagrams.domain.len(), 1);
-	/// assert_eq!(diagrams.domain, ensemble.all_diagrams().domain);
+	/// assert!(diagrams.domain_representatives.is_none());
+	/// assert_eq!(diagrams.domain, ensemble.all_diagrams(false).domain);
 	/// # Ok::<(), phimaker::errors::InclusionError>(())
 	/// ```
-	pub fn all_diagrams(&self) -> DiagramEnsemble {
+	pub fn all_diagrams(&self, get_representatives: bool) -> DiagramEnsemble {
 		let (domain, domain_representatives) =
-			domain_diagram_with_reps(&self.metadata, &self.d_dom);
-		let (codomain, codomain_representatives) = decomposition_with_reps(&self.d_cod);
-		let (image, image_representatives) = image_diagram_with_reps(
+			domain_diagram(&self.metadata, &self.d_dom, get_representatives);
+		let (codomain, codomain_representatives) =
+			decomposition_diagram(&self.d_cod, get_representatives);
+		let (image, image_representatives) = image_diagram(
 			&self.metadata,
 			&self.d_dom,
 			&self.d_im,
 			&domain_representatives,
 		);
+		let kernel = kernel_diagram(&self.metadata, &self.d_ker, &self.d_dom, &self.d_im);
+		let kernel_representatives = get_representatives.then(|| {
+			kernel_representatives(
+				&self.metadata,
+				&kernel,
+				&self.d_ker,
+				&self.d_dom,
+				&self.d_im,
+			)
+		});
 		DiagramEnsemble {
 			domain,
 			domain_representatives,
@@ -591,6 +796,8 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 			codomain_representatives,
 			image,
 			image_representatives,
+			kernel,
+			kernel_representatives,
 			relative: {
 				let f = |idx| {
 					self.metadata
@@ -601,7 +808,6 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 					.anti_transpose(self.metadata.sz_codomain - self.metadata.sz_domain)
 					.map_idxs(f)
 			},
-			kernel: kernel_diagram(&self.metadata, &self.d_ker, &self.d_dom, &self.d_im),
 			cokernel: cokernel_diagram(&self.metadata, &self.d_dom, &self.d_im, &self.d_cok),
 		}
 	}
@@ -643,12 +849,16 @@ impl FileEnsemble {
 	/// Files must be positioned at the start of compatible decomposition data.
 	/// Reading advances every file cursor; rewind all six before calling again.
 	/// This call requires memory for all six decompositions.
-	/// Domain, codomain, and image representatives use original generator
-	/// indices. Empty diagrams have empty representative maps.
+	/// Domain, codomain, image, and kernel representatives use original
+	/// generator indices when `get_representatives` is true. Requested
+	/// empty diagrams have `Some` of an empty map. When false, all four
+	/// representative maps are `None`, and no representative extraction is
+	/// performed.
 	///
 	/// # Panics
 	/// Panics on read errors or incompatible or corrupt serialized data, or if
-	/// a nonempty domain, codomain, or image decomposition did not retain V.
+	/// representatives are requested from a nonempty domain, codomain, or image
+	/// decomposition that did not retain V.
 	/// The computation entry points retain these matrices.
 	///
 	/// # Example
@@ -658,10 +868,10 @@ impl FileEnsemble {
 	/// use phimaker::all_decompositions_slow;
 	///
 	/// let stored = all_decompositions_slow::<LockFreeAlgorithm<_>, _>(&[vec![]], &[0], &[0], 1)?;
-	/// assert_eq!(stored.all_diagrams().domain.len(), 1);
+	/// assert_eq!(stored.all_diagrams(false).domain.len(), 1);
 	/// # Ok::<(), phimaker::errors::InclusionError>(())
 	/// ```
-	pub fn all_diagrams(&self) -> DiagramEnsemble {
+	pub fn all_diagrams(&self, get_representatives: bool) -> DiagramEnsemble {
 		let d_dom_decomp = from_file(&self.d_dom);
 		let d_cod_decomp = from_file(&self.d_cod);
 		let d_im_decomp = from_file(&self.d_im);
@@ -669,14 +879,25 @@ impl FileEnsemble {
 		let d_ker_decomp = from_file(&self.d_ker);
 		let d_rel_decomp = from_file(&self.d_rel);
 		let (domain, domain_representatives) =
-			domain_diagram_with_reps(&self.metadata, &d_dom_decomp);
-		let (codomain, codomain_representatives) = decomposition_with_reps(&d_cod_decomp);
-		let (image, image_representatives) = image_diagram_with_reps(
+			domain_diagram(&self.metadata, &d_dom_decomp, get_representatives);
+		let (codomain, codomain_representatives) =
+			decomposition_diagram(&d_cod_decomp, get_representatives);
+		let (image, image_representatives) = image_diagram(
 			&self.metadata,
 			&d_dom_decomp,
 			&d_im_decomp,
 			&domain_representatives,
 		);
+		let kernel = kernel_diagram(&self.metadata, &d_ker_decomp, &d_dom_decomp, &d_im_decomp);
+		let kernel_representatives = get_representatives.then(|| {
+			kernel_representatives(
+				&self.metadata,
+				&kernel,
+				&d_ker_decomp,
+				&d_dom_decomp,
+				&d_im_decomp,
+			)
+		});
 		DiagramEnsemble {
 			domain,
 			domain_representatives,
@@ -684,6 +905,8 @@ impl FileEnsemble {
 			codomain_representatives,
 			image,
 			image_representatives,
+			kernel,
+			kernel_representatives,
 			relative: {
 				let f = |idx| {
 					self.metadata
@@ -694,7 +917,6 @@ impl FileEnsemble {
 					.anti_transpose(self.metadata.sz_codomain - self.metadata.sz_domain)
 					.map_idxs(f)
 			},
-			kernel: kernel_diagram(&self.metadata, &d_ker_decomp, &d_dom_decomp, &d_im_decomp),
 			cokernel: cokernel_diagram(&self.metadata, &d_dom_decomp, &d_im_decomp, &d_cok_decomp),
 		}
 	}
@@ -714,7 +936,7 @@ mod tests {
 		ExtendedUsize::{Finite, Infinity},
 		PersistenceDiagram,
 		solve,
-		xor_sorted,
+		sum_mod2,
 	};
 
 	/// Solve every combination of a sparse triangular basis, including zero;
@@ -727,7 +949,7 @@ mod tests {
 			let mut expected = Vec::new();
 			for (bit, key) in [2, 4, 7].into_iter().enumerate() {
 				if mask & (1 << bit) != 0 {
-					b = xor_sorted(&b, &a[&key]);
+					b = sum_mod2(&b, &a[&key]);
 					expected.push(key);
 				}
 			}

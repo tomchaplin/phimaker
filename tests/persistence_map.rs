@@ -27,6 +27,121 @@ fn generator_images_produce_binary_coefficients() {
 	assert_eq!(result, HashMap::from([(1, vec![0, 1])]));
 }
 
+/// Kernel births can occur after all generators of the representing domain
+/// cycle. Identity generator images recover the kernel-to-domain coefficient.
+#[test]
+fn source_cycle_can_precede_feature_birth() {
+	let source = [(4, Finite(5))].into_iter().collect();
+	let target = [(1, Infinity), (2, Finite(5))].into_iter().collect();
+	assert_eq!(
+		get_persistence_map(
+			&source,
+			&HashMap::from([(4, vec![1, 2])]),
+			&target,
+			&HashMap::from([(1, vec![1]), (2, vec![1, 2])]),
+			&HashMap::from([(1, vec![1]), (2, vec![2])]),
+		)
+		.unwrap(),
+		HashMap::from([(4, vec![2])]),
+	);
+}
+
+/// Target births are feature labels, not necessarily the pivots of their
+/// representatives. Colliding initial pivots still give unique coefficients.
+#[test]
+fn target_basis_is_reduced_without_changing_feature_labels() {
+	let source = [(5, Finite(9))].into_iter().collect();
+	let target = [(1, Finite(8)), (3, Finite(7))].into_iter().collect();
+	assert_eq!(
+		get_persistence_map(
+			&source,
+			&HashMap::from([(5, vec![0])]),
+			&target,
+			&HashMap::from([(1, vec![0, 1]), (3, vec![1])]),
+			&HashMap::from([(0, vec![0])]),
+		)
+		.unwrap(),
+		HashMap::from([(5, vec![1, 3])]),
+	);
+}
+
+/// Every combination of an independent basis with colliding pivots retains
+/// the original feature labels after triangularization, including zero.
+#[test]
+fn all_combinations_of_earlier_supported_targets() {
+	let source = [(7, Infinity)].into_iter().collect();
+	let target = [(1, Infinity), (3, Infinity), (5, Infinity)]
+		.into_iter()
+		.collect();
+	let representatives = HashMap::from([(1, vec![0, 1]), (3, vec![1]), (5, vec![0, 1, 2])]);
+	for mask in 0..8 {
+		let mut image = std::collections::HashSet::new();
+		let mut expected = Vec::new();
+		for (bit, birth) in [1, 3, 5].into_iter().enumerate() {
+			if mask & (1 << bit) == 0 {
+				continue;
+			}
+			expected.push(birth);
+			for &idx in &representatives[&birth] {
+				if !image.insert(idx) {
+					image.remove(&idx);
+				}
+			}
+		}
+		assert_eq!(
+			get_persistence_map(
+				&source,
+				&HashMap::from([(7, vec![0])]),
+				&target,
+				&representatives,
+				&HashMap::from([(0, image.into_iter().collect())]),
+			)
+			.unwrap()[&7],
+			expected,
+		);
+	}
+}
+
+/// Availability of a cycle does not permit mapping to a future-born feature
+/// represented by that cycle.
+#[test]
+fn future_target_feature_with_older_support_is_rejected() {
+	let source = [(2, Infinity)].into_iter().collect();
+	let target = [(1, Finite(8)), (3, Finite(7))].into_iter().collect();
+	assert_eq!(
+		get_persistence_map(
+			&source,
+			&HashMap::from([(2, vec![1])]),
+			&target,
+			&HashMap::from([(1, vec![0, 1]), (3, vec![1])]),
+			&HashMap::from([(1, vec![1])]),
+		),
+		Err(PersistenceMapError::IncompatibleIntervals {
+			target: "target",
+			birth: 2,
+			target_birth: 3,
+		}),
+	);
+}
+
+/// Earlier-supported targets must still be independent to define cycle-basis
+/// coefficients unambiguously.
+#[test]
+fn dependent_target_representatives_are_rejected() {
+	let source = [(3, Infinity)].into_iter().collect();
+	let target = [(0, Infinity), (2, Infinity)].into_iter().collect();
+	assert_eq!(
+		get_persistence_map(
+			&source,
+			&HashMap::from([(3, vec![0])]),
+			&target,
+			&HashMap::from([(0, vec![0]), (2, vec![0])]),
+			&HashMap::from([(0, vec![0])]),
+		),
+		Err(PersistenceMapError::InconsistentData { diagram: "target" }),
+	);
+}
+
 /// Equal images of distinct source generators cancel, yielding the zero cycle.
 #[test]
 fn overlapping_generator_images_cancel() {

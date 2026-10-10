@@ -75,14 +75,18 @@ class DiagramEnsemble:
 	to recover filtration times and degrees. A kernel interval has the degree of
 	its birth generator minus one; other intervals have the birth-generator degree.
 
-	The ``domain_representatives``, ``codomain_representatives``, and
-	``image_representatives`` attributes map birth indices to lists of generator
-	indices. Summing the listed generators over the field with two elements gives
-	a representative cycle. Keys and entries use the same coordinates as the diagrams.
-	If ``b`` is a feature's birth index in any of these diagrams, the maximum index
-	in its representative is equal to ``b``. Representatives need not be minimal or
+	The ``domain_representatives``, ``codomain_representatives``,
+	``image_representatives``, and ``kernel_representatives`` attributes are ``None`` unless
+	``get_representatives=True`` was requested. When requested, they map birth
+	indices to lists of generator indices. Summing the listed generators over the
+	field with two elements gives a representative cycle. Keys and entries use the
+	same coordinates as the diagrams.
+	For domain, codomain, and image features, the maximum index in a representative
+	equals the feature's birth. Kernel representatives use only domain generators,
+	with indices strictly less than the kernel birth. Representatives need not be minimal or
 	unique. Each representative dictionary has exactly its diagram's birth keys.
-	An empty diagram has an empty representative dictionary.
+	A requested empty diagram has an empty representative dictionary. If extraction
+	was skipped, its representative attribute is still ``None``.
 
 	Attributes are read-only. Each dictionary access returns an independent copy,
 	including the lists in representative dictionaries. Editing a copy does not
@@ -91,9 +95,10 @@ class DiagramEnsemble:
 	Example::
 
 	    >>> from phimaker import sixpack_from_inclusion
-	    >>> result = sixpack_from_inclusion([[]], [0], [0])
+	    >>> result = sixpack_from_inclusion([[]], [0], [0], get_representatives=True)
 	    >>> assert result.domain == {0: None}
 	    >>> assert result.domain_representatives == {0: [0]}
+	    >>> assert result.kernel_representatives == {}
 	    >>> diagram = result.domain
 	    >>> diagram.clear()
 	    >>> assert result.domain == {0: None}
@@ -104,13 +109,14 @@ class DiagramEnsemble:
 		Persistent homology of the codomain, as a birth-to-death dictionary.
 		"""
 	@property
-	def codomain_representatives(self, /) -> dict[int, list[int]]:
+	def codomain_representatives(self, /) -> dict[int, list[int]] | None:
 		"""
 		Codomain representatives, as a dictionary from birth indices to generator lists.
 
 		Sum the listed generators over the field with two elements to obtain a cycle.
-		Indices use the codomain diagram's coordinates. An empty codomain diagram has an
-		empty dictionary.
+		Indices use the codomain diagram's coordinates. When requested, an empty codomain
+		diagram has an empty dictionary. ``None`` means representative extraction was
+		skipped.
 		"""
 	@property
 	def cokernel(self, /) -> dict[int, int | None]:
@@ -123,13 +129,14 @@ class DiagramEnsemble:
 		Persistent homology of the domain, as a birth-to-death dictionary.
 		"""
 	@property
-	def domain_representatives(self, /) -> dict[int, list[int]]:
+	def domain_representatives(self, /) -> dict[int, list[int]] | None:
 		"""
 		Domain representatives, as a dictionary from birth indices to generator lists.
 
 		Sum the listed generators over the field with two elements to obtain a cycle.
-		Indices use the domain diagram's coordinates. An empty domain diagram has an
-		empty dictionary.
+		Indices use the domain diagram's coordinates. When requested, an empty domain
+		diagram has an empty dictionary. ``None`` means representative extraction was
+		skipped.
 		"""
 	@property
 	def image(self, /) -> dict[int, int | None]:
@@ -137,13 +144,14 @@ class DiagramEnsemble:
 		Image of the induced homology map, as a birth-to-death dictionary.
 		"""
 	@property
-	def image_representatives(self, /) -> dict[int, list[int]]:
+	def image_representatives(self, /) -> dict[int, list[int]] | None:
 		"""
 		Image representatives, as a dictionary from birth indices to generator lists.
 
 		Sum the listed generators over the field with two elements to obtain a cycle.
-		Only domain generators occur, in the image diagram's coordinates. An empty image
-		diagram has an empty dictionary.
+		Only domain generators occur, in the image diagram's coordinates. When requested,
+		an empty image diagram has an empty dictionary. ``None`` means representative
+		extraction was skipped.
 		"""
 	@property
 	def kernel(self, /) -> dict[int, int | None]:
@@ -151,6 +159,19 @@ class DiagramEnsemble:
 		Kernel of the induced homology map, as a birth-to-death dictionary.
 
 		The degree of an interval is the degree of its birth generator minus one.
+		"""
+	@property
+	def kernel_representatives(self, /) -> dict[int, list[int]] | None:
+		"""
+		Kernel representatives, as a dictionary from birth indices to generator lists.
+
+		Sum the listed generators over the field with two elements to obtain a domain
+		cycle that is zero in codomain homology. Supports use the diagram's ambient
+		coordinates and contain only domain generators, with indices strictly less than
+		the kernel birth. When requested, an empty kernel diagram has an empty dictionary.
+		``None`` means representative extraction was skipped. Use these representatives
+		with :py:func:`~phimaker.get_persistence_map` and the identity map to
+		compute the kernel-to-domain inclusion.
 		"""
 	@property
 	def relative(self, /) -> dict[int, int | None]:
@@ -189,20 +210,28 @@ def get_persistence_map(
 	and map keys use the source generator basis; target representatives and map
 	values use the target generator basis.
 
+	Representative dictionaries must be supplied explicitly; ``None`` is not accepted.
+	When using a computation result, request ``get_representatives=True``.
 	Representative dictionaries must have exactly their diagram's birth keys. Each
-	support must have maximum index equal to its birth, and finite deaths must be
-	strictly later than births. Supports and individual mapping columns may be in
+	support must be nonempty and use generator indices no greater than the feature's
+	birth. A feature may be born after every generator in its representative; the
+	maximum support index need not equal its birth. Finite deaths must be strictly
+	later than births. Supports and individual mapping columns may be in
 	any order. Repeated indices within a column identify the same nonzero entry and
 	are ignored. Overlaps between distinct mapped columns cancel when added over F2.
 
 	Representatives must be cycles and the generator map must preserve degree,
 	filtration, and boundaries. Cyclehood, degrees, and the chain-map identity are
-	not checked. Mapped cycles must lie in the span of target representatives.
+	not checked. Target representatives must be linearly independent as chain vectors
+	and span the mapped source cycles; their pivots need not equal their birth labels.
 	An empty source returns an empty dictionary without inspecting representatives.
 	Target features dead at the source birth are omitted after cycle expansion.
 	Every retained coefficient satisfies
 	``target_birth <= source_birth < target_death <= source_death``, with ``None``
 	interpreted as infinity. At a filtration index, use only intervals alive there.
+	Target features can be born earlier than source features; equal births are not
+	required. Only target features already born and still alive at the source birth
+	can have nonzero coefficients.
 	The call blocks until results are ready; other Python threads can run meanwhile.
 
 	:raises RuntimeError: If representatives are unavailable or inconsistent, a
@@ -217,7 +246,7 @@ def get_persistence_map(
 	Example::
 
 	    >>> from phimaker import get_persistence_map, sixpack_from_inclusion
-	    >>> diagrams = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [1])
+	    >>> diagrams = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [1], get_representatives=True)
 	    >>> get_persistence_map(
 	    ...     diagrams.domain, diagrams.domain_representatives,
 	    ...     diagrams.codomain, diagrams.codomain_representatives, {1: [1]},
@@ -228,12 +257,17 @@ def get_persistence_map(
 	    ...     diagrams.image, diagrams.image_representatives, {1: [1]},
 	    ... )
 	    {1: [1]}
+	    >>> get_persistence_map(
+	    ...     {4: 5}, {4: [1, 2]}, {2: 5}, {2: [1, 2]}, {1: [1], 2: [2]},
+	    ... )
+	    {4: [2]}
 	"""
 
 def sixpack(
 	domain_matrix: Sequence[tuple[float, int, Sequence[int]]],
 	codomain_matrix: Sequence[tuple[float, int, Sequence[int]]],
 	map: Sequence[Sequence[int]],
+	get_representatives: bool = False,
 	num_threads: int = 0,
 	slow: bool = False,
 ) -> tuple[DiagramEnsemble, CylinderMetadata]:
@@ -247,6 +281,10 @@ def sixpack(
 	:param map: Column ``i`` lists the codomain generators with coefficient one
 	    in the image of domain generator ``i``. Supply at least one column per domain
 	    generator; additional map columns are ignored.
+	:param get_representatives: Whether to extract domain, codomain, image, and kernel cycles.
+	    Defaults to ``False``, which skips extraction and leaves the four
+	    representative attributes as ``None``. With ``True``, empty diagrams have
+	    empty representative dictionaries.
 	:param num_threads: Worker limit per computation step, default ``0``. Zero
 	    selects the count automatically. The whole call may use more threads.
 	:param slow: Whether to use temporary files to reduce memory use while computing.
@@ -254,7 +292,7 @@ def sixpack(
 	    during final diagram computation.
 	:returns: ``(diagrams, metadata)``. Diagram attributes are birth-to-death
 	    dictionaries, with ``None`` for features persisting beyond the supplied
-	    filtration. Endpoints identify mapping-cylinder columns, rather than original
+	    filtration. Interval endpoints identify mapping-cylinder columns, rather than original
 	    input columns. Use ``metadata.times[index]`` to recover filtration times.
 	    ``metadata.domain_indices`` and ``metadata.codomain_indices`` locate the
 	    original generators. Intervals with equal birth and death times are retained.
@@ -302,6 +340,7 @@ def sixpack_from_inclusion(
 	boundary_matrix: Sequence[Sequence[int]],
 	degrees: Sequence[int],
 	cols_in_domain: Sequence[int],
+	get_representatives: bool = False,
 	num_threads: int = 0,
 	slow: bool = False,
 ) -> DiagramEnsemble:
@@ -315,6 +354,10 @@ def sixpack_from_inclusion(
 	:param degrees: Nonnegative degree of each codomain generator, one per column.
 	:param cols_in_domain: Indices selecting the domain generators in the codomain.
 	    Any order is accepted; repeated indices are ignored.
+	:param get_representatives: Whether to extract domain, codomain, image, and kernel cycles.
+	    Defaults to ``False``, which skips extraction and leaves the four
+	    representative attributes as ``None``. With ``True``, empty diagrams have
+	    empty representative dictionaries.
 	:param num_threads: Worker limit per computation step, default ``0``. Zero
 	    selects the count automatically. The whole call may use more threads.
 	:param slow: Whether to use temporary files to reduce memory use while computing.

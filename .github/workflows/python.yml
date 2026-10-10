@@ -91,6 +91,28 @@ jobs:
                   assert ast.unparse(arguments[argument]) == "dict[int, int | None]", (
                       f"Missing diagram input type for {argument}"
                   )
+              for name in ("sixpack", "sixpack_from_inclusion"):
+                  function = functions[name]
+                  arguments = {arg.arg: arg.annotation for arg in function.args.args}
+                  assert ast.unparse(arguments["get_representatives"]) == "bool"
+                  defaults = dict(zip(
+                      [arg.arg for arg in function.args.args][-len(function.args.defaults):],
+                      function.args.defaults,
+                  ))
+                  assert ast.literal_eval(defaults["get_representatives"]) is False
+              ensemble = next(
+                  node for node in ast.parse(stub).body
+                  if isinstance(node, ast.ClassDef) and node.name == "DiagramEnsemble"
+              )
+              getters = {
+                  node.name: node for node in ensemble.body
+                  if isinstance(node, ast.FunctionDef)
+              }
+              for name in (
+                  "domain_representatives", "codomain_representatives", "image_representatives",
+                  "kernel_representatives"
+              ):
+                  assert ast.unparse(getters[name].returns) == "dict[int, list[int]] | None"
           PY
       - name: Install the built wheel
         run: >-

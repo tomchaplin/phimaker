@@ -35,20 +35,28 @@ This requirement cannot be checked from these inputs. Source representatives
 and map keys use the source generator basis; target representatives and map
 values use the target generator basis.
 
+Representative dictionaries must be supplied explicitly; ``None`` is not accepted.
+When using a computation result, request ``get_representatives=True``.
 Representative dictionaries must have exactly their diagram's birth keys. Each
-support must have maximum index equal to its birth, and finite deaths must be
-strictly later than births. Supports and individual mapping columns may be in
+support must be nonempty and use generator indices no greater than the feature's
+birth. A feature may be born after every generator in its representative; the
+maximum support index need not equal its birth. Finite deaths must be strictly
+later than births. Supports and individual mapping columns may be in
 any order. Repeated indices within a column identify the same nonzero entry and
 are ignored. Overlaps between distinct mapped columns cancel when added over F2.
 
 Representatives must be cycles and the generator map must preserve degree,
 filtration, and boundaries. Cyclehood, degrees, and the chain-map identity are
-not checked. Mapped cycles must lie in the span of target representatives.
+not checked. Target representatives must be linearly independent as chain vectors
+and span the mapped source cycles; their pivots need not equal their birth labels.
 An empty source returns an empty dictionary without inspecting representatives.
 Target features dead at the source birth are omitted after cycle expansion.
 Every retained coefficient satisfies
 ``target_birth <= source_birth < target_death <= source_death``, with ``None``
 interpreted as infinity. At a filtration index, use only intervals alive there.
+Target features can be born earlier than source features; equal births are not
+required. Only target features already born and still alive at the source birth
+can have nonzero coefficients.
 The call blocks until results are ready; other Python threads can run meanwhile.
 
 :raises RuntimeError: If representatives are unavailable or inconsistent, a
@@ -63,7 +71,7 @@ The call blocks until results are ready; other Python threads can run meanwhile.
 Example::
 
     >>> from phimaker import get_persistence_map, sixpack_from_inclusion
-    >>> diagrams = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [1])
+    >>> diagrams = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [1], get_representatives=True)
     >>> get_persistence_map(
     ...     diagrams.domain, diagrams.domain_representatives,
     ...     diagrams.codomain, diagrams.codomain_representatives, {1: [1]},
@@ -73,7 +81,11 @@ Example::
     ...     diagrams.domain, diagrams.domain_representatives,
     ...     diagrams.image, diagrams.image_representatives, {1: [1]},
     ... )
-    {1: [1]}"#
+    {1: [1]}
+    >>> get_persistence_map(
+    ...     {4: 5}, {4: [1, 2]}, {2: 5}, {2: [1, 2]}, {1: [1], 2: [2]},
+    ... )
+    {4: [2]}"#
 )]
 #[pyfunction(name = "get_persistence_map")]
 fn py_get_persistence_map(
@@ -105,6 +117,10 @@ r#"Compute six persistence diagrams for an inclusion of filtered chain complexes
 :param degrees: Nonnegative degree of each codomain generator, one per column.
 :param cols_in_domain: Indices selecting the domain generators in the codomain.
     Any order is accepted; repeated indices are ignored.
+:param get_representatives: Whether to extract domain, codomain, image, and kernel cycles.
+    Defaults to ``False``, which skips extraction and leaves the four
+    representative attributes as ``None``. With ``True``, empty diagrams have
+    empty representative dictionaries.
 :param num_threads: Worker limit per computation step, default ``0``. Zero
     selects the count automatically. The whole call may use more threads.
 :param slow: Whether to use temporary files to reduce memory use while computing.
@@ -149,12 +165,13 @@ Example::
     >>> assert diagrams.relative == {0: 2}"#
 )]
 #[pyfunction(name = "sixpack_from_inclusion")]
-#[pyo3(signature = (boundary_matrix, degrees, cols_in_domain, num_threads=0, slow=false))]
+#[pyo3(signature = (boundary_matrix, degrees, cols_in_domain, get_representatives=false, num_threads=0, slow=false))]
 fn py_sixpack_from_inclusion(
 	py: Python<'_>,
 	boundary_matrix: Vec<Vec<usize>>,
 	degrees: Vec<usize>,
 	cols_in_domain: Vec<usize>,
+	get_representatives: bool,
 	num_threads: usize,
 	slow: bool,
 ) -> PyResult<DiagramEnsemble> {
@@ -163,6 +180,7 @@ fn py_sixpack_from_inclusion(
 			&boundary_matrix,
 			&degrees,
 			&cols_in_domain,
+			get_representatives,
 			num_threads,
 			slow,
 		)
@@ -180,6 +198,10 @@ r#"Compute six persistence diagrams for a filtered chain map over F2.
 :param map: Column ``i`` lists the codomain generators with coefficient one
     in the image of domain generator ``i``. Supply at least one column per domain
     generator; additional map columns are ignored.
+:param get_representatives: Whether to extract domain, codomain, image, and kernel cycles.
+    Defaults to ``False``, which skips extraction and leaves the four
+    representative attributes as ``None``. With ``True``, empty diagrams have
+    empty representative dictionaries.
 :param num_threads: Worker limit per computation step, default ``0``. Zero
     selects the count automatically. The whole call may use more threads.
 :param slow: Whether to use temporary files to reduce memory use while computing.
@@ -187,7 +209,7 @@ r#"Compute six persistence diagrams for a filtered chain map over F2.
     during final diagram computation.
 :returns: ``(diagrams, metadata)``. Diagram attributes are birth-to-death
     dictionaries, with ``None`` for features persisting beyond the supplied
-    filtration. Endpoints identify mapping-cylinder columns, rather than original
+    filtration. Interval endpoints identify mapping-cylinder columns, rather than original
     input columns. Use ``metadata.times[index]`` to recover filtration times.
     ``metadata.domain_indices`` and ``metadata.codomain_indices`` locate the
     original generators. Intervals with equal birth and death times are retained.
@@ -231,17 +253,27 @@ Example::
     >>> assert metadata.times[birth] == 2.0"#
 )]
 #[pyfunction(name = "sixpack")]
-#[pyo3(signature = (domain_matrix, codomain_matrix, map, num_threads=0, slow=false))]
+#[pyo3(signature = (domain_matrix, codomain_matrix, map, get_representatives=false, num_threads=0, slow=false))]
 fn py_sixpack(
 	py: Python<'_>,
 	domain_matrix: Vec<(f64, usize, Vec<usize>)>,
 	codomain_matrix: Vec<(f64, usize, Vec<usize>)>,
 	map: Vec<Vec<usize>>,
+	get_representatives: bool,
 	num_threads: usize,
 	slow: bool,
 ) -> PyResult<(DiagramEnsemble, CylinderMetadata)> {
-	py.detach(|| sixpack(&domain_matrix, &codomain_matrix, &map, num_threads, slow))
-		.map_err(|error| PyValueError::new_err(error.to_string()))
+	py.detach(|| {
+		sixpack(
+			&domain_matrix,
+			&codomain_matrix,
+			&map,
+			get_representatives,
+			num_threads,
+			slow,
+		)
+	})
+	.map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
 #[rustfmt::skip::attributes(doc)]

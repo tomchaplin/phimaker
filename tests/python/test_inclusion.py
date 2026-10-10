@@ -21,7 +21,7 @@ def assert_diagrams(result: Any, expected: dict[str, dict[int, int | None]]) -> 
 @pytest.mark.parametrize("vertex", [0, 1])
 def test_vertex_into_interval(vertex: int, *, slow: bool) -> None:
 	"""Domain-first row order must not change ordinary codomain elder pairing."""
-	result = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [vertex], 1, slow)
+	result = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [vertex], num_threads=1, slow=slow)
 	assert_diagrams(
 		result,
 		{
@@ -39,7 +39,9 @@ def test_vertex_into_interval(vertex: int, *, slow: bool) -> None:
 @pytest.mark.parametrize("domain", [[0, 1], [1, 0]])
 def test_unsorted_domain_with_finite_class(domain: list[int], *, slow: bool) -> None:
 	"""Sorting domain indices must keep local columns and row coordinates aligned."""
-	result = sixpack_from_inclusion([[], [0], [], [2]], [0, 1, 0, 1], domain, 1, slow)
+	result = sixpack_from_inclusion(
+		[[], [0], [], [2]], [0, 1, 0, 1], domain, num_threads=1, slow=slow
+	)
 	assert_diagrams(
 		result,
 		{
@@ -60,8 +62,8 @@ def test_boundary_circle_filled_in_codomain(*, slow: bool) -> None:
 		[[], [], [], [0, 1], [1, 2], [0, 2], [3, 4, 5]],
 		[0, 0, 0, 1, 1, 1, 2],
 		list(range(6)),
-		1,
-		slow,
+		num_threads=1,
+		slow=slow,
 	)
 	assert_diagrams(
 		result,
@@ -98,8 +100,8 @@ def test_face_into_tetrahedron_boundary(*, slow: bool) -> None:
 		],
 		[0] * 4 + [1] * 6 + [2] * 4,
 		[0, 1, 2, 4, 5, 6, 13],
-		1,
-		slow,
+		num_threads=1,
+		slow=slow,
 	)
 	assert_diagrams(
 		result,
@@ -152,12 +154,12 @@ def test_empty_and_identity_inclusions(
 	expected: dict[str, dict[int, int | None]],
 ) -> None:
 	"""Empty quotients have no basepoint; identity maps have zero kernel and cokernel."""
-	assert_diagrams(sixpack_from_inclusion(matrix, dimensions, domain, 1), expected)
+	assert_diagrams(sixpack_from_inclusion(matrix, dimensions, domain, num_threads=1), expected)
 
 
 def test_dictionary_lookup_and_copy() -> None:
 	"""Python getters return independent dictionaries and use None for infinity."""
-	result = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [0], 1)
+	result = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [0], num_threads=1)
 	diagram = result.codomain
 	assert diagram[1] == 2
 	assert diagram[0] is None

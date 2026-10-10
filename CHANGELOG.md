@@ -43,9 +43,28 @@ since `v0.3.0`.
   Python function `get_persistence_map`. Supply source and target diagrams,
   their representatives, and a generator map; call it separately for the
   domain-to-codomain and domain-to-image maps.
+- Make domain, codomain, and image representatives optional on `DiagramEnsemble`.
+  Rust `sixpack`, `sixpack_from_inclusion`, and both `all_diagrams` methods take
+  a `get_representatives` flag. Python convenience functions default it to
+  `False`; pass `get_representatives=True` before using their representatives
+  with `get_persistence_map`.
 
 ### Added
 
+- Optional `kernel_representatives` on `DiagramEnsemble` in Rust and Python,
+  controlled by the existing `get_representatives` flag in both computation
+  modes. Cycles use only domain generators preceding the kernel birth, bound
+  in the codomain, and follow finite kernel death pairings. Use identity
+  generator images with `get_persistence_map` for the kernel-to-domain inclusion.
+  Add regressions for finite and essential classes, differing birth/death cycle
+  bases, domain index translation, and zero-map cylinders; check independence
+  in domain homology and the zero composite into codomain homology.
+- Rust and Python regressions for image-to-codomain persistence maps in both
+  computation modes, including sums, different representative bases, dead targets,
+  empty images, and identity and zero-map cylinders. Verify pointwise injectivity
+  and factorization of domain-to-codomain through the image, accounting for interval
+  lifetimes when composing maps. Include nonzero interval maps whose composition
+  is zero because the outer intervals do not overlap.
 - Standalone `get_persistence_map(source, source_representatives, target,
   target_representatives, generator_map)` for sparse binary persistence maps
   between supplied cycle bases. Apply generator images over F2 before sparse
@@ -59,9 +78,10 @@ since `v0.3.0`.
   by birth index with cycle supports in diagram coordinates. Extract representatives
   in both normal and slow modes using LoPhat's `diagram_with_reps`; translate domain
   and image row indices back to original generator indices and use domain cycles
-  for essential image features. Store representatives as plain maps, with empty
-  maps for empty diagrams. Nonempty domain, codomain, and image decompositions
-  must retain V for diagram extraction.
+  for essential image features. Store representatives as optional maps: `None`
+  when extraction is skipped, or a map (empty for empty diagrams) when requested.
+  Nonempty domain, codomain, and image decompositions must retain V when
+  representatives are requested. Diagram-only extraction does not require V.
 - A shared inclusion preparation step with typed `InclusionError` variants for
   degree-count mismatches, invalid domain indices, non-upper-triangular
   boundaries, incorrect boundary degrees, and domains not closed under boundary.
@@ -86,6 +106,12 @@ since `v0.3.0`.
 
 ### Changed
 
+- Allow source and target persistence-map representatives supported strictly
+  before their feature births. Validate availability by birth instead of
+  requiring equality with the maximum support index. Reduce target cycle bases
+  with overlapping pivots while preserving their feature labels; reject
+  dependent target cycles and retain interval lifetime checks. Document the
+  relaxed contract and cover kernel-style inputs and future-born target features.
 - Adapt LoPhat's Python wheel and Rust crate workflows. Every push, pull request,
   and manual dispatch runs Rust tests and builds, installs, and tests each Python
   wheel. A published GitHub release uploads tested wheels to PyPI and publishes
@@ -130,6 +156,7 @@ since `v0.3.0`.
 
 ### Fixed
 
+- Skip image representative extraction when representatives are disabled.
 - Construct the relative complex as the quotient by the domain without an extra
   degree-zero basepoint. Identity inclusions now have empty relative homology.
 - Correct kernel classification and index translation across original,

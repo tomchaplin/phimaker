@@ -25,7 +25,7 @@ def timed_bars(result: Any, metadata: Any, name: str) -> list[tuple[int, float, 
 def test_identity_chain_map(*, slow: bool) -> None:
 	"""Identity preserves homology and has acyclic cone, even with tied times."""
 	interval = [(0.0, 0, []), (0.0, 0, []), (1.0, 1, [0, 1])]
-	result, metadata = sixpack(interval, interval, [[0], [1], [2]], 1, slow)
+	result, metadata = sixpack(interval, interval, [[0], [1], [2]], num_threads=1, slow=slow)
 	for name in NAMES:
 		expected = [(0, 0.0, 1.0), (0, 0.0, float("inf"))] if name in NAMES[:3] else []
 		assert timed_bars(result, metadata, name) == expected, name
@@ -43,7 +43,7 @@ def test_identity_chain_map(*, slow: bool) -> None:
 @pytest.mark.parametrize("slow", [False, True])
 def test_zero_map_of_points(*, slow: bool) -> None:
 	"""A zero map has full kernel/cokernel and a suspended domain in its cone."""
-	result, metadata = sixpack([(0.0, 0, [])], [(0.0, 0, [])], [[]], 1, slow)
+	result, metadata = sixpack([(0.0, 0, [])], [(0.0, 0, [])], [[]], num_threads=1, slow=slow)
 	point = [(0, 0.0, float("inf"))]
 	expected = {
 		"domain": point,
@@ -72,7 +72,9 @@ def test_square_fills_earlier_in_codomain(*, slow: bool) -> None:
 			(2.0, 2, [6, 7, 8]),
 		]
 	)
-	result, metadata = sixpack(domain, codomain, [[i] for i in range(8)] + [[9, 10]], 1, slow)
+	result, metadata = sixpack(
+		domain, codomain, [[i] for i in range(8)] + [[9, 10]], num_threads=1, slow=slow
+	)
 	essential = [(0, 0.0, float("inf"))]
 	expected = {
 		"domain": [(0, 0.0, 1.0)] * 3 + essential + [(1, 1.0, 10.0)],

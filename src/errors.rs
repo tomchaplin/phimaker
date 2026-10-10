@@ -14,7 +14,7 @@ use std::{error::Error, fmt};
 /// ```
 /// use phimaker::{errors::InclusionError, sixpack_from_inclusion};
 ///
-/// let error = sixpack_from_inclusion(&[vec![]], &[], &[], 1, false).unwrap_err();
+/// let error = sixpack_from_inclusion(&[vec![]], &[], &[], false, 1, false).unwrap_err();
 /// assert_eq!(
 /// 	error,
 /// 	InclusionError::DegreeCount {

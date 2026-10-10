@@ -86,18 +86,34 @@ class born at index 0 and a class born at index 1 that dies at index 2.
 Use `diagram[birth]` to look up a death and `diagram.items()` to iterate over
 intervals. The former `.paired` and `.unpaired` attributes have been removed.
 
-`domain_representatives`, `codomain_representatives`, and `image_representatives`
-map each birth index to the generator indices whose sum over F2 gives a cycle.
-Keys and supports use the diagram coordinates; the maximum support index equals
-the feature's birth. Rust stores these as `HashMap<usize, Vec<usize>>`; Python exposes
-dictionaries of lists. Each map has exactly its diagram's birth keys, and an empty
-diagram has an empty representative map. Nonempty domain, codomain, and image
-decompositions must retain V when calling `all_diagrams`; the computation entry
-points do so automatically.
+`domain_representatives`, `codomain_representatives`, `image_representatives`,
+and `kernel_representatives`
+are optional. Python's `sixpack_from_inclusion` and `sixpack` default to
+`get_representatives=False`, which leaves all four attributes as `None` and
+skips representative extraction. Pass `get_representatives=True` to obtain
+maps from each birth index to the generator indices whose sum over F2 gives a cycle.
+Keys and supports use the diagram coordinates. Domain, codomain, and image cycles
+have maximum support index equal to the feature's birth. Kernel cycles contain
+only domain generators with indices strictly less than their kernel birth; these
+cycles are boundaries in the codomain throughout their kernel intervals.
+Rust stores these as `Option<HashMap<usize, Vec<usize>>>`;
+Python exposes dictionaries of lists or `None`. Each requested map has exactly
+its diagram's birth keys. A requested empty diagram has `Some` of an empty map
+in Rust and `{}` in Python; when extraction is skipped it still has `None`.
+
+Rust callers supply `get_representatives` immediately after the input matrices
+and map or domain indices in `sixpack` and `sixpack_from_inclusion`, or as the
+argument to `all_diagrams`. Pass `false` for diagrams only or
+`true` for cycles too. Nonempty domain, codomain, and image decompositions must
+retain V only when requesting representatives; the computation entry points
+retain these matrices automatically. This flag skips representative extraction
+and allocation; it does not change which matrices the reductions retain.
 
 Call `get_persistence_map(source, source_representatives, target,
 target_representatives, generator_map)` for one persistence-module map. The
-result maps every source birth to a sorted list of target births with binary
+representative arguments must be actual maps; `None` is not accepted. Request
+representatives when obtaining the input diagrams from the computation functions.
+The result maps every source birth to a sorted list of target births with binary
 coefficient one. The generator map sends each source generator to a list of
 target generators. Missing entries implicitly map to zero, and overlaps between
 distinct mapped columns cancel over F2. Repeated listings within one supplied
@@ -108,10 +124,15 @@ numbered complexes must be reindexed before calling; the generator map does not
 establish how their filtration indices compare. This is a caller contract.
 Representatives must be cycles and the mapping must describe a degree-preserving
 filtered chain map. These algebraic requirements are not checked. Representative
-keys, maximum support indices, interval endpoints, solvability, and coefficient
+keys, availability of support generators at birth, interval endpoints, solvability, and coefficient
 lifetimes are checked. Each retained coefficient satisfies
 `target_birth <= source_birth < target_death <= source_death`. Targets already
 dead at the source birth contribute zero after exact cycle expansion.
+Representatives must be nonempty and use generator indices no greater than their
+feature's birth. The maximum support index can be strictly earlier than the birth,
+on either side of the map. Target representatives must be linearly independent
+as chain vectors; overlapping pivots are supported. Feature labels are preserved
+when expanding cycles, and targets may be born earlier than their source.
 
 Rust returns a `Result` with `PersistenceMapError`; Python reports semantic
 failures as `RuntimeError`. Python diagrams are ordinary birth-to-death
@@ -126,7 +147,10 @@ source representatives and call the function separately for each target:
 ```python
 from phimaker import get_persistence_map, sixpack_from_inclusion
 
-diagrams = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [1])
+diagrams = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [1], get_representatives=True)
+assert diagrams.domain_representatives is not None
+assert diagrams.codomain_representatives is not None
+assert diagrams.image_representatives is not None
 generator_map = {
 	index: [index] for support in diagrams.domain_representatives.values() for index in support
 }
@@ -146,6 +170,28 @@ to_image = get_persistence_map(
 )
 assert to_codomain == {1: [0, 1]}
 assert to_image == {1: [1]}
+```
+
+Kernel representatives can be mapped into the domain with the same identity
+generator map. Here an external edge creates a kernel class at 4, and a domain
+edge kills it at 5:
+
+```python
+diagrams = sixpack_from_inclusion(
+	[[], [], [], [0, 1], [0, 2], [1, 2]],
+	[0, 0, 0, 1, 1, 1],
+	[1, 2, 5],
+	get_representatives=True,
+)
+assert diagrams.kernel == {4: 5}
+assert diagrams.kernel_representatives == {4: [1, 2]}
+assert get_persistence_map(
+	diagrams.kernel,
+	diagrams.kernel_representatives,
+	diagrams.domain,
+	diagrams.domain_representatives,
+	{1: [1], 2: [2]},
+) == {4: [2]}
 ```
 
 ## References
@@ -212,8 +258,8 @@ gives its representative cycle; for an essential feature, use V column `birth`.
 Both diagram extraction modes read codomain pairs directly in these coordinates.
 The relative decomposition still uses anti-transposed quotient coordinates.
 Retaining codomain V adds memory use and increases the slow-mode file size.
-Python convenience functions expose the representative maps on the returned
-`DiagramEnsemble`.
+Python convenience functions expose representative maps on the returned
+`DiagramEnsemble` when called with `get_representatives=True`.
 
 ## Tests
 

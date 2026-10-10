@@ -48,20 +48,21 @@ impl Ord for CylinderColType {
 /// use phimaker::sixpack;
 ///
 /// let point = vec![(2.0, 0, vec![])];
-/// let (_, metadata) = sixpack(&point, &point, &[vec![0]], 1, false)?;
+/// let (_, metadata) = sixpack(&point, &point, &[vec![0]], false, 1, false)?;
 /// let index = metadata.domain_indices[0];
 /// assert_eq!(metadata.times[index], 2.0);
 /// assert_eq!(metadata.degrees[index], 0);
 /// # Ok::<(), phimaker::errors::InclusionError>(())
 /// ```
 #[doc = python_doc!(
-r#"Coordinates, degrees, and entrance times returned by :py:func:`~phimaker.sixpack`.
+r#"Mapping cylinder coordinates, degrees, and entrance times returned by :py:func:`~phimaker.sixpack`.
 
 Diagram endpoints identify columns in a mapping cylinder. Look up ``times[index]``
-and ``degrees[index]`` to recover the entrance time and degree of a column.
-``domain_indices[i]`` and ``codomain_indices[i]`` locate the original input
-generators; ``domain_shift[i]`` locates the degree-one-higher copy of domain
-generator ``i``. For kernel intervals, subtract one from the birth-column degree.
+and ``degrees[index]`` to recover the entrance time and degree of a column of the
+boundary matrix of the mapping cylinder. ``domain_indices[i]`` is the mapping
+cylinder index of generator `i` in the domain, and ``codomain_indices[i]`` is the
+cylinder index of generator `i` in the codomain. ``domain_shift[i]`` is the cylinder
+index of degree-one-higher copy of domain generator ``i``.
 
 Attributes are read-only and return independent lists. Editing a returned list
 does not change subsequent accesses.
@@ -353,7 +354,7 @@ mod tests {
 			0,
 		)
 		.unwrap()
-		.all_diagrams();
+		.all_diagrams(false);
 		let pairings: Vec<_> = ensemble
 			.kernel
 			.iter()

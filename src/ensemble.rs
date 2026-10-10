@@ -68,7 +68,8 @@ pub struct EnsembleMetadata {
 /// Six matrix decompositions and their coordinate metadata.
 ///
 /// Obtain this value from [`all_decompositions`]. Use [`Self::all_diagrams`]
-/// for diagrams in original input indices. When inspecting matrix columns
+/// for diagrams in original input indices; pass `false` for diagrams only or
+/// `true` to also extract representatives. When inspecting matrix columns
 /// directly, follow the coordinate conventions documented on each field and use
 /// `metadata` to translate indices. Repeated diagram extraction is supported.
 ///
@@ -84,7 +85,7 @@ pub struct EnsembleMetadata {
 /// use phimaker::all_decompositions;
 ///
 /// let ensemble = all_decompositions::<LockFreeAlgorithm<_>, _>(&[vec![]], &[0], &[0], 1)?;
-/// assert_eq!(ensemble.all_diagrams().domain.len(), 1);
+/// assert_eq!(ensemble.all_diagrams(false).domain.len(), 1);
 /// # Ok::<(), phimaker::errors::InclusionError>(())
 /// ```
 pub struct DecompositionEnsemble<C, Algo>
@@ -114,7 +115,8 @@ where
 ///
 /// Obtain this value from [`all_decompositions_slow`]. Use
 /// [`Self::all_diagrams`] to read the results and obtain diagrams in original
-/// indices. The file handles start at byte zero. Reading advances their
+/// indices. Pass `false` for diagrams only or `true` for representatives too.
+/// The file handles start at byte zero. Reading advances their
 /// cursors; rewind all six before extracting again. Data remains available for
 /// the lifetime of the file handles.
 ///
@@ -125,7 +127,7 @@ where
 /// use phimaker::all_decompositions_slow;
 ///
 /// let stored = all_decompositions_slow::<LockFreeAlgorithm<_>, _>(&[vec![]], &[0], &[0], 1)?;
-/// assert_eq!(stored.all_diagrams().domain.len(), 1);
+/// assert_eq!(stored.all_diagrams(false).domain.len(), 1);
 /// # Ok::<(), phimaker::errors::InclusionError>(())
 /// ```
 pub struct FileEnsemble {
@@ -372,7 +374,7 @@ fn prepare_inclusion<UsizeSlice: Deref<Target = [usize]>>(
 /// 	&[1],
 /// 	1,
 /// )?;
-/// let diagrams = ensemble.all_diagrams();
+/// let diagrams = ensemble.all_diagrams(false);
 /// assert!(diagrams.kernel.is_empty());
 /// assert_eq!(ensemble.metadata.cols_in_dom, vec![1]);
 /// # Ok::<(), phimaker::errors::InclusionError>(())
@@ -514,7 +516,7 @@ pub fn to_file<Algo: Serialize>(algo: Algo) -> File {
 /// use phimaker::all_decompositions_slow;
 ///
 /// let ensemble = all_decompositions_slow::<LockFreeAlgorithm<_>, _>(&[vec![]], &[0], &[0], 1)?;
-/// let diagrams = ensemble.all_diagrams();
+/// let diagrams = ensemble.all_diagrams(false);
 /// assert_eq!(diagrams.domain.len(), 1);
 /// assert!(diagrams.relative.is_empty());
 /// # Ok::<(), phimaker::errors::InclusionError>(())
