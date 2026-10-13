@@ -6,12 +6,14 @@ persistent homology over the field with two elements. Diagrams map birth
 indices to death indices, with ``None`` for essential features.
 
 Representative cycles are optional. The computation functions default to
-``get_representatives=False``, returning ``None`` for the four representative
+``get_representatives=False``, returning ``None`` for the five representative
 attributes. Pass ``get_representatives=True`` when cycles are needed. A requested
 empty diagram has an empty representative dictionary.
-Domain, codomain, and image cycles have maximum generator index equal to birth.
+Domain, codomain, image, and cokernel cycles have maximum generator index equal to birth.
 Kernel cycles use only domain generators preceding their birth and are boundaries
-in the codomain.
+in the codomain. Cokernel representatives are codomain cycles considered modulo
+codomain boundaries and domain cycles; finite features become zero in that
+quotient at their deaths.
 
 For development setup and source builds, see
 `the README <https://github.com/tomchaplin/phimaker#development-environment-and-source-builds>`_.

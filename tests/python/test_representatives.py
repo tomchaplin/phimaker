@@ -35,7 +35,7 @@ def test_optional_representatives(*, slow: bool, case: str) -> None:
 	requested = compute(get_representatives=True)
 	for name in ("domain", "codomain", "image", "kernel", "cokernel", "relative"):
 		assert getattr(default, name) == getattr(skipped, name) == getattr(requested, name)
-	for name in ("domain", "codomain", "image", "kernel"):
+	for name in ("domain", "codomain", "image", "kernel", "cokernel"):
 		assert getattr(default, f"{name}_representatives") is None
 		assert getattr(skipped, f"{name}_representatives") is None
 		representatives = getattr(requested, f"{name}_representatives")
@@ -56,7 +56,7 @@ def test_representative_flag_accepts_positional_argument() -> None:
 
 def assert_representatives(result: Any, matrix: list[list[int]]) -> None:
 	"""Each birth has one cycle supported at its birth, in the original basis."""
-	for name in ("domain", "codomain", "image", "kernel"):
+	for name in ("domain", "codomain", "image", "kernel", "cokernel"):
 		diagram = getattr(result, name)
 		representatives = getattr(result, f"{name}_representatives")
 		assert isinstance(representatives, dict)
@@ -110,6 +110,7 @@ def test_empty_representative_maps(*, slow: bool) -> None:
 	assert empty.codomain_representatives == {}
 	assert empty.image_representatives == {}
 	assert empty.kernel_representatives == {}
+	assert empty.cokernel_representatives == {}
 	result = sixpack_from_inclusion(
 		[[]], [0], [], num_threads=1, slow=slow, get_representatives=True
 	)
@@ -117,6 +118,7 @@ def test_empty_representative_maps(*, slow: bool) -> None:
 	assert result.codomain_representatives == {0: [0]}
 	assert result.image_representatives == {}
 	assert result.kernel_representatives == {}
+	assert result.cokernel_representatives == {0: [0]}
 
 
 def test_representative_getters_return_independent_lists() -> None:
@@ -133,6 +135,7 @@ def test_representative_getters_return_independent_lists() -> None:
 		"codomain_representatives",
 		"image_representatives",
 		"kernel_representatives",
+		"cokernel_representatives",
 	):
 		expected = getattr(result, name)
 		representatives = getattr(result, name)

@@ -51,6 +51,16 @@ since `v0.3.0`.
 
 ### Added
 
+- Optional `cokernel_representatives` on `DiagramEnsemble` in Rust and Python,
+  controlled by `get_representatives` in both normal and serialized modes.
+  Finite features use reduced cokernel death columns; essential features use
+  codomain V birth columns, giving homogeneous codomain cycles with maximum
+  support index equal to birth. Classes are interpreted modulo codomain
+  boundaries and domain cycles. No additional V matrices are retained.
+  Add tests for quotient independence and finite deaths, empty and identity
+  inclusions, gapped domains, cylinders, and an essential loop for which
+  cokernel V would give a noncycle. Update both language references, examples,
+  optional-field checks, and generated Python interface checks.
 - Optional `kernel_representatives` on `DiagramEnsemble` in Rust and Python,
   controlled by the existing `get_representatives` flag in both computation
   modes. Cycles use only domain generators preceding the kernel birth, bound

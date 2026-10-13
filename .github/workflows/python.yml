@@ -104,7 +104,7 @@ jobs:
               }
               for name in (
                   "domain_representatives", "codomain_representatives", "image_representatives",
-                  "kernel_representatives"
+                  "kernel_representatives", "cokernel_representatives"
               ):
                   assert ast.unparse(getters[name].returns) == "dict[int, list[int]] | None"
           PY

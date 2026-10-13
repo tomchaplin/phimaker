@@ -122,6 +122,14 @@ classes match the objects returned by the functions.
   Private cycle-coordinate tests allow earlier-supported cycles on either
   side, reduce independent target cycles sharing a pivot, and reject future
   target features, future support generators, and dependent target cycles.
+- **Cokernel representatives:** finite death columns and essential codomain birth
+  cycles are checked in both modes. Independent rank tests verify that active
+  representatives form a basis modulo codomain boundaries and all available
+  domain cycles, and that finite representatives vanish precisely at their
+  deaths. A finite H0 class can die in the cokernel while remaining nonzero in
+  codomain homology. A parallel-edge loop detects incorrect use of cokernel V,
+  which can mix degrees and fail cyclehood. Empty/identity inclusions, permuted
+  domain indices, cylinders, optional getters, and absent cokernel V are covered.
 - **Python bindings:** dictionary lookup, missing-key behavior, independent
   getter copies, `None` for infinity, metadata, signatures, and docstrings. The
   retired standalone map function is absent from both the package and native

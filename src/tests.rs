@@ -257,7 +257,7 @@ fn interval_composition_discards_dead_final_target() {
 
 // Independent small-matrix rank oracle for homology assertions: boundary
 // columns and representatives are supplied directly in the original basis.
-fn binary_rank(columns: impl IntoIterator<Item = HashSet<usize>>) -> usize {
+pub(super) fn binary_rank(columns: impl IntoIterator<Item = HashSet<usize>>) -> usize {
 	let mut pivots: HashMap<usize, HashSet<usize>> = HashMap::new();
 	for mut residual in columns {
 		while let Some(&pivot) = residual.iter().max() {
@@ -460,6 +460,7 @@ fn assert_diagrams(actual: &DiagramEnsemble, expected: [&[(usize, ExtendedUsize)
 		assert!(actual.codomain_representatives.is_none());
 		assert!(actual.image_representatives.is_none());
 		assert!(actual.kernel_representatives.is_none());
+		assert!(actual.cokernel_representatives.is_none());
 		return;
 	}
 	for (diagram, representatives) in [
@@ -478,6 +479,10 @@ fn assert_diagrams(actual: &DiagramEnsemble, expected: [&[(usize, ExtendedUsize)
 		(
 			&actual.kernel,
 			actual.kernel_representatives.as_ref().unwrap(),
+		),
+		(
+			&actual.cokernel,
+			actual.cokernel_representatives.as_ref().unwrap(),
 		),
 	] {
 		assert_eq!(representatives.len(), diagram.len());
@@ -847,6 +852,7 @@ fn empty_representative_maps_in_both_modes() {
 		assert!(empty.codomain_representatives.as_ref().unwrap().is_empty());
 		assert!(empty.image_representatives.as_ref().unwrap().is_empty());
 		assert!(empty.kernel_representatives.as_ref().unwrap().is_empty());
+		assert!(empty.cokernel_representatives.as_ref().unwrap().is_empty());
 		let result = diagrams(&[vec![]], &[0], &[], slow);
 		assert!(result.domain_representatives.as_ref().unwrap().is_empty());
 		assert_eq!(
@@ -855,6 +861,10 @@ fn empty_representative_maps_in_both_modes() {
 		);
 		assert_eq!(result.image_representatives, Some(HashMap::new()));
 		assert_eq!(result.kernel_representatives, Some(HashMap::new()));
+		assert_eq!(
+			result.cokernel_representatives,
+			Some(HashMap::from([(0, vec![0])]))
+		);
 	}
 }
 
@@ -885,6 +895,7 @@ fn representatives_unavailable_without_v_in_both_modes() {
 		assert!(diagrams.codomain_representatives.is_none());
 		assert!(diagrams.image_representatives.is_none());
 		assert!(diagrams.kernel_representatives.is_none());
+		assert!(diagrams.cokernel_representatives.is_none());
 		assert!(std::panic::catch_unwind(|| ensemble.all_diagrams(true)).is_err());
 		let mut stored = FileEnsemble {
 			d_cod: to_file(ensemble.d_cod),
@@ -901,6 +912,7 @@ fn representatives_unavailable_without_v_in_both_modes() {
 		assert!(diagrams.codomain_representatives.is_none());
 		assert!(diagrams.image_representatives.is_none());
 		assert!(diagrams.kernel_representatives.is_none());
+		assert!(diagrams.cokernel_representatives.is_none());
 		for file in [
 			&mut stored.d_cod,
 			&mut stored.d_dom,
@@ -939,6 +951,7 @@ fn optional_representatives_preserve_all_diagrams() {
 			assert!(plain.codomain_representatives.is_none());
 			assert!(plain.image_representatives.is_none());
 			assert!(plain.kernel_representatives.is_none());
+			assert!(plain.cokernel_representatives.is_none());
 			for (plain, requested) in [
 				(&plain.domain, &with_reps.domain),
 				(&plain.codomain, &with_reps.codomain),
@@ -954,6 +967,7 @@ fn optional_representatives_preserve_all_diagrams() {
 				(&with_reps.codomain, &with_reps.codomain_representatives),
 				(&with_reps.image, &with_reps.image_representatives),
 				(&with_reps.kernel, &with_reps.kernel_representatives),
+				(&with_reps.cokernel, &with_reps.cokernel_representatives),
 			] {
 				assert_eq!(representatives.as_ref().unwrap().len(), diagram.len());
 			}
@@ -1430,6 +1444,10 @@ fn rust_general_map_identity_in_both_modes() {
 		);
 		assert_eq!(result.image_representatives.is_some(), get_representatives);
 		assert_eq!(result.kernel_representatives.is_some(), get_representatives);
+		assert_eq!(
+			result.cokernel_representatives.is_some(),
+			get_representatives
+		);
 		assert_eq!(metadata.domain_indices, vec![0]);
 		assert_eq!(metadata.codomain_indices, vec![1]);
 		assert_eq!(metadata.domain_shift, vec![2]);

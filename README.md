@@ -87,15 +87,18 @@ Use `diagram[birth]` to look up a death and `diagram.items()` to iterate over
 intervals. The former `.paired` and `.unpaired` attributes have been removed.
 
 `domain_representatives`, `codomain_representatives`, `image_representatives`,
-and `kernel_representatives`
+`kernel_representatives`, and `cokernel_representatives`
 are optional. Python's `sixpack_from_inclusion` and `sixpack` default to
-`get_representatives=False`, which leaves all four attributes as `None` and
+`get_representatives=False`, which leaves all five attributes as `None` and
 skips representative extraction. Pass `get_representatives=True` to obtain
 maps from each birth index to the generator indices whose sum over F2 gives a cycle.
-Keys and supports use the diagram coordinates. Domain, codomain, and image cycles
+Keys and supports use the diagram coordinates. Domain, codomain, image, and cokernel cycles
 have maximum support index equal to the feature's birth. Kernel cycles contain
 only domain generators with indices strictly less than their kernel birth; these
 cycles are boundaries in the codomain throughout their kernel intervals.
+Cokernel representatives are codomain cycles interpreted modulo codomain
+boundaries and domain cycles. A finite representative becomes zero in that
+quotient at its death, without necessarily becoming a codomain boundary.
 Rust stores these as `Option<HashMap<usize, Vec<usize>>>`;
 Python exposes dictionaries of lists or `None`. Each requested map has exactly
 its diagram's birth keys. A requested empty diagram has `Some` of an empty map
@@ -124,6 +127,21 @@ diagrams = sixpack_from_inclusion(
 )
 assert diagrams.kernel == {4: 5}
 assert diagrams.kernel_representatives == {4: [1, 2]}
+```
+
+For a cokernel example, let two parallel edges join the same vertices, with only
+the second edge in the domain. The codomain loop represents an essential
+cokernel feature:
+
+```python
+diagrams = sixpack_from_inclusion(
+	[[], [], [0, 1], [0, 1]],
+	[0, 0, 1, 1],
+	[0, 1, 3],
+	get_representatives=True,
+)
+assert diagrams.cokernel == {3: None}
+assert diagrams.cokernel_representatives == {3: [2, 3]}
 ```
 
 ## References

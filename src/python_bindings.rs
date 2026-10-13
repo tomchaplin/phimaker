@@ -18,8 +18,8 @@ r#"Compute six persistence diagrams for an inclusion of filtered chain complexes
 :param degrees: Nonnegative degree of each codomain generator, one per column.
 :param cols_in_domain: Indices selecting the domain generators in the codomain.
     Any order is accepted; repeated indices are ignored.
-:param get_representatives: Whether to extract domain, codomain, image, and kernel cycles.
-    Defaults to ``False``, which skips extraction and leaves the four
+:param get_representatives: Whether to extract domain, codomain, image, kernel, and cokernel cycles.
+    Defaults to ``False``, which skips extraction and leaves the five
     representative attributes as ``None``. With ``True``, empty diagrams have
     empty representative dictionaries.
 :param num_threads: Worker limit per computation step, default ``0``. Zero
@@ -99,8 +99,8 @@ r#"Compute six persistence diagrams for a filtered chain map over F2.
 :param map: Column ``i`` lists the codomain generators with coefficient one
     in the image of domain generator ``i``. Supply at least one column per domain
     generator; additional map columns are ignored.
-:param get_representatives: Whether to extract domain, codomain, image, and kernel cycles.
-    Defaults to ``False``, which skips extraction and leaves the four
+:param get_representatives: Whether to extract domain, codomain, image, kernel, and cokernel cycles.
+    Defaults to ``False``, which skips extraction and leaves the five
     representative attributes as ``None``. With ``True``, empty diagrams have
     empty representative dictionaries.
 :param num_threads: Worker limit per computation step, default ``0``. Zero

@@ -40,16 +40,18 @@ use crate::{
 /// interval is the birth-generator degree minus one; other interval degrees
 /// equal that degree.
 ///
-/// The domain, codomain, image, and kernel representative maps associate each
-/// birth with the generator indices whose sum is its cycle over F2 when
-/// requested. They are `None` when `get_representatives` is false. Their keys
-/// and entries use the same coordinates as the diagrams. Domain, codomain, and
-/// image representatives have maximum generator index equal to their birth.
-/// Kernel representatives contain only domain generators with indices strictly
-/// less than their kernel birth. Representatives are not necessarily minimal or
-/// unique, and support order is unspecified. Each representative map has
-/// exactly its diagram's birth keys; a requested empty diagram has `Some` of
-/// an empty map. Skipping extraction still returns `None` for empty diagrams.
+/// The domain, codomain, image, kernel, and cokernel representative maps
+/// associate each birth with the generator indices whose sum is its cycle over
+/// F2 when requested. They are `None` when `get_representatives` is false.
+/// Their keys and entries use the same coordinates as the diagrams. Domain,
+/// codomain, image, and cokernel representatives have maximum index equal to
+/// their birth. Kernel representatives contain only domain generators with
+/// indices strictly less than their kernel birth. Cokernel cycles are
+/// interpreted modulo codomain boundaries and domain cycles. Representatives
+/// are not necessarily minimal or unique, and support order is unspecified.
+/// Each representative map has exactly its diagram's birth keys; a requested
+/// empty diagram has `Some` of an empty map. Skipping extraction still returns
+/// `None` for empty diagrams.
 ///
 /// # Example
 ///
@@ -79,14 +81,16 @@ to recover filtration times and degrees. A kernel interval has the degree of
 its birth generator minus one; other intervals have the birth-generator degree.
 
 The ``domain_representatives``, ``codomain_representatives``,
-``image_representatives``, and ``kernel_representatives`` attributes are ``None`` unless
+``image_representatives``, ``kernel_representatives``, and
+``cokernel_representatives`` attributes are ``None`` unless
 ``get_representatives=True`` was requested. When requested, they map birth
 indices to lists of generator indices. Summing the listed generators over the
 field with two elements gives a representative cycle. Keys and entries use the
 same coordinates as the diagrams.
-For domain, codomain, and image features, the maximum index in a representative
+For domain, codomain, image, and cokernel features, the maximum index in a representative
 equals the feature's birth. Kernel representatives use only domain generators,
-with indices strictly less than the kernel birth. Representatives need not be minimal or
+with indices strictly less than the kernel birth. Cokernel cycles are interpreted
+modulo codomain boundaries and domain cycles. Representatives need not be minimal or
 unique. Each representative dictionary has exactly its diagram's birth keys.
 A requested empty diagram has an empty representative dictionary. If extraction
 was skipped, its representative attribute is still ``None``.
@@ -206,6 +210,53 @@ the kernel birth. When requested, an empty kernel diagram has an empty dictionar
     r#"Cokernel of the induced homology map, as a birth-to-death dictionary."#
     )]
 	pub cokernel: PersistenceDiagram,
+
+	/// Cokernel birth indices mapped to codomain cycle supports.
+	/// Each listed generator has coefficient one over F2, in diagram
+	/// coordinates. The maximum support index equals the feature birth.
+	/// During its interval, the cycle is nonzero modulo codomain boundaries
+	/// and domain cycles; at a finite death it becomes zero in that
+	/// quotient. A requested empty diagram has `Some` of an empty map;
+	/// `None` means extraction was disabled.
+	///
+	/// # Example
+	/// ```
+	/// use phimaker::sixpack_from_inclusion;
+	/// let result = sixpack_from_inclusion(
+	/// 	&[vec![], vec![], vec![0, 1], vec![0, 1]],
+	/// 	&[0, 0, 1, 1],
+	/// 	&[0, 1, 3],
+	/// 	true,
+	/// 	1,
+	/// 	false,
+	/// )?;
+	/// assert_eq!(
+	/// 	result.cokernel_representatives.as_ref().unwrap()[&3],
+	/// 	vec![2, 3]
+	/// );
+	/// # Ok::<(), phimaker::errors::InclusionError>(())
+	/// ```
+	#[doc = python_doc!(
+    r#"Cokernel representatives, as a dictionary from birth indices to generator lists.
+
+Sum the listed generators over the field with two elements to obtain a codomain
+cycle. Supports use the diagram's coordinates, with maximum index equal to birth.
+During the feature's interval, the cycle is nonzero modulo codomain boundaries
+and domain cycles. At a finite death it becomes zero in this quotient, without
+necessarily becoming a codomain boundary. When requested, an empty cokernel
+diagram has an empty dictionary. ``None`` means representative extraction was skipped.
+
+Example::
+
+    >>> from phimaker import sixpack_from_inclusion
+    >>> result = sixpack_from_inclusion(
+    ...     [[], [], [0, 1], [0, 1]], [0, 0, 1, 1], [0, 1, 3],
+    ...     get_representatives=True,
+    ... )
+    >>> assert result.cokernel == {3: None}
+    >>> assert result.cokernel_representatives == {3: [2, 3]}"#
+    )]
+	pub cokernel_representatives: Option<HashMap<usize, Vec<usize>>>,
 
 	/// Homology of the quotient complex; for a general map, homology of its
 	/// cone.
@@ -655,6 +706,34 @@ fn cokernel_diagram<Decomp: Decomposition<C>, C: Column>(
 	});
 	dgm
 }
+
+// Cokernel relations span codomain boundaries plus domain cycles. Every
+// reduced relation column is a codomain cycle; its pivot is the finite birth.
+// Essential classes use codomain V: cokernel V expresses dependencies among
+// boundary and cycle columns and need not be a homogeneous codomain cycle.
+fn cokernel_representatives<Decomp: Decomposition<C>, C: Column>(
+	diagram: &PersistenceDiagram,
+	d_cok_decomp: &Decomp,
+	d_cod_decomp: &Decomp,
+) -> HashMap<usize, Vec<usize>> {
+	diagram
+		.iter()
+		.map(|(&birth, &death)| {
+			let support = match death {
+				Finite(death) => d_cok_decomp.get_r_col(death).entries().collect(),
+				Infinity => {
+					d_cod_decomp
+						.get_v_col(birth)
+						.expect("Cokernel representative extraction requires retained codomain V")
+						.entries()
+						.collect()
+				},
+			};
+			(birth, support)
+		})
+		.collect()
+}
+
 impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 	/// Return all six diagrams in original codomain generator indices.
 	///
@@ -663,11 +742,11 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 	/// [`ExtendedUsize::Infinity`]. For a mapping-cylinder inclusion, use
 	/// its metadata to recover entrance times. Calling this method again
 	/// returns the same diagrams.
-	/// Domain, codomain, image, and kernel representatives use original
-	/// generator indices when `get_representatives` is true. Requested
-	/// empty diagrams have `Some` of an empty map. When false, all four
-	/// representative maps are `None`, and no representative extraction is
-	/// performed.
+	/// Domain, codomain, image, kernel, and cokernel representatives use
+	/// original generator indices when `get_representatives` is true.
+	/// Requested empty diagrams have `Some` of an empty map. When false,
+	/// all five representative maps are `None`, and no representative
+	/// extraction is performed.
 	///
 	/// # Panics
 	/// Panics if representatives are requested and a nonempty domain, codomain,
@@ -708,6 +787,9 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 				&self.d_im,
 			)
 		});
+		let cokernel = cokernel_diagram(&self.metadata, &self.d_dom, &self.d_im, &self.d_cok);
+		let cokernel_representatives = get_representatives
+			.then(|| cokernel_representatives(&cokernel, &self.d_cok, &self.d_cod));
 		DiagramEnsemble {
 			domain,
 			domain_representatives,
@@ -717,6 +799,8 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 			image_representatives,
 			kernel,
 			kernel_representatives,
+			cokernel,
+			cokernel_representatives,
 			relative: {
 				let f = |idx| {
 					self.metadata
@@ -727,7 +811,6 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 					.anti_transpose(self.metadata.sz_codomain - self.metadata.sz_domain)
 					.map_idxs(f)
 			},
-			cokernel: cokernel_diagram(&self.metadata, &self.d_dom, &self.d_im, &self.d_cok),
 		}
 	}
 }
@@ -768,11 +851,11 @@ impl FileEnsemble {
 	/// Files must be positioned at the start of compatible decomposition data.
 	/// Reading advances every file cursor; rewind all six before calling again.
 	/// This call requires memory for all six decompositions.
-	/// Domain, codomain, image, and kernel representatives use original
-	/// generator indices when `get_representatives` is true. Requested
-	/// empty diagrams have `Some` of an empty map. When false, all four
-	/// representative maps are `None`, and no representative extraction is
-	/// performed.
+	/// Domain, codomain, image, kernel, and cokernel representatives use
+	/// original generator indices when `get_representatives` is true.
+	/// Requested empty diagrams have `Some` of an empty map. When false,
+	/// all five representative maps are `None`, and no representative
+	/// extraction is performed.
 	///
 	/// # Panics
 	/// Panics on read errors or incompatible or corrupt serialized data, or if
@@ -817,6 +900,9 @@ impl FileEnsemble {
 				&d_im_decomp,
 			)
 		});
+		let cokernel = cokernel_diagram(&self.metadata, &d_dom_decomp, &d_im_decomp, &d_cok_decomp);
+		let cokernel_representatives = get_representatives
+			.then(|| cokernel_representatives(&cokernel, &d_cok_decomp, &d_cod_decomp));
 		DiagramEnsemble {
 			domain,
 			domain_representatives,
@@ -826,6 +912,8 @@ impl FileEnsemble {
 			image_representatives,
 			kernel,
 			kernel_representatives,
+			cokernel,
+			cokernel_representatives,
 			relative: {
 				let f = |idx| {
 					self.metadata
@@ -836,7 +924,6 @@ impl FileEnsemble {
 					.anti_transpose(self.metadata.sz_codomain - self.metadata.sz_domain)
 					.map_idxs(f)
 			},
-			cokernel: cokernel_diagram(&self.metadata, &d_dom_decomp, &d_im_decomp, &d_cok_decomp),
 		}
 	}
 }
