@@ -110,8 +110,8 @@ classes match the objects returned by the functions.
   and normalization of unsorted or repeated support indices. Crate-private Rust
   tests also cover non-identity generator images, F2 cancellation, missing images
   as zero, ignored unused images, future-born target coefficients, and unchanged
-  inputs. These tests preserve calculation coverage during the transition to
-  ensemble maps; no standalone persistence-map function is publicly exported.
+  inputs. These private tests cover the calculation used by ensemble maps; no
+  standalone persistence-map function is publicly exported.
 - **Kernel representatives:** finite and essential cycles use only domain
   generators preceding their kernel birth. A finite two-class fixture requires
   the kernel death basis rather than the image boundary at birth. Both modes
@@ -130,6 +130,15 @@ classes match the objects returned by the functions.
   codomain homology. A parallel-edge loop detects incorrect use of cokernel V,
   which can mix degrees and fail cyclehood. Empty/identity inclusions, permuted
   domain indices, cylinders, optional getters, and absent cokernel V are covered.
+- **Stored ensemble maps:** all five morphisms have exact source birth keys and
+  sorted binary coefficients in the returned cycle bases. Independent chain
+  checks compare each column modulo the appropriate domain/codomain boundaries
+  or quotient relations. At every index, verify kernel/image injectivity,
+  domain-to-image and codomain-to-cokernel surjectivity, exactness, factorization,
+  and zero composites. A concrete inclusion demonstrates that multiplying whole
+  coefficient tables introduces a spurious dead target. Both modes cover sums,
+  differing bases, empty/identity inclusions, finite/essential classes, cylinder
+  identity/zero maps, optional extraction, and independent Python getter copies.
 - **Python bindings:** dictionary lookup, missing-key behavior, independent
   getter copies, `None` for infinity, metadata, signatures, and docstrings. The
   retired standalone map function is absent from both the package and native

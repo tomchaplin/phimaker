@@ -69,10 +69,12 @@ use lophat::algorithms::LockFreeAlgorithm;
 /// supported.
 ///
 /// Set `get_representatives` to true to extract domain, codomain, image,
-/// kernel, and cokernel cycles. Otherwise their representative fields are
-/// `None`, and extraction is skipped. Requested empty diagrams have `Some` of
-/// an empty map. Reductions still retain the matrices used by the six-diagram
-/// algorithm.
+/// kernel, and cokernel cycles and the five maps between them. Otherwise
+/// their representative and morphism fields are `None`, and extraction and
+/// map solving are skipped. Requested empty diagrams have `Some` of
+/// an empty map. Each morphism has exactly its source diagram's birth keys;
+/// empty vectors denote zero. Reductions still retain the matrices used by
+/// the six-diagram algorithm.
 ///
 /// # Errors
 /// Returns [`InclusionError`] for mismatched degree counts, out-of-range domain
@@ -203,6 +205,9 @@ mod persistence_map_tests;
 
 #[cfg(test)]
 mod cokernel_tests;
+
+#[cfg(test)]
+mod ensemble_map_tests;
 
 #[cfg(feature = "python-module")]
 mod python_bindings;

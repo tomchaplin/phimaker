@@ -51,6 +51,17 @@ since `v0.3.0`.
 
 ### Added
 
+- Optional `kernel_to_domain`, `domain_to_image`, `image_to_codomain`,
+  `domain_to_codomain`, and `codomain_to_cokernel` maps on `DiagramEnsemble`.
+  With `get_representatives=true`, both extraction modes compute binary
+  coefficients in the stored cycle bases, keyed by every source birth with
+  sorted target births and explicit empty columns for zero. Skipped extraction
+  leaves all five maps as `None`, including empty sources. Compute the quotient
+  map using the combined image and cokernel cycle basis and discard image
+  coordinates before applying cokernel lifetimes. Preserve raw cylinder indices
+  and zero-duration intervals. Document interval-aware evaluation/composition,
+  update Python getter types, and test chain actions, pointwise ranks,
+  exactness, factorization, zero composites, and independent getter copies.
 - Optional `cokernel_representatives` on `DiagramEnsemble` in Rust and Python,
   controlled by `get_representatives` in both normal and serialized modes.
   Finite features use reduced cokernel death columns; essential features use

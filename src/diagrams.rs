@@ -53,6 +53,18 @@ use crate::{
 /// empty diagram has `Some` of an empty map. Skipping extraction still returns
 /// `None` for empty diagrams.
 ///
+/// The optional maps [`Self::kernel_to_domain`], [`Self::domain_to_image`],
+/// [`Self::image_to_codomain`], [`Self::domain_to_codomain`], and
+/// [`Self::codomain_to_cokernel`] are computed with the representatives.
+/// Each source birth maps to a sorted list of target births with coefficient
+/// one over F2 in these cycle bases; an empty list denotes zero. Every source
+/// birth is included. An empty source gives `Some` of an empty map. All five
+/// maps are `None` when extraction is skipped. Each nonzero coefficient obeys
+/// `target_birth <= source_birth < target_death <= source_death`.
+/// At a filtration index, evaluate maps using only intervals alive there.
+/// Compose maps at that index; multiplying complete coefficient tables without
+/// accounting for interval lifetimes can produce incorrect coefficients.
+///
 /// # Example
 ///
 /// ```
@@ -65,6 +77,11 @@ use crate::{
 /// 	vec![0]
 /// );
 /// assert!(diagrams.relative.is_empty());
+/// assert_eq!(diagrams.domain_to_image.as_ref().unwrap()[&0], vec![0]);
+/// assert_eq!(diagrams.domain_to_codomain.as_ref().unwrap()[&0], vec![0]);
+/// assert_eq!(diagrams.image_to_codomain.as_ref().unwrap()[&0], vec![0]);
+/// assert!(diagrams.kernel_to_domain.as_ref().unwrap().is_empty());
+/// assert!(diagrams.codomain_to_cokernel.as_ref().unwrap()[&0].is_empty());
 /// # Ok::<(), phimaker::errors::InclusionError>(())
 /// ```
 #[doc = python_doc!(
@@ -95,6 +112,17 @@ unique. Each representative dictionary has exactly its diagram's birth keys.
 A requested empty diagram has an empty representative dictionary. If extraction
 was skipped, its representative attribute is still ``None``.
 
+The ``kernel_to_domain``, ``domain_to_image``, ``image_to_codomain``,
+``domain_to_codomain``, and ``codomain_to_cokernel`` attributes are also ``None``
+unless ``get_representatives=True`` was requested. Each dictionary maps every
+source birth to a sorted list of target births with coefficient one in the
+stored representative bases. An empty list denotes zero; an empty source gives
+an empty dictionary. A nonzero coefficient satisfies
+``target_birth <= source_birth < target_death <= source_death``, with ``None``
+deaths treated as infinity. At a filtration index, use only intervals alive
+there. Compose maps at that index; multiplying the complete coefficient tables
+without accounting for interval lifetimes can give incorrect results.
+
 Attributes are read-only. Each dictionary access returns an independent copy,
 including the lists in representative dictionaries. Editing a copy does not
 change this result or later attribute accesses. Support order is unspecified.
@@ -106,6 +134,11 @@ Example::
     >>> assert result.domain == {0: None}
     >>> assert result.domain_representatives == {0: [0]}
     >>> assert result.kernel_representatives == {}
+    >>> assert result.kernel_to_domain == {}
+    >>> assert result.domain_to_image == {0: [0]}
+    >>> assert result.image_to_codomain == {0: [0]}
+    >>> assert result.domain_to_codomain == {0: [0]}
+    >>> assert result.codomain_to_cokernel == {0: []}
     >>> diagram = result.domain
     >>> diagram.clear()
     >>> assert result.domain == {0: None}"#
@@ -258,6 +291,96 @@ Example::
     )]
 	pub cokernel_representatives: Option<HashMap<usize, Vec<usize>>>,
 
+	/// The kernel-to-domain inclusion in the computed cycle bases.
+	/// Source births map to sorted target birth indices with coefficient one
+	/// over F2. Every source birth is a key; an empty vector denotes zero.
+	/// At a filtration index, use only source and target intervals alive there.
+	/// `None` means extraction was skipped; an empty source has `Some` of an
+	/// empty map when requested. Coordinates match the diagrams.
+	#[doc = python_doc!(
+    r#"The kernel-to-domain inclusion, as a dictionary of binary coefficients.
+
+Each kernel birth maps to a sorted list of domain births with coefficient
+one over the field with two elements, in the stored representative bases.
+Every kernel birth is a key; an empty list denotes zero. At a filtration
+index, use only source and target intervals alive there. Indices use the
+diagrams' coordinates. An empty source has an empty dictionary when requested.
+``None`` means representative and map extraction was skipped."#
+    )]
+	pub kernel_to_domain: Option<HashMap<usize, Vec<usize>>>,
+
+	/// The domain-to-image surjection in the computed cycle bases.
+	/// Source births map to sorted target birth indices with coefficient one
+	/// over F2. Every source birth is a key; an empty vector denotes zero.
+	/// At a filtration index, use only source and target intervals alive there.
+	/// `None` means extraction was skipped; an empty source has `Some` of an
+	/// empty map when requested. Coordinates match the diagrams.
+	#[doc = python_doc!(
+    r#"The domain-to-image surjection, as a dictionary of binary coefficients.
+
+Each domain birth maps to a sorted list of image births with coefficient
+one over the field with two elements, in the stored representative bases.
+Every domain birth is a key; an empty list denotes zero. At a filtration
+index, use only source and target intervals alive there. Indices use the
+diagrams' coordinates. An empty source has an empty dictionary when requested.
+``None`` means representative and map extraction was skipped."#
+    )]
+	pub domain_to_image: Option<HashMap<usize, Vec<usize>>>,
+
+	/// The image-to-codomain inclusion in the computed cycle bases.
+	/// Source births map to sorted target birth indices with coefficient one
+	/// over F2. Every source birth is a key; an empty vector denotes zero.
+	/// At a filtration index, use only source and target intervals alive there.
+	/// `None` means extraction was skipped; an empty source has `Some` of an
+	/// empty map when requested. Coordinates match the diagrams.
+	#[doc = python_doc!(
+    r#"The image-to-codomain inclusion, as a dictionary of binary coefficients.
+
+Each image birth maps to a sorted list of codomain births with coefficient
+one over the field with two elements, in the stored representative bases.
+Every image birth is a key; an empty list denotes zero. At a filtration
+index, use only source and target intervals alive there. Indices use the
+diagrams' coordinates. An empty source has an empty dictionary when requested.
+``None`` means representative and map extraction was skipped."#
+    )]
+	pub image_to_codomain: Option<HashMap<usize, Vec<usize>>>,
+
+	/// The domain-to-codomain induced map in the computed cycle bases.
+	/// Source births map to sorted target birth indices with coefficient one
+	/// over F2. Every source birth is a key; an empty vector denotes zero.
+	/// At a filtration index, use only source and target intervals alive there.
+	/// `None` means extraction was skipped; an empty source has `Some` of an
+	/// empty map when requested. Coordinates match the diagrams.
+	#[doc = python_doc!(
+    r#"The domain-to-codomain induced map, as a dictionary of binary coefficients.
+
+Each domain birth maps to a sorted list of codomain births with coefficient
+one over the field with two elements, in the stored representative bases.
+Every domain birth is a key; an empty list denotes zero. At a filtration
+index, use only source and target intervals alive there. Indices use the
+diagrams' coordinates. An empty source has an empty dictionary when requested.
+``None`` means representative and map extraction was skipped."#
+    )]
+	pub domain_to_codomain: Option<HashMap<usize, Vec<usize>>>,
+
+	/// The codomain-to-cokernel quotient map in the computed cycle bases.
+	/// Source births map to sorted target birth indices with coefficient one
+	/// over F2. Every source birth is a key; an empty vector denotes zero.
+	/// At a filtration index, use only source and target intervals alive there.
+	/// `None` means extraction was skipped; an empty source has `Some` of an
+	/// empty map when requested. Coordinates match the diagrams.
+	#[doc = python_doc!(
+    r#"The codomain-to-cokernel quotient map, as a dictionary of binary coefficients.
+
+Each codomain birth maps to a sorted list of cokernel births with coefficient
+one over the field with two elements, in the stored representative bases.
+Every codomain birth is a key; an empty list denotes zero. At a filtration
+index, use only source and target intervals alive there. Indices use the
+diagrams' coordinates. An empty source has an empty dictionary when requested.
+``None`` means representative and map extraction was skipped."#
+    )]
+	pub codomain_to_cokernel: Option<HashMap<usize, Vec<usize>>>,
+
 	/// Homology of the quotient complex; for a general map, homology of its
 	/// cone.
 	#[doc = python_doc!(
@@ -395,11 +518,6 @@ pub(crate) type PersistenceMap = HashMap<usize, Vec<usize>>;
 // original feature labels, then discard targets dead at each source birth.
 // The supplied representatives must span the mapped cycles as chain vectors;
 // this does not solve modulo an independently supplied boundary space.
-// Retained privately until maps are computed during ensemble extraction.
-#[allow(
-	dead_code,
-	reason = "Retained for the upcoming ensemble map extraction"
-)]
 pub(crate) fn get_persistence_map(
 	source: &PersistenceDiagram,
 	source_representatives: &HashMap<usize, Vec<usize>>,
@@ -441,27 +559,149 @@ pub(crate) fn get_persistence_map(
 			}
 			let mut mapped: Vec<_> = mapped.into_iter().collect();
 			mapped.sort_unstable();
-			let pivots = solve(&basis, &mapped).ok_or(PersistenceMapError::Unsolvable {
-				target: "target",
-				birth,
-			})?;
-			let mut coefficients = Vec::new();
-			for pivot in pivots {
-				coefficients = sum_mod2(&coefficients, &features[&pivot]);
-			}
-			coefficients.retain(|target_birth| target[target_birth] > Finite(birth));
-			for &target_birth in &coefficients {
-				if target_birth > birth || target[&target_birth] > source[&birth] {
-					return Err(PersistenceMapError::IncompatibleIntervals {
-						target: "target",
-						birth,
-						target_birth,
-					});
-				}
-			}
+			let coefficients = cycle_coordinates(&basis, &features, &mapped, birth)?;
+			let coefficients = interval_coefficients(source, birth, target, coefficients)?;
 			Ok((birth, coefficients))
 		})
 		.collect()
+}
+
+// Recover coefficients in the original basis before applying any interval or
+// quotient projection. The auxiliary reduced columns have no interval labels.
+fn cycle_coordinates(
+	basis: &PersistenceRepresentatives,
+	features: &PersistenceRepresentatives,
+	support: &[usize],
+	birth: usize,
+) -> Result<Vec<usize>, PersistenceMapError> {
+	let pivots = solve(basis, support).ok_or(PersistenceMapError::Unsolvable {
+		target: "target",
+		birth,
+	})?;
+	let mut coefficients = Vec::new();
+	for pivot in pivots {
+		coefficients = sum_mod2(&coefficients, &features[&pivot]);
+	}
+	Ok(coefficients)
+}
+
+fn interval_coefficients(
+	source: &PersistenceDiagram,
+	birth: usize,
+	target: &PersistenceDiagram,
+	mut coefficients: Vec<usize>,
+) -> Result<Vec<usize>, PersistenceMapError> {
+	coefficients.retain(|target_birth| target[target_birth] > Finite(birth));
+	for &target_birth in &coefficients {
+		if target_birth > birth || target[&target_birth] > source[&birth] {
+			return Err(PersistenceMapError::IncompatibleIntervals {
+				target: "target",
+				birth,
+				target_birth,
+			});
+		}
+	}
+	Ok(coefficients)
+}
+
+impl DiagramEnsemble {
+	// The ensemble is an inclusion in one ambient chain basis, also for a
+	// general map represented by its mapping cylinder. No second generator
+	// mapping is needed. All representatives are extracted before solving.
+	fn extract_persistence_maps(&mut self) {
+		let domain_reps = self.domain_representatives.as_ref().unwrap();
+		let codomain_reps = self.codomain_representatives.as_ref().unwrap();
+		let image_reps = self.image_representatives.as_ref().unwrap();
+		let kernel_reps = self.kernel_representatives.as_ref().unwrap();
+		let identity = domain_reps
+			.values()
+			.chain(image_reps.values())
+			.chain(kernel_reps.values())
+			.flatten()
+			.map(|&idx| (idx, vec![idx]))
+			.collect();
+		self.kernel_to_domain = Some(
+			get_persistence_map(
+				&self.kernel,
+				kernel_reps,
+				&self.domain,
+				domain_reps,
+				&identity,
+			)
+			.expect("Kernel-to-domain map requires consistent inclusion decompositions"),
+		);
+		self.domain_to_image = Some(
+			get_persistence_map(
+				&self.domain,
+				domain_reps,
+				&self.image,
+				image_reps,
+				&identity,
+			)
+			.expect("Domain-to-image map requires consistent inclusion decompositions"),
+		);
+		self.image_to_codomain = Some(
+			get_persistence_map(
+				&self.image,
+				image_reps,
+				&self.codomain,
+				codomain_reps,
+				&identity,
+			)
+			.expect("Image-to-codomain map requires consistent inclusion decompositions"),
+		);
+		self.domain_to_codomain = Some(
+			get_persistence_map(
+				&self.domain,
+				domain_reps,
+				&self.codomain,
+				codomain_reps,
+				&identity,
+			)
+			.expect("Domain-to-codomain map requires consistent inclusion decompositions"),
+		);
+		self.codomain_to_cokernel = Some(
+			self.cokernel_projection()
+				.expect("Codomain-to-cokernel map requires consistent inclusion decompositions"),
+		);
+	}
+
+	// Image cycles and cokernel lifts together form a basis of codomain cycles.
+	// Image coefficients vanish in the quotient regardless of image deaths:
+	// domain cycles are quotient relations even after becoming boundaries.
+	fn cokernel_projection(&self) -> Result<PersistenceMap, PersistenceMapError> {
+		let source_reps = prepare_representatives(
+			&self.codomain,
+			self.codomain_representatives.as_ref().unwrap(),
+			"source",
+		)?;
+		let mut combined = prepare_representatives(
+			&self.cokernel,
+			self.cokernel_representatives.as_ref().unwrap(),
+			"target",
+		)?;
+		let image_reps = prepare_representatives(
+			&self.image,
+			self.image_representatives.as_ref().unwrap(),
+			"image",
+		)?;
+		for (birth, support) in image_reps {
+			if combined.insert(birth, support).is_some() {
+				return Err(PersistenceMapError::InconsistentData { diagram: "target" });
+			}
+		}
+		let (basis, features) = prepare_target_basis(&combined)?;
+		source_reps
+			.iter()
+			.map(|(&birth, support)| {
+				let mut coefficients = cycle_coordinates(&basis, &features, support, birth)?;
+				coefficients.retain(|target_birth| self.cokernel.contains_key(target_birth));
+				let coefficients =
+					interval_coefficients(&self.codomain, birth, &self.cokernel, coefficients)?;
+				Ok((birth, coefficients))
+			})
+			.collect()
+	}
 }
 
 fn is_kernel_birth<Decomp: Decomposition<C>, C: Column>(
@@ -745,13 +985,15 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 	/// Domain, codomain, image, kernel, and cokernel representatives use
 	/// original generator indices when `get_representatives` is true.
 	/// Requested empty diagrams have `Some` of an empty map. When false,
-	/// all five representative maps are `None`, and no representative
-	/// extraction is performed.
+	/// all representative and morphism fields are `None`; representative
+	/// extraction and map solving are skipped. When true, all five morphisms
+	/// are computed in the returned cycle bases and the same coordinates.
 	///
 	/// # Panics
 	/// Panics if representatives are requested and a nonempty domain, codomain,
 	/// or image decomposition did not retain V. The computation entry points
-	/// retain these matrices.
+	/// retain these matrices. Violated algebraic decomposition invariants can
+	/// also cause map extraction to panic.
 	///
 	/// # Example
 	///
@@ -790,7 +1032,7 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 		let cokernel = cokernel_diagram(&self.metadata, &self.d_dom, &self.d_im, &self.d_cok);
 		let cokernel_representatives = get_representatives
 			.then(|| cokernel_representatives(&cokernel, &self.d_cok, &self.d_cod));
-		DiagramEnsemble {
+		let mut result = DiagramEnsemble {
 			domain,
 			domain_representatives,
 			codomain,
@@ -801,6 +1043,11 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 			kernel_representatives,
 			cokernel,
 			cokernel_representatives,
+			kernel_to_domain: None,
+			domain_to_image: None,
+			image_to_codomain: None,
+			domain_to_codomain: None,
+			codomain_to_cokernel: None,
 			relative: {
 				let f = |idx| {
 					self.metadata
@@ -811,7 +1058,11 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 					.anti_transpose(self.metadata.sz_codomain - self.metadata.sz_domain)
 					.map_idxs(f)
 			},
+		};
+		if get_representatives {
+			result.extract_persistence_maps();
 		}
+		result
 	}
 }
 
@@ -854,14 +1105,16 @@ impl FileEnsemble {
 	/// Domain, codomain, image, kernel, and cokernel representatives use
 	/// original generator indices when `get_representatives` is true.
 	/// Requested empty diagrams have `Some` of an empty map. When false,
-	/// all five representative maps are `None`, and no representative
-	/// extraction is performed.
+	/// all representative and morphism fields are `None`; representative
+	/// extraction and map solving are skipped. When true, all five morphisms
+	/// are computed in the returned cycle bases and the same coordinates.
 	///
 	/// # Panics
 	/// Panics on read errors or incompatible or corrupt serialized data, or if
 	/// representatives are requested from a nonempty domain, codomain, or image
 	/// decomposition that did not retain V.
-	/// The computation entry points retain these matrices.
+	/// The computation entry points retain these matrices. Violated algebraic
+	/// decomposition invariants can also cause map extraction to panic.
 	///
 	/// # Example
 	///
@@ -903,7 +1156,7 @@ impl FileEnsemble {
 		let cokernel = cokernel_diagram(&self.metadata, &d_dom_decomp, &d_im_decomp, &d_cok_decomp);
 		let cokernel_representatives = get_representatives
 			.then(|| cokernel_representatives(&cokernel, &d_cok_decomp, &d_cod_decomp));
-		DiagramEnsemble {
+		let mut result = DiagramEnsemble {
 			domain,
 			domain_representatives,
 			codomain,
@@ -914,6 +1167,11 @@ impl FileEnsemble {
 			kernel_representatives,
 			cokernel,
 			cokernel_representatives,
+			kernel_to_domain: None,
+			domain_to_image: None,
+			image_to_codomain: None,
+			domain_to_codomain: None,
+			codomain_to_cokernel: None,
 			relative: {
 				let f = |idx| {
 					self.metadata
@@ -924,7 +1182,11 @@ impl FileEnsemble {
 					.anti_transpose(self.metadata.sz_codomain - self.metadata.sz_domain)
 					.map_idxs(f)
 			},
+		};
+		if get_representatives {
+			result.extract_persistence_maps();
 		}
+		result
 	}
 }
 

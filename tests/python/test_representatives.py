@@ -47,6 +47,24 @@ def test_optional_representatives(*, slow: bool, case: str) -> None:
 			else:
 				assert max(support) == birth
 
+	assert_optional_maps(default, skipped, requested)
+
+
+def assert_optional_maps(
+	default: DiagramEnsemble, skipped: DiagramEnsemble, requested: DiagramEnsemble
+) -> None:
+	"""Skipped map fields are None and requested maps include every source feature."""
+	for name, source in (
+		("kernel_to_domain", "kernel"),
+		("domain_to_image", "domain"),
+		("image_to_codomain", "image"),
+		("domain_to_codomain", "domain"),
+		("codomain_to_cokernel", "codomain"),
+	):
+		assert getattr(default, name) is None
+		assert getattr(skipped, name) is None
+		assert getattr(requested, name).keys() == getattr(requested, source).keys()
+
 
 def test_representative_flag_accepts_positional_argument() -> None:
 	"""The representative flag precedes worker count and slow mode in positional calls."""
@@ -141,4 +159,27 @@ def test_representative_getters_return_independent_lists() -> None:
 		representatives = getattr(result, name)
 		representatives[next(iter(representatives))].append(99)
 		representatives.clear()
+		assert getattr(result, name) == expected
+
+
+def test_map_getters_return_independent_lists() -> None:
+	"""All five stored morphisms expose independent dictionaries and coefficient lists."""
+	result = sixpack_from_inclusion(
+		[[], [], [], [0, 1], [0, 2], [1, 2]],
+		[0, 0, 0, 1, 1, 1],
+		[1, 2, 5],
+		num_threads=1,
+		get_representatives=True,
+	)
+	for name in (
+		"kernel_to_domain",
+		"domain_to_image",
+		"image_to_codomain",
+		"domain_to_codomain",
+		"codomain_to_cokernel",
+	):
+		expected = getattr(result, name)
+		mapping = getattr(result, name)
+		mapping[next(iter(mapping))].append(99)
+		mapping.clear()
 		assert getattr(result, name) == expected

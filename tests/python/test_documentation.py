@@ -61,6 +61,19 @@ def test_shared_class_and_property_documentation() -> None:
 		assert "None" in documentation
 		assert "HashMap" not in documentation
 		assert "V matrix" not in documentation
+	for name in (
+		"kernel_to_domain",
+		"domain_to_image",
+		"image_to_codomain",
+		"domain_to_codomain",
+		"codomain_to_cokernel",
+	):
+		documentation = getattr(type(result), name).__doc__
+		assert "dictionary" in documentation
+		assert "empty list denotes zero" in documentation
+		assert "None" in documentation
+		assert "intervals alive" in documentation
+		assert "HashMap" not in documentation
 	assert "maximum index" in type(result).__doc__
 	assert "Index this list" in type(metadata).times.__doc__
 	assert "in input order" in type(metadata).domain_indices.__doc__

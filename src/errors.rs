@@ -126,7 +126,7 @@ impl Error for InclusionError {}
 pub(crate) enum PersistenceMapError {
 	/// A nonempty diagram has an empty representative map.
 	MissingRepresentatives {
-		/// Diagram requiring representatives: source or target.
+		/// Diagram requiring representatives.
 		diagram: &'static str,
 	},
 	/// Birth keys, supports, or interval endpoints are inconsistent.

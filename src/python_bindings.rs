@@ -19,9 +19,12 @@ r#"Compute six persistence diagrams for an inclusion of filtered chain complexes
 :param cols_in_domain: Indices selecting the domain generators in the codomain.
     Any order is accepted; repeated indices are ignored.
 :param get_representatives: Whether to extract domain, codomain, image, kernel, and cokernel cycles.
-    Defaults to ``False``, which skips extraction and leaves the five
-    representative attributes as ``None``. With ``True``, empty diagrams have
-    empty representative dictionaries.
+    Also compute ``kernel_to_domain``, ``domain_to_image``, ``image_to_codomain``,
+    ``domain_to_codomain``, and ``codomain_to_cokernel`` in these cycle bases.
+    Defaults to ``False``, which skips cycle extraction and map solving and
+    leaves all representative and morphism attributes as ``None``. With ``True``,
+    empty diagrams have empty representative dictionaries. Morphism dictionaries
+    have every source birth as a key; an empty coefficient list denotes zero.
 :param num_threads: Worker limit per computation step, default ``0``. Zero
     selects the count automatically. The whole call may use more threads.
 :param slow: Whether to use temporary files to reduce memory use while computing.
@@ -100,9 +103,12 @@ r#"Compute six persistence diagrams for a filtered chain map over F2.
     in the image of domain generator ``i``. Supply at least one column per domain
     generator; additional map columns are ignored.
 :param get_representatives: Whether to extract domain, codomain, image, kernel, and cokernel cycles.
-    Defaults to ``False``, which skips extraction and leaves the five
-    representative attributes as ``None``. With ``True``, empty diagrams have
-    empty representative dictionaries.
+    Also compute ``kernel_to_domain``, ``domain_to_image``, ``image_to_codomain``,
+    ``domain_to_codomain``, and ``codomain_to_cokernel`` in these cycle bases.
+    Defaults to ``False``, which skips cycle extraction and map solving and
+    leaves all representative and morphism attributes as ``None``. With ``True``,
+    empty diagrams have empty representative dictionaries. Morphism dictionaries
+    have every source birth as a key; an empty coefficient list denotes zero.
 :param num_threads: Worker limit per computation step, default ``0``. Zero
     selects the count automatically. The whole call may use more threads.
 :param slow: Whether to use temporary files to reduce memory use while computing.

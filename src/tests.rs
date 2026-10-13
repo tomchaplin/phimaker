@@ -40,7 +40,7 @@ fn persistence_maps(
 		.flatten()
 		.map(|&index| (index, vec![index]))
 		.collect();
-	Ok((
+	let calculated = (
 		get_persistence_map(
 			&result.domain,
 			result.domain_representatives.as_ref().unwrap(),
@@ -55,7 +55,10 @@ fn persistence_maps(
 			result.image_representatives.as_ref().unwrap(),
 			&generator_map,
 		)?,
-	))
+	);
+	assert_eq!(result.domain_to_codomain.as_ref(), Some(&calculated.0));
+	assert_eq!(result.domain_to_image.as_ref(), Some(&calculated.1));
+	Ok(calculated)
 }
 
 // Evaluate the interval maps at each index, rather than multiplying their
@@ -76,6 +79,7 @@ fn assert_image_inclusion(result: &DiagramEnsemble, n_columns: usize, expected: 
 	)
 	.unwrap();
 	assert_eq!(image_to_codomain, expected);
+	assert_eq!(result.image_to_codomain.as_ref(), Some(&image_to_codomain));
 	let (domain_to_codomain, domain_to_image) = persistence_maps(result).unwrap();
 	let alive = |diagram: &PersistenceDiagram, birth: usize, index: usize| {
 		birth <= index && Finite(index) < diagram[&birth]
@@ -316,6 +320,7 @@ fn assert_kernel_cycles(
 		&identity,
 	)
 	.unwrap();
+	assert_eq!(result.kernel_to_domain.as_ref(), Some(&kernel_to_domain));
 	let (domain_to_codomain, _) = persistence_maps(result).unwrap();
 	let alive = |diagram: &PersistenceDiagram, birth: usize, index: usize| {
 		birth <= index && Finite(index) < diagram[&birth]

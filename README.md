@@ -90,7 +90,7 @@ intervals. The former `.paired` and `.unpaired` attributes have been removed.
 `kernel_representatives`, and `cokernel_representatives`
 are optional. Python's `sixpack_from_inclusion` and `sixpack` default to
 `get_representatives=False`, which leaves all five attributes as `None` and
-skips representative extraction. Pass `get_representatives=True` to obtain
+skips representative extraction and map solving. Pass `get_representatives=True` to obtain
 maps from each birth index to the generator indices whose sum over F2 gives a cycle.
 Keys and supports use the diagram coordinates. Domain, codomain, image, and cokernel cycles
 have maximum support index equal to the feature's birth. Kernel cycles contain
@@ -107,10 +107,10 @@ in Rust and `{}` in Python; when extraction is skipped it still has `None`.
 Rust callers supply `get_representatives` immediately after the input matrices
 and map or domain indices in `sixpack` and `sixpack_from_inclusion`, or as the
 argument to `all_diagrams`. Pass `false` for diagrams only or
-`true` for cycles too. Nonempty domain, codomain, and image decompositions must
+`true` for cycles and maps. Nonempty domain, codomain, and image decompositions must
 retain V only when requesting representatives; the computation entry points
-retain these matrices automatically. This flag skips representative extraction
-and allocation; it does not change which matrices the reductions retain.
+retain these matrices automatically. This flag skips representative extraction, map solving,
+and their allocations; it does not change which matrices the reductions retain.
 
 For example, an external edge creates a kernel class at index 4, and a domain
 edge kills it at index 5. Its representative is a domain cycle that bounds in
@@ -143,6 +143,48 @@ diagrams = sixpack_from_inclusion(
 assert diagrams.cokernel == {3: None}
 assert diagrams.cokernel_representatives == {3: [2, 3]}
 ```
+
+## Persistence maps
+
+Setting `get_representatives=True` also computes five maps in the stored cycle
+bases: `kernel_to_domain`, `domain_to_image`, `image_to_codomain`,
+`domain_to_codomain`, and `codomain_to_cokernel`. Each is
+`Option<HashMap<usize, Vec<usize>>>` in Rust and a dictionary or `None` in Python.
+All five are `None` when extraction is skipped.
+
+Each dictionary has exactly its source diagram's birth keys. The value is a
+sorted list of target births with coefficient one over F2; an empty list denotes
+zero. A requested map with an empty source is an empty dictionary. For example,
+a younger vertex included in an edge maps to two codomain features, while both
+codomain features project to the same cokernel feature:
+
+```python
+diagrams = sixpack_from_inclusion(
+	[[], [], [0, 1]],
+	[0, 0, 1],
+	[1],
+	get_representatives=True,
+)
+assert diagrams.kernel_to_domain == {}
+assert diagrams.domain_to_image == {1: [1]}
+assert diagrams.image_to_codomain == {1: [0, 1]}
+assert diagrams.domain_to_codomain == {1: [0, 1]}
+assert diagrams.codomain_to_cokernel == {0: [0], 1: [0]}
+```
+
+Coefficients use the stored representative bases and the same indices as the
+diagrams. Every nonzero coefficient satisfies
+`target_birth <= source_birth < target_death <= source_death`, with infinite
+deaths allowed. At an index, evaluate a map using only source and target
+intervals alive there. Compose these evaluated maps; ordinary multiplication of
+complete coefficient tables can retain entries between disjoint intervals.
+For `sixpack`, use `metadata.times` to evaluate at actual filtration times;
+equal-time cylinder intervals are retained in the returned data.
+
+Maps are computed from the complete diagrams, including intervals of zero
+duration in actual filtration time. Downstream filtering can restrict the
+resulting rows and columns. Neither diagrams nor representative dictionaries
+need to be supplied separately to a map-computation function.
 
 ## References
 

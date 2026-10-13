@@ -15,6 +15,14 @@ in the codomain. Cokernel representatives are codomain cycles considered modulo
 codomain boundaries and domain cycles; finite features become zero in that
 quotient at their deaths.
 
+The same flag computes ``kernel_to_domain``, ``domain_to_image``,
+``image_to_codomain``, ``domain_to_codomain``, and ``codomain_to_cokernel`` in the
+stored representative bases. Each dictionary has every source birth as a key
+and a sorted list of target births with coefficient one; an empty list denotes
+zero. An empty source gives an empty dictionary, while skipped extraction gives
+``None``. Evaluate and compose maps using only intervals alive at the desired
+index. For mapping-cylinder results, use the returned metadata to recover times.
+
 For development setup and source builds, see
 `the README <https://github.com/tomchaplin/phimaker#development-environment-and-source-builds>`_.
 Build this reference from the repository root after installing the extension::
