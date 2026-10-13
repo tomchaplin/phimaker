@@ -77,3 +77,4 @@ docs/_build/
 # Scratch
 scratch/**
 todo.md
+/python/phimaker/phimaker.pyi
