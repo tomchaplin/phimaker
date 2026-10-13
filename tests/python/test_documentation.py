@@ -3,14 +3,10 @@
 import doctest
 from typing import Any
 
+import phimaker
+import phimaker.phimaker as extension
 import pytest
-from phimaker import (
-	CylinderMetadata,
-	DiagramEnsemble,
-	get_persistence_map,
-	sixpack,
-	sixpack_from_inclusion,
-)
+from phimaker import CylinderMetadata, DiagramEnsemble, sixpack, sixpack_from_inclusion
 
 
 def test_result_class_exports() -> None:
@@ -65,21 +61,13 @@ def test_shared_class_and_property_documentation() -> None:
 		assert "HashMap" not in documentation
 		assert "V matrix" not in documentation
 	assert "maximum index" in type(result).__doc__
-	assert "common ordered filtration" in get_persistence_map.__doc__
-	assert "Missing entries implicitly map to zero" in get_persistence_map.__doc__
-	assert ":returns:" in get_persistence_map.__doc__
-	assert ":raises RuntimeError:" in get_persistence_map.__doc__
-	assert "HashMap" not in get_persistence_map.__doc__
-	assert "PersistenceMapError" not in get_persistence_map.__doc__
 	assert "Index this list" in type(metadata).times.__doc__
 	assert "in input order" in type(metadata).domain_indices.__doc__
 	assert "in input order" in type(metadata).codomain_indices.__doc__
 	assert "Original domain" not in type(metadata).domain_indices.__doc__
 
 
-@pytest.mark.parametrize(
-	"name", ["sixpack", "sixpack_from_inclusion", "diagrams", "metadata", "persistence_map"]
-)
+@pytest.mark.parametrize("name", ["sixpack", "sixpack_from_inclusion", "diagrams", "metadata"])
 def test_python_documentation_examples(name: str) -> None:
 	"""Every function and shared-class example is valid and has the stated result."""
 	result, metadata = sixpack([(0.0, 0, [])], [(0.0, 0, [])], [[0]])
@@ -88,9 +76,15 @@ def test_python_documentation_examples(name: str) -> None:
 		"sixpack_from_inclusion": sixpack_from_inclusion,
 		"diagrams": type(result),
 		"metadata": type(metadata),
-		"persistence_map": get_persistence_map,
 	}
 	test = doctest.DocTestParser().get_doctest(objects[name].__doc__, {}, name, None, 0)
 	assert test.examples, "Usage documentation must include executable examples"
 	outcome = doctest.DocTestRunner().run(test)
 	assert outcome.failed == 0
+
+
+def test_standalone_persistence_map_is_not_exported() -> None:
+	"""Both the package and native extension expose only chain-complex computations."""
+	assert "get_persistence_map" not in phimaker.__all__
+	assert not hasattr(phimaker, "get_persistence_map")
+	assert not hasattr(extension, "get_persistence_map")

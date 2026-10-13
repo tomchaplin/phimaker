@@ -1,14 +1,14 @@
-//! Public standalone API checks using minimal triangular cycle bases over F2.
+//! Private cycle-coordinate regression tests using minimal F2 cycle bases.
 
 use std::collections::HashMap;
 
-use phimaker::{
+use crate::{
 	diagrams::{
 		ExtendedUsize::{Finite, Infinity},
 		PersistenceDiagram,
+		get_persistence_map,
 	},
 	errors::PersistenceMapError,
-	get_persistence_map,
 };
 
 /// A generator can map to a sum of two target features instead of an inclusion.

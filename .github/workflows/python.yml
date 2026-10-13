@@ -78,19 +78,13 @@ jobs:
               for declaration in (
                   "def sixpack(", "def sixpack_from_inclusion(",
                   "class DiagramEnsemble:", "class CylinderMetadata:",
-                  "def get_persistence_map(",
               ):
                   assert declaration in stub, f"Generated stubs omit {declaration}"
               functions = {
                   node.name: node for node in ast.parse(stub).body
                   if isinstance(node, ast.FunctionDef)
               }
-              persistence_map = functions["get_persistence_map"]
-              arguments = {arg.arg: arg.annotation for arg in persistence_map.args.args}
-              for argument in ("source", "target"):
-                  assert ast.unparse(arguments[argument]) == "dict[int, int | None]", (
-                      f"Missing diagram input type for {argument}"
-                  )
+              assert "get_persistence_map" not in functions, "Retired API is still exported"
               for name in ("sixpack", "sixpack_from_inclusion"):
                   function = functions[name]
                   arguments = {arg.arg: arg.annotation for arg in function.args.args}

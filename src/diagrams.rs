@@ -197,9 +197,7 @@ Sum the listed generators over the field with two elements to obtain a domain
 cycle that is zero in codomain homology. Supports use the diagram's ambient
 coordinates and contain only domain generators, with indices strictly less than
 the kernel birth. When requested, an empty kernel diagram has an empty dictionary.
-``None`` means representative extraction was skipped. Use these representatives
-with :py:func:`~phimaker.get_persistence_map` and the identity map to
-compute the kernel-to-domain inclusion."#
+``None`` means representative extraction was skipped."#
     )]
 	pub kernel_representatives: Option<HashMap<usize, Vec<usize>>>,
 
@@ -339,98 +337,19 @@ fn prepare_target_basis(
 	Ok((new_representatives, new_to_old_mapping))
 }
 
-/// Source birth indices mapped to target births with coefficient one over F2.
-pub type PersistenceMap = HashMap<usize, Vec<usize>>;
-/// Compute a persistence-module map over F2 in the supplied cycle bases.
-///
-/// Returns a map with every source birth as a key and a sorted list of target
-/// births with coefficient one as its value. An empty list denotes zero.
-/// Apply `generator_map` to each source representative before expressing it in
-/// the target representative basis. Overlaps between generator images cancel
-/// over F2. Missing generator-map entries implicitly map to zero; unused
-/// entries are ignored. Inputs are not modified.
-///
-/// # Input contract
-/// All source and target birth and death indices must use **one common ordered
-/// filtration index scale**. Independently numbered complexes must be reindexed
-/// before calling this function; a generator map alone does not establish how
-/// their filtration indices compare. This requirement cannot be checked from
-/// the supplied data. Source supports and map keys use the source generator
-/// basis; target supports and map values use the target generator basis.
-///
-/// Supply representative maps explicitly. When using a [`DiagramEnsemble`],
-/// request `get_representatives = true` and borrow the maps from their `Some`
-/// values before calling this function.
-///
-/// Each representative map must have exactly its diagram's birth keys. Every
-/// cycle support must be nonempty and use indices no greater than its feature's
-/// birth. A feature may be born after all generators in its representative;
-/// its birth need not equal the maximum support index. Finite deaths must be
-/// strictly later than births. Supports and individual generator-map
-/// columns may be unsorted; repeated indices within a column are repeated
-/// listings of one nonzero entry and are ignored. Repetitions across distinct
-/// mapped columns cancel when those columns are added.
-///
-/// Representatives must be cycles. Target representatives must be linearly
-/// independent as chain vectors and span the mapped source cycles. The
-/// generator map must describe a degree-preserving filtered chain map.
-/// Cyclehood, degrees, and the chain-map identity are not
-/// checked. An empty source returns an empty map without inspecting the
-/// representative data.
-///
-/// Target features dead at the source birth are omitted after exact cycle
-/// expansion. Every retained coefficient satisfies `target_birth <=
-/// source_birth < target_death <= source_death`, with infinity allowed for
-/// deaths. At a filtration index, use only intervals alive there.
-///
-/// Features can map to target features born earlier; equal births are not
-/// required. Only target features already born and still alive at the source
-/// birth can have nonzero coefficients.
-///
-/// # Errors
-/// Returns [`PersistenceMapError`] for unavailable or inconsistent
-/// representatives, invalid interval endpoints, a mapped cycle outside the
-/// target span, or a coefficient incompatible with the interval lifetimes.
-///
-/// # Example
-/// ```
-/// use phimaker::{get_persistence_map, sixpack_from_inclusion};
-/// let diagrams = sixpack_from_inclusion(
-/// 	&[vec![], vec![], vec![0, 1]],
-/// 	&[0, 0, 1],
-/// 	&[1],
-/// 	true,
-/// 	1,
-/// 	false,
-/// )?;
-/// let generator_map = [(1, vec![1])].into_iter().collect();
-/// let to_codomain = get_persistence_map(
-/// 	&diagrams.domain,
-/// 	diagrams.domain_representatives.as_ref().unwrap(),
-/// 	&diagrams.codomain,
-/// 	diagrams.codomain_representatives.as_ref().unwrap(),
-/// 	&generator_map,
-/// )?;
-/// assert_eq!(to_codomain[&1], vec![0, 1]);
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
-///
-/// A kernel feature may be born after all generators in its domain cycle:
-///
-/// ```
-/// use phimaker::{diagrams::ExtendedUsize::Finite, get_persistence_map};
-/// let source = [(4, Finite(5))].into_iter().collect();
-/// let target = [(2, Finite(5))].into_iter().collect();
-/// let source_reps = [(4, vec![1, 2])].into_iter().collect();
-/// let target_reps = [(2, vec![1, 2])].into_iter().collect();
-/// let identity = [(1, vec![1]), (2, vec![2])].into_iter().collect();
-/// assert_eq!(
-/// 	get_persistence_map(&source, &source_reps, &target, &target_reps, &identity)?[&4],
-/// 	vec![2]
-/// );
-/// # Ok::<(), phimaker::errors::PersistenceMapError>(())
-/// ```
-pub fn get_persistence_map(
+// Source birth indices mapped to target births with coefficient one over F2.
+pub(crate) type PersistenceMap = HashMap<usize, Vec<usize>>;
+
+// Expand mapped cycles exactly in the complete target cycle basis, restore the
+// original feature labels, then discard targets dead at each source birth.
+// The supplied representatives must span the mapped cycles as chain vectors;
+// this does not solve modulo an independently supplied boundary space.
+// Retained privately until maps are computed during ensemble extraction.
+#[allow(
+	dead_code,
+	reason = "Retained for the upcoming ensemble map extraction"
+)]
+pub(crate) fn get_persistence_map(
 	source: &PersistenceDiagram,
 	source_representatives: &HashMap<usize, Vec<usize>>,
 	target: &PersistenceDiagram,

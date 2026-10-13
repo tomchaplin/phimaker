@@ -20,14 +20,14 @@ use crate::{
 		PersistenceDiagram,
 		PersistenceMap,
 		from_file,
+		get_persistence_map,
 	},
 	ensemble::{FileEnsemble, all_decompositions, all_decompositions_slow, to_file},
 	errors::PersistenceMapError,
-	get_persistence_map,
 	indexing::Permutation,
 };
 
-// Compare both inclusion targets using the standalone API and identity
+// Compare both inclusion targets using the private calculation and identity
 // generator images.
 fn persistence_maps(
 	result: &DiagramEnsemble,

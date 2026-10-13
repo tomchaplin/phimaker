@@ -44,7 +44,6 @@ use std::ops::Deref;
 
 use cylinder::{CylinderMetadata, build_cylinder};
 use diagrams::DiagramEnsemble;
-pub use diagrams::{PersistenceMap, get_persistence_map};
 pub use ensemble::{all_decompositions, all_decompositions_slow};
 use errors::InclusionError;
 use lophat::algorithms::LockFreeAlgorithm;
@@ -197,6 +196,9 @@ pub fn sixpack<UsizeSlice: Deref<Target = [usize]>>(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod persistence_map_tests;
 
 #[cfg(feature = "python-module")]
 mod python_bindings;

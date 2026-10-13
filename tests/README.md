@@ -95,9 +95,9 @@ classes match the objects returned by the functions.
   both modes. Diagram-only extraction is tested with V absent separately from
   each relevant decomposition, including serialized results and cursor rewinds.
   Python tests check the default, explicit flags, and forwarding through both
-  convenience functions; persistence-map tests opt in to cycle extraction.
-- **Persistence maps:** sparse F2 back substitution over all combinations of a
-  small basis; sums of codomain or image features; dead target cycles needed for
+  convenience functions; representative tests opt in to cycle extraction.
+- **Private cycle-coordinate calculation:** sparse F2 back substitution over
+  all combinations of a small basis; sums of codomain or image features; dead target cycles needed for
   exact expansion but omitted from homology coefficients; identity and empty maps;
   image-to-codomain inclusions with hand-derived coefficients, pointwise F2 rank,
   and domain-to-image-to-codomain factorization at every filtration index. These
@@ -107,12 +107,11 @@ classes match the objects returned by the functions.
   `[1, 3)`, and `[0, 2)` compose to zero despite a nonzero ordinary matrix product;
   zero general maps after equal-time cylinder cells enter; missing or inconsistent
   representatives, non-spanning target bases, incompatible interval lifetimes,
-  and normalization of unsorted or repeated support indices. Standalone Rust
-  integration tests and Python tests also cover non-identity generator images,
-  F2 cancellation, missing images as zero, ignored unused images, future-born
-  target coefficients, unchanged inputs, and diagram dictionary extraction
-  with contextual type and integer range errors. Both extraction modes and
-  independent Python return copies are tested.
+  and normalization of unsorted or repeated support indices. Crate-private Rust
+  tests also cover non-identity generator images, F2 cancellation, missing images
+  as zero, ignored unused images, future-born target coefficients, and unchanged
+  inputs. These tests preserve calculation coverage during the transition to
+  ensemble maps; no standalone persistence-map function is publicly exported.
 - **Kernel representatives:** finite and essential cycles use only domain
   generators preceding their kernel birth. A finite two-class fixture requires
   the kernel death basis rather than the image boundary at birth. Both modes
@@ -120,11 +119,13 @@ classes match the objects returned by the functions.
   boundaries, membership in codomain boundaries, pointwise kernel-to-domain
   injectivity, and the zero composite into codomain homology. Optional flags,
   empty maps, copied Python getters, and a zero-map cylinder are covered.
-  Standalone persistence-map tests allow earlier-supported cycles on either
+  Private cycle-coordinate tests allow earlier-supported cycles on either
   side, reduce independent target cycles sharing a pivot, and reject future
   target features, future support generators, and dependent target cycles.
 - **Python bindings:** dictionary lookup, missing-key behavior, independent
-  getter copies, `None` for infinity, metadata, signatures, and docstrings.
+  getter copies, `None` for infinity, metadata, signatures, and docstrings. The
+  retired standalone map function is absent from both the package and native
+  extension, and CI checks that generated type declarations omit it.
 - **Documentation:** Python functions, shared classes, and properties expose
   Python usage docs without Rust comments. Their examples run through Python's
   doctest parser under pytest. Rust examples run as Cargo doctests; rustdoc is

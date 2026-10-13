@@ -117,13 +117,13 @@ impl Error for InclusionError {}
 
 /// A persistence map could not be recovered from diagrams and a generator map.
 ///
-/// Returned by [`crate::get_persistence_map`].
+/// Used by the private cycle-coordinate calculation.
 /// Representative maps must be available and agree with their diagrams.
 /// Representative extraction requires retained V. Modifying diagrams or
 /// representatives independently can make them inconsistent. Interval indices
 /// must share a common filtration scale; the map must be a filtered chain map.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PersistenceMapError {
+pub(crate) enum PersistenceMapError {
 	/// A nonempty diagram has an empty representative map.
 	MissingRepresentatives {
 		/// Diagram requiring representatives: source or target.

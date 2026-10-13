@@ -39,41 +39,31 @@ since `v0.3.0`.
   submodule and Python interface.
 - Require Python 3.12 or newer, matching LoPhat's Python requirement, and
   move the Rust crate to edition 2024.
-- Replace `DiagramEnsemble.get_persistence_map()` with the standalone Rust and
-  Python function `get_persistence_map`. Supply source and target diagrams,
-  their representatives, and a generator map; call it separately for the
-  domain-to-codomain and domain-to-image maps.
+- Remove the public standalone `get_persistence_map` function in Rust and
+  Python and its public `PersistenceMap` and `PersistenceMapError` types.
+  Computation entry points accept filtered chain complexes and chain maps;
+  there is no public solver for independently supplied persistence diagrams.
+  Retain the cycle-coordinate calculation privately with Rust regression tests.
 - Make domain, codomain, and image representatives optional on `DiagramEnsemble`.
   Rust `sixpack`, `sixpack_from_inclusion`, and both `all_diagrams` methods take
   a `get_representatives` flag. Python convenience functions default it to
-  `False`; pass `get_representatives=True` before using their representatives
-  with `get_persistence_map`.
+  `False`; pass `get_representatives=True` when representative cycles are needed.
 
 ### Added
 
 - Optional `kernel_representatives` on `DiagramEnsemble` in Rust and Python,
   controlled by the existing `get_representatives` flag in both computation
   modes. Cycles use only domain generators preceding the kernel birth, bound
-  in the codomain, and follow finite kernel death pairings. Use identity
-  generator images with `get_persistence_map` for the kernel-to-domain inclusion.
+  in the codomain, and follow finite kernel death pairings.
   Add regressions for finite and essential classes, differing birth/death cycle
   bases, domain index translation, and zero-map cylinders; check independence
   in domain homology and the zero composite into codomain homology.
-- Rust and Python regressions for image-to-codomain persistence maps in both
+- Private Rust regressions for image-to-codomain persistence maps in both
   computation modes, including sums, different representative bases, dead targets,
   empty images, and identity and zero-map cylinders. Verify pointwise injectivity
   and factorization of domain-to-codomain through the image, accounting for interval
   lifetimes when composing maps. Include nonzero interval maps whose composition
   is zero because the outer intervals do not overlap.
-- Standalone `get_persistence_map(source, source_representatives, target,
-  target_representatives, generator_map)` for sparse binary persistence maps
-  between supplied cycle bases. Apply generator images over F2 before sparse
-  back substitution; missing entries implicitly map to zero. Normalize repeated
-  listings within columns, cancel overlaps between distinct images, and omit
-  target features already dead at the source birth. Require a common filtration
-  index scale and reject coefficients born too late or dying too late. Include
-  typed `PersistenceMapError` failures in Rust, `RuntimeError` in Python, usage
-  examples, and Rust/Python tests for arbitrary mappings and both extraction modes.
 - Domain, codomain, and image representative maps on `DiagramEnsemble`, keyed
   by birth index with cycle supports in diagram coordinates. Extract representatives
   in both normal and slow modes using LoPhat's `diagram_with_reps`; translate domain
@@ -106,8 +96,8 @@ since `v0.3.0`.
 
 ### Changed
 
-- Allow source and target persistence-map representatives supported strictly
-  before their feature births. Validate availability by birth instead of
+- Allow the private cycle-coordinate calculation to use representatives
+  supported strictly before their feature births. Validate availability by birth instead of
   requiring equality with the maximum support index. Reduce target cycle bases
   with overlapping pivots while preserving their feature labels; reject
   dependent target cycles and retain interval lifetime checks. Document the
@@ -126,19 +116,15 @@ since `v0.3.0`.
   PyO3 exports, explicitly enable introspection metadata, and include `py.typed`.
   Export `DiagramEnsemble` and `CylinderMetadata` from Python so typed result
   objects can be imported. Check public declarations in every built wheel,
-  including the standalone persistence-map function and its diagram input types.
+  including optional representative getters and the absence of the retired
+  standalone persistence-map function.
 - Include the README in Python package metadata and correct its repository URL.
   Document publishing credentials and platform coverage. The copied workflows
   publish wheels only; they no longer build a source distribution, Intel macOS,
   PyPy, musllinux, or the other architectures from the previous wheel matrix.
 - Upgrade LoPhat from 0.11.0 to 0.14.0, use its shared diagram and extended-index
   types, and adapt column access to `degree()`. Delegate Python dictionary and
-  infinite-death conversion to LoPhat when `python-module` is enabled. Accept
-  Python diagram dictionaries through its new `FromPyObject` implementations.
-- Label persistence-map errors by source and target. Preserve `RuntimeError`
-  for inconsistent diagrams, representatives, or maps; malformed Python diagram
-  dictionaries raise `TypeError` with the underlying conversion error as their
-  cause.
+  infinite-death conversion to LoPhat when `python-module` is enabled.
 - Upgrade PyO3 from 0.25.1 to the 0.29 series and pyo3-log from 0.12.4 to 0.13.4.
   Update compatible Rust dependencies and the lockfile, including atomic_refcell,
   crossbeam, log, rayon, serde, serde_json, and tempfile. Python computations

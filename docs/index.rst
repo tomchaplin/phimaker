@@ -7,13 +7,11 @@ indices to death indices, with ``None`` for essential features.
 
 Representative cycles are optional. The computation functions default to
 ``get_representatives=False``, returning ``None`` for the four representative
-attributes. Pass ``get_representatives=True`` when cycles are needed, including
-when supplying their dictionaries to ``get_persistence_map``. A requested empty
-diagram has an empty representative dictionary.
+attributes. Pass ``get_representatives=True`` when cycles are needed. A requested
+empty diagram has an empty representative dictionary.
 Domain, codomain, and image cycles have maximum generator index equal to birth.
 Kernel cycles use only domain generators preceding their birth and are boundaries
-in the codomain. Pass kernel and domain representatives to ``get_persistence_map``
-with identity generator images to obtain the kernel-to-domain inclusion.
+in the codomain.
 
 For development setup and source builds, see
 `the README <https://github.com/tomchaplin/phimaker#development-environment-and-source-builds>`_.
@@ -33,11 +31,6 @@ Computing diagrams
 .. autofunction:: phimaker.sixpack_from_inclusion
 
 .. autofunction:: phimaker.sixpack
-
-Persistence maps
-----------------
-
-.. autofunction:: phimaker.get_persistence_map
 
 Results
 -------
