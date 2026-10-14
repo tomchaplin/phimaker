@@ -76,6 +76,18 @@ use lophat::algorithms::LockFreeAlgorithm;
 /// empty vectors denote zero. Reductions still retain the matrices used by
 /// the six-diagram algorithm.
 ///
+/// When `get_representatives` is true and `num_threads != 1`, representatives
+/// may vary across calls with identical inputs because multithreaded reduction
+/// is nondeterministic. This includes zero when it selects multiple workers.
+///
+/// With `num_threads = 1`, domain representatives depend only on the induced
+/// ordered domain chain complex, up to an order-preserving relabelling of its
+/// generators. Changing the codomain while preserving the domain boundaries,
+/// degrees, and relative generator order does not change these representatives
+/// after relabelling. Codomain representatives do not depend on the selected
+/// domain. Use one worker when computing several domain/codomain combinations
+/// whose representative bases need to be compatible.
+///
 /// # Errors
 /// Returns [`InclusionError`] for mismatched degree counts, out-of-range domain
 /// indices, boundary rows not less than their column, boundaries that do not

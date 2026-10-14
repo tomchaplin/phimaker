@@ -117,6 +117,12 @@ since `v0.3.0`.
 
 ### Changed
 
+- Document representative reproducibility in the Rust and Python docstrings of
+  `sixpack_from_inclusion`: multithreaded calls may choose different cycles for
+  identical inputs. With one worker, domain representatives are independent of
+  the ambient codomain up to order-preserving relabelling, and codomain
+  representatives are independent of the selected domain. Explain using one
+  worker for compatible representative bases across multiple inclusions.
 - Allow the private cycle-coordinate calculation to use representatives
   supported strictly before their feature births. Validate availability by birth instead of
   requiring equality with the maximum support index. Reduce target cycle bases

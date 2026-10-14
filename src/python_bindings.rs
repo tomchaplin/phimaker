@@ -42,6 +42,18 @@ this is not checked, and violations can give incorrect diagrams even if the
 call succeeds. Kernel interval degree is ``degrees[birth] - 1``; other interval
 degrees are ``degrees[birth]``. Relative means homology of the quotient complex.
 
+When ``get_representatives=True`` and ``num_threads != 1``, representatives may
+vary across calls with identical inputs because multithreaded reduction is
+nondeterministic. This includes ``num_threads=0`` when it selects multiple workers.
+
+With ``num_threads=1``, domain representatives depend only on the induced ordered
+domain chain complex, up to an order-preserving relabelling of its generators.
+Changing the codomain while preserving the domain boundaries, degrees, and
+relative generator order does not change these representatives after relabelling.
+Codomain representatives do not depend on the selected domain. Use one worker
+when computing several domain/codomain combinations whose representative bases
+need to be compatible.
+
 The input lists are not modified. Each dictionary access returns a fresh copy,
 so editing it does not change the result. Dictionary order is unspecified.
 Empty complexes, empty domains, and identity inclusions work in both modes.
