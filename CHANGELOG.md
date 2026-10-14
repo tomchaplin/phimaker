@@ -133,6 +133,12 @@ since `v0.3.0`.
 
 ### Changed
 
+- Document the representative birth guarantee for `sixpack_from_inclusion`
+  in both Rust and Python: domain, codomain, image, cokernel, and relative
+  representatives have maximum generator index equal to their feature's
+  birth, for every thread count. Explain the corresponding maximum birth-value
+  guarantee for nondecreasing filtration values, including ties, and demonstrate
+  the index guarantee in the executable usage examples.
 - Document representative reproducibility in the Rust and Python docstrings of
   `sixpack_from_inclusion`: multithreaded calls may choose different cycles for
   identical inputs. With one worker, domain representatives are independent of

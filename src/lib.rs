@@ -79,6 +79,14 @@ use lophat::algorithms::LockFreeAlgorithm;
 /// empty vectors denote zero. Reductions still retain the matrices used by
 /// the six-diagram algorithm.
 ///
+/// When representatives are requested, each domain, codomain, image, cokernel,
+/// or relative feature with birth index `b` has maximum representative
+/// generator index equal to `b`: generator `b` occurs and no later generator
+/// occurs. This guarantee holds for every thread count. If you associate
+/// nondecreasing filtration values with the input generator order, the
+/// interval's birth value is therefore the maximum filtration value of a
+/// generator in its representative, including when values are equal.
+///
 /// When `get_representatives` is true and `num_threads != 1`, representatives
 /// may vary across calls with identical inputs because multithreaded reduction
 /// is nondeterministic. This includes zero when it selects multiple workers.
@@ -113,13 +121,15 @@ use lophat::algorithms::LockFreeAlgorithm;
 /// 	&[vec![], vec![], vec![0, 1]],
 /// 	&[0, 0, 1],
 /// 	&[1],
-/// 	false,
+/// 	true,
 /// 	1,
 /// 	false,
 /// )?;
 /// assert_eq!(diagrams.domain[&1], Infinity);
 /// assert_eq!(diagrams.codomain[&1], Finite(2));
 /// assert!(diagrams.kernel.is_empty());
+/// let cycle = &diagrams.codomain_representatives.as_ref().unwrap()[&1];
+/// assert_eq!(cycle.iter().max(), Some(&1));
 /// # Ok::<(), phimaker::errors::InclusionError>(())
 /// ```
 pub fn sixpack_from_inclusion<UsizeSlice: Deref<Target = [usize]>>(

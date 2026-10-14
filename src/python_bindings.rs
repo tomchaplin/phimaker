@@ -44,6 +44,14 @@ degrees are ``degrees[birth]``. Relative means homology of the quotient complex.
 Relative representatives contain only generators outside the domain. Their
 boundary lies in the domain, so they need not be cycles in the codomain itself.
 
+When ``get_representatives=True``, each domain, codomain, image, cokernel, or
+relative feature with birth index ``b`` has maximum representative generator
+index equal to ``b``: generator ``b`` occurs and no later generator occurs.
+This guarantee holds for every thread count. If you associate nondecreasing
+filtration values with the input generator order, the interval's birth value
+is therefore the maximum filtration value of a generator in its representative,
+including when values are equal.
+
 When ``get_representatives=True`` and ``num_threads != 1``, representatives may
 vary across calls with identical inputs because multithreaded reduction is
 nondeterministic. This includes ``num_threads=0`` when it selects multiple workers.
@@ -77,10 +85,14 @@ The call blocks until results are ready; other Python threads can run meanwhile.
 Example::
 
     >>> from phimaker import sixpack_from_inclusion
-    >>> diagrams = sixpack_from_inclusion([[], [], [0, 1]], [0, 0, 1], [1])
+    >>> diagrams = sixpack_from_inclusion(
+    ...     [[], [], [0, 1]], [0, 0, 1], [1],
+    ...     get_representatives=True, num_threads=1,
+    ... )
     >>> assert diagrams.domain == {1: None}
     >>> assert diagrams.codomain == {0: None, 1: 2}
-    >>> assert diagrams.relative == {0: 2}"#
+    >>> assert diagrams.relative == {0: 2}
+    >>> assert max(diagrams.codomain_representatives[1]) == 1"#
 )]
 #[pyfunction(name = "sixpack_from_inclusion")]
 #[pyo3(signature = (boundary_matrix, degrees, cols_in_domain, get_representatives=false, num_threads=0, slow=false))]
