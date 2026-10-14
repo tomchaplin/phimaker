@@ -139,6 +139,18 @@ classes match the objects returned by the functions.
   coefficient tables introduces a spurious dead target. Both modes cover sums,
   differing bases, empty/identity inclusions, finite/essential classes, cylinder
   identity/zero maps, optional extraction, and independent Python getter copies.
+- **Relative representatives:** finite R death columns and essential V birth
+  columns lift to chains supported outside the domain, with boundary contained
+  in the domain and maximum support index equal to birth. An edge relative to
+  its two endpoints detects representatives that are not codomain cycles.
+  Independent rank checks in each degree and at every index verify quotient
+  basis independence and completeness, and that finite representatives vanish
+  at their deaths. Both modes cover empty and identity inclusions, an empty
+  domain, unsorted domains with gaps, filled triangles, and identity/zero map
+  cylinders. Raw relative matrices retain forward quotient coordinates and V;
+  diagram-only extraction also works without relative V. Optional getters,
+  independent Python copies, executable examples, and generated getter types
+  are checked.
 - **Python bindings:** dictionary lookup, missing-key behavior, independent
   getter copies, `None` for infinity, metadata, signatures, and docstrings. The
   retired standalone map function is absent from both the package and native

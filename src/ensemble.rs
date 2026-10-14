@@ -8,7 +8,6 @@ use lophat::{
 	algorithms::DecompositionAlgo,
 	columns::{Column, VecColumn},
 	options::LoPhatOptions,
-	utils::anti_transpose,
 };
 use serde::Serialize;
 
@@ -103,7 +102,7 @@ where
 	pub d_ker: Algo::Decomposition,
 	/// Cokernel decomposition in original codomain coordinates.
 	pub d_cok: Algo::Decomposition,
-	/// Anti-transposed relative decomposition in local quotient coordinates.
+	/// Relative decomposition in local quotient coordinates, retaining V.
 	pub d_rel: Algo::Decomposition,
 	/// Coordinate maps for this inclusion.
 	pub metadata: EnsembleMetadata,
@@ -141,7 +140,7 @@ pub struct FileEnsemble {
 	pub d_ker: File,
 	/// Cokernel decomposition in original codomain coordinates.
 	pub d_cok: File,
-	/// Anti-transposed relative decomposition in local quotient coordinates.
+	/// Relative decomposition in local quotient coordinates, retaining V.
 	pub d_rel: File,
 	/// Coordinate maps for this inclusion.
 	pub metadata: EnsembleMetadata,
@@ -244,22 +243,23 @@ fn decompose_im_ker<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>
 	(d_im_decomp, d_ker_decomp, ker_mapping)
 }
 
-/// Reduce the anti-transpose of the quotient boundary B/A.
+/// Reduce the quotient boundary B/A, retaining V.
 /// The permutation must put the `sz_domain` domain generators first. Returned
-/// indices are reversed local quotient indices, not original codomain indices.
-/// See [`build_d_rel`]; reduction options pass through.
+/// indices are local quotient indices, not original codomain indices.
+/// See [`build_d_rel`]; other reduction options pass through.
 fn decompose_rel<Algo: DecompositionAlgo<VecColumn, Options = LoPhatOptions>>(
 	d_cod: &[VecColumn],
 	dom_first_mapping: &impl Permutation,
 	sz_domain: usize,
 	base_options: LoPhatOptions,
 ) -> Algo::Decomposition {
-	let d_rel = build_d_rel(d_cod, dom_first_mapping, sz_domain).collect::<Vec<_>>();
-	// Chain complex so can use clearing and anti-transpose
-	let d_rel_anti_transpose = anti_transpose(&d_rel);
-	let decomp_d_rel = Algo::init(Some(base_options))
-		.add_cols(d_rel_anti_transpose.into_iter())
-		.decompose();
+	let d_rel = build_d_rel(d_cod, dom_first_mapping, sz_domain);
+	let decomp_d_rel = Algo::init(Some(LoPhatOptions {
+		maintain_v: true,
+		..base_options
+	}))
+	.add_cols(d_rel)
+	.decompose();
 	debug!("Decomposed d_rel");
 	decomp_d_rel
 }

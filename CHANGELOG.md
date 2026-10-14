@@ -32,6 +32,10 @@ since `v0.3.0`.
   input coordinates instead of anti-transposed coordinates. Consumers of raw
   codomain decompositions must stop reversing indices. Extracted codomain
   diagrams retain their original coordinates.
+- Store `DecompositionEnsemble.d_rel` and `FileEnsemble.d_rel` in forward local
+  quotient coordinates instead of anti-transposed coordinates. Consumers of
+  raw relative decompositions must stop reversing indices. Extracted relative
+  diagrams retain their original codomain coordinates.
 - Replace `VectorMapping`, `IndexMapping`, annotated-column helpers, and row
   reordering abstractions with permutation-based index translation. Make matrix
   builders and individual reduction helpers internal implementation details.
@@ -51,6 +55,18 @@ since `v0.3.0`.
 
 ### Added
 
+- Optional `relative_representatives` on `DiagramEnsemble` in Rust and Python,
+  controlled by `get_representatives` in both normal and serialized modes.
+  Reduce the quotient boundary directly and retain V; finite features use R
+  death columns and essential features use V birth columns. Translate birth
+  keys and supports to original codomain or mapping-cylinder coordinates.
+  Supports use only generators outside the domain, have maximum index equal
+  to birth, and have boundary contained in the domain. Document their classes
+  modulo codomain boundaries and domain chains. Test quotient cyclehood,
+  pointwise basis completeness and independence, finite deaths, empty and
+  identity inclusions, permuted coordinates, cylinders, optional extraction,
+  copied Python getters, and generated getter types. Retaining relative V
+  adds memory use and increases serialized relative data size.
 - Optional `kernel_to_domain`, `domain_to_image`, `image_to_codomain`,
   `domain_to_codomain`, and `codomain_to_cokernel` maps on `DiagramEnsemble`.
   With `get_representatives=true`, both extraction modes compute binary
@@ -162,7 +178,7 @@ since `v0.3.0`.
 - Reduce the codomain boundary directly and retain V in both normal and slow
   modes, making R death columns and essential V birth columns available for
   representative-cycle extraction. Read codomain diagrams directly from this
-  reduction; only the relative reduction remains anti-transposed. Retaining V
+  reduction. The relative reduction also now preserves forward order. Retaining V
   adds memory use and increases serialized codomain data size.
 - Add GPL-3.0-or-later licensing, the license text, and package author,
   repository, and classification metadata. Update the Maturin CI action.

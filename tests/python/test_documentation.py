@@ -54,6 +54,7 @@ def test_shared_class_and_property_documentation() -> None:
 		"image_representatives",
 		"kernel_representatives",
 		"cokernel_representatives",
+		"relative_representatives",
 	):
 		documentation = getattr(type(result), name).__doc__
 		assert "dictionary" in documentation
@@ -83,7 +84,14 @@ def test_shared_class_and_property_documentation() -> None:
 
 @pytest.mark.parametrize(
 	"name",
-	["sixpack", "sixpack_from_inclusion", "diagrams", "metadata", "cokernel_representatives"],
+	[
+		"sixpack",
+		"sixpack_from_inclusion",
+		"diagrams",
+		"metadata",
+		"cokernel_representatives",
+		"relative_representatives",
+	],
 )
 def test_python_documentation_examples(name: str) -> None:
 	"""Every function and shared-class example is valid and has the stated result."""
@@ -94,6 +102,7 @@ def test_python_documentation_examples(name: str) -> None:
 		"diagrams": type(result),
 		"metadata": type(metadata),
 		"cokernel_representatives": type(result).cokernel_representatives,
+		"relative_representatives": type(result).relative_representatives,
 	}
 	test = doctest.DocTestParser().get_doctest(objects[name].__doc__, {}, name, None, 0)
 	assert test.examples, "Usage documentation must include executable examples"

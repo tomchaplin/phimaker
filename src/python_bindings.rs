@@ -18,7 +18,7 @@ r#"Compute six persistence diagrams for an inclusion of filtered chain complexes
 :param degrees: Nonnegative degree of each codomain generator, one per column.
 :param cols_in_domain: Indices selecting the domain generators in the codomain.
     Any order is accepted; repeated indices are ignored.
-:param get_representatives: Whether to extract domain, codomain, image, kernel, and cokernel cycles.
+:param get_representatives: Whether to extract cycles for all six diagrams.
     Also compute ``kernel_to_domain``, ``domain_to_image``, ``image_to_codomain``,
     ``domain_to_codomain``, and ``codomain_to_cokernel`` in these cycle bases.
     Defaults to ``False``, which skips cycle extraction and map solving and
@@ -41,6 +41,8 @@ and the degree-list length are checked. The boundary must also square to zero;
 this is not checked, and violations can give incorrect diagrams even if the
 call succeeds. Kernel interval degree is ``degrees[birth] - 1``; other interval
 degrees are ``degrees[birth]``. Relative means homology of the quotient complex.
+Relative representatives contain only generators outside the domain. Their
+boundary lies in the domain, so they need not be cycles in the codomain itself.
 
 When ``get_representatives=True`` and ``num_threads != 1``, representatives may
 vary across calls with identical inputs because multithreaded reduction is
@@ -114,7 +116,7 @@ r#"Compute six persistence diagrams for a filtered chain map over F2.
 :param map: Column ``i`` lists the codomain generators with coefficient one
     in the image of domain generator ``i``. Supply at least one column per domain
     generator; additional map columns are ignored.
-:param get_representatives: Whether to extract domain, codomain, image, kernel, and cokernel cycles.
+:param get_representatives: Whether to extract cycles for all six diagrams.
     Also compute ``kernel_to_domain``, ``domain_to_image``, ``image_to_codomain``,
     ``domain_to_codomain``, and ``codomain_to_cokernel`` in these cycle bases.
     Defaults to ``False``, which skips cycle extraction and map solving and

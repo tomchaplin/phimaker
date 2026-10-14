@@ -45,10 +45,10 @@ pub(crate) fn build_d_im(
 }
 /// Build the quotient boundary matrix B/A, with no extra basepoint.
 ///
-/// The first `sz_domain` permuted indices must be exactly the boundary-closed
-/// domain. Remove those rows and columns and subtract `sz_domain` from
-/// remaining row indices. Local quotient index i corresponds to inverse_map(i +
-/// sz_domain).
+/// The columns of `d_cod` with indices in the permuted image of
+/// `(0..sz_domain)` must be exactly the boundary-closed domain. Remove those
+/// rows and columns and subtract `sz_domain` from remaining row indices. Local
+/// quotient index i corresponds to inverse_map(i + sz_domain).
 pub(crate) fn build_d_rel(
 	d_cod: &[VecColumn],
 	dom_first_permutation: &impl Permutation,

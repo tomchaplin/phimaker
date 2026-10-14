@@ -104,7 +104,7 @@ jobs:
               }
               for name in (
                   "domain_representatives", "codomain_representatives", "image_representatives",
-                  "kernel_representatives", "cokernel_representatives",
+                  "kernel_representatives", "cokernel_representatives", "relative_representatives",
                   "kernel_to_domain", "domain_to_image", "image_to_codomain",
                   "domain_to_codomain", "codomain_to_cokernel"
               ):

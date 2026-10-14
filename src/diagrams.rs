@@ -40,18 +40,20 @@ use crate::{
 /// interval is the birth-generator degree minus one; other interval degrees
 /// equal that degree.
 ///
-/// The domain, codomain, image, kernel, and cokernel representative maps
-/// associate each birth with the generator indices whose sum is its cycle over
-/// F2 when requested. They are `None` when `get_representatives` is false.
+/// The domain, codomain, image, kernel, cokernel, and relative representative
+/// maps associate each birth with the generator indices whose sum is its cycle
+/// over F2 when requested. They are `None` when `get_representatives` is false.
 /// Their keys and entries use the same coordinates as the diagrams. Domain,
-/// codomain, image, and cokernel representatives have maximum index equal to
-/// their birth. Kernel representatives contain only domain generators with
-/// indices strictly less than their kernel birth. Cokernel cycles are
-/// interpreted modulo codomain boundaries and domain cycles. Representatives
-/// are not necessarily minimal or unique, and support order is unspecified.
-/// Each representative map has exactly its diagram's birth keys; a requested
-/// empty diagram has `Some` of an empty map. Skipping extraction still returns
-/// `None` for empty diagrams.
+/// codomain, image, cokernel, and relative representatives have maximum index
+/// equal to their birth. Kernel representatives contain only domain generators
+/// with indices strictly less than their kernel birth. Cokernel cycles are
+/// interpreted modulo codomain boundaries and domain cycles. Relative cycles
+/// use only generators outside the domain; their codomain boundary lies in
+/// the domain, so they need not be cycles in the codomain itself.
+/// Representatives are not necessarily minimal or unique, and support order is
+/// unspecified. Each representative map has exactly its diagram's birth keys; a
+/// requested empty diagram has `Some` of an empty map. Skipping extraction
+/// still returns `None` for empty diagrams.
 ///
 /// The optional maps [`Self::kernel_to_domain`], [`Self::domain_to_image`],
 /// [`Self::image_to_codomain`], [`Self::domain_to_codomain`], and
@@ -98,16 +100,18 @@ to recover filtration times and degrees. A kernel interval has the degree of
 its birth generator minus one; other intervals have the birth-generator degree.
 
 The ``domain_representatives``, ``codomain_representatives``,
-``image_representatives``, ``kernel_representatives``, and
-``cokernel_representatives`` attributes are ``None`` unless
+``image_representatives``, ``kernel_representatives``,
+``cokernel_representatives``, and ``relative_representatives`` attributes are ``None`` unless
 ``get_representatives=True`` was requested. When requested, they map birth
 indices to lists of generator indices. Summing the listed generators over the
 field with two elements gives a representative cycle. Keys and entries use the
 same coordinates as the diagrams.
-For domain, codomain, image, and cokernel features, the maximum index in a representative
+For domain, codomain, image, cokernel, and relative features, the maximum index in a representative
 equals the feature's birth. Kernel representatives use only domain generators,
 with indices strictly less than the kernel birth. Cokernel cycles are interpreted
-modulo codomain boundaries and domain cycles. Representatives need not be minimal or
+modulo codomain boundaries and domain cycles. Relative cycles use only generators
+outside the domain. Their boundary lies in the domain, so they need not be cycles
+in the codomain itself. Representatives need not be minimal or
 unique. Each representative dictionary has exactly its diagram's birth keys.
 A requested empty diagram has an empty representative dictionary. If extraction
 was skipped, its representative attribute is still ``None``.
@@ -390,6 +394,58 @@ For results from :py:func:`~phimaker.sixpack`, this is the homology of the
 mapping cone."#
     )]
 	pub relative: PersistenceDiagram,
+
+	/// Relative birth indices mapped to cycle supports in the quotient complex.
+	/// Each listed generator has coefficient one over F2, in diagram
+	/// coordinates. Supports contain only generators outside the domain, with
+	/// maximum index equal to birth. Their codomain boundary lies in the
+	/// domain, so the represented chain need not be a codomain cycle.
+	/// During its interval the class is nonzero modulo codomain boundaries
+	/// and domain chains; at a finite death it becomes zero in that
+	/// quotient. A requested empty diagram has `Some` of an empty map;
+	/// `None` means representative extraction was disabled.
+	///
+	/// # Example
+	///
+	/// ```
+	/// use phimaker::{diagrams::ExtendedUsize::Infinity, sixpack_from_inclusion};
+	/// let result = sixpack_from_inclusion(
+	/// 	&[vec![], vec![], vec![0, 1]],
+	/// 	&[0, 0, 1],
+	/// 	&[0, 1],
+	/// 	true,
+	/// 	1,
+	/// 	false,
+	/// )?;
+	/// assert_eq!(result.relative[&2], Infinity);
+	/// assert_eq!(
+	/// 	result.relative_representatives.as_ref().unwrap()[&2],
+	/// 	vec![2]
+	/// );
+	/// # Ok::<(), phimaker::errors::InclusionError>(())
+	/// ```
+	#[doc = python_doc!(
+    r#"Relative representatives, as a dictionary from birth indices to generator lists.
+
+Sum the listed generators over the field with two elements to obtain a cycle in
+the quotient complex. Supports use the diagram's coordinates, contain only
+generators outside the domain, and have maximum index equal to birth. The chain's
+boundary lies in the domain; it need not be a cycle in the codomain itself.
+During the feature's interval, its class is nonzero modulo codomain boundaries
+and domain chains. At a finite death it becomes zero in this quotient.
+When requested, an empty relative diagram has an empty dictionary.
+``None`` means representative extraction was skipped.
+
+Example::
+
+    >>> from phimaker import sixpack_from_inclusion
+    >>> result = sixpack_from_inclusion(
+    ...     [[], [], [0, 1]], [0, 0, 1], [0, 1], get_representatives=True,
+    ... )
+    >>> assert result.relative == {2: None}
+    >>> assert result.relative_representatives == {2: [2]}"#
+    )]
+	pub relative_representatives: Option<HashMap<usize, Vec<usize>>>,
 }
 
 // Sum of two vectors over F2.
@@ -871,6 +927,33 @@ fn domain_diagram<Decomp: Decomposition<C>, C: Column>(
 	(diagram.map_idxs(unpermute), representatives)
 }
 
+// Quotient generators enumerate the complement of the domain in input order.
+// Lift each quotient cycle using this complement, so its codomain boundary is
+// allowed to lie in the domain rather than vanish in the codomain itself.
+fn relative_diagram<Decomp: Decomposition<C>, C: Column>(
+	metadata: &EnsembleMetadata,
+	d_rel_decomp: &Decomp,
+	get_representatives: bool,
+) -> (PersistenceDiagram, Option<HashMap<usize, Vec<usize>>>) {
+	let (diagram, representatives) = decomposition_diagram(d_rel_decomp, get_representatives);
+	let unpermute = |idx| {
+		metadata
+			.dom_first_permutation
+			.inverse_map(idx + metadata.sz_domain)
+	};
+	let representatives = representatives.map(|r| {
+		r.into_iter()
+			.map(|(birth, support)| {
+				(
+					unpermute(birth),
+					support.into_iter().map(unpermute).collect(),
+				)
+			})
+			.collect()
+	});
+	(diagram.map_idxs(unpermute), representatives)
+}
+
 fn image_diagram<Decomp: Decomposition<C>, C: Column>(
 	metadata: &EnsembleMetadata,
 	d_dom_decomp: &Decomp,
@@ -982,7 +1065,7 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 	/// [`ExtendedUsize::Infinity`]. For a mapping-cylinder inclusion, use
 	/// its metadata to recover entrance times. Calling this method again
 	/// returns the same diagrams.
-	/// Domain, codomain, image, kernel, and cokernel representatives use
+	/// All six representative maps use
 	/// original generator indices when `get_representatives` is true.
 	/// Requested empty diagrams have `Some` of an empty map. When false,
 	/// all representative and morphism fields are `None`; representative
@@ -991,9 +1074,9 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 	///
 	/// # Panics
 	/// Panics if representatives are requested and a nonempty domain, codomain,
-	/// or image decomposition did not retain V. The computation entry points
-	/// retain these matrices. Violated algebraic decomposition invariants can
-	/// also cause map extraction to panic.
+	/// image, or relative decomposition did not retain V. The computation entry
+	/// points retain these matrices. Violated algebraic decomposition
+	/// invariants can also cause map extraction to panic.
 	///
 	/// # Example
 	///
@@ -1032,6 +1115,8 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 		let cokernel = cokernel_diagram(&self.metadata, &self.d_dom, &self.d_im, &self.d_cok);
 		let cokernel_representatives = get_representatives
 			.then(|| cokernel_representatives(&cokernel, &self.d_cok, &self.d_cod));
+		let (relative, relative_representatives) =
+			relative_diagram(&self.metadata, &self.d_rel, get_representatives);
 		let mut result = DiagramEnsemble {
 			domain,
 			domain_representatives,
@@ -1048,16 +1133,8 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 			image_to_codomain: None,
 			domain_to_codomain: None,
 			codomain_to_cokernel: None,
-			relative: {
-				let f = |idx| {
-					self.metadata
-						.dom_first_permutation
-						.inverse_map(idx + self.metadata.sz_domain)
-				};
-				PersistenceDiagram::from_decomposition(&self.d_rel)
-					.anti_transpose(self.metadata.sz_codomain - self.metadata.sz_domain)
-					.map_idxs(f)
-			},
+			relative,
+			relative_representatives,
 		};
 		if get_representatives {
 			result.extract_persistence_maps();
@@ -1102,7 +1179,7 @@ impl FileEnsemble {
 	/// Files must be positioned at the start of compatible decomposition data.
 	/// Reading advances every file cursor; rewind all six before calling again.
 	/// This call requires memory for all six decompositions.
-	/// Domain, codomain, image, kernel, and cokernel representatives use
+	/// All six representative maps use
 	/// original generator indices when `get_representatives` is true.
 	/// Requested empty diagrams have `Some` of an empty map. When false,
 	/// all representative and morphism fields are `None`; representative
@@ -1111,8 +1188,8 @@ impl FileEnsemble {
 	///
 	/// # Panics
 	/// Panics on read errors or incompatible or corrupt serialized data, or if
-	/// representatives are requested from a nonempty domain, codomain, or image
-	/// decomposition that did not retain V.
+	/// representatives are requested from a nonempty domain, codomain, image,
+	/// or relative decomposition that did not retain V.
 	/// The computation entry points retain these matrices. Violated algebraic
 	/// decomposition invariants can also cause map extraction to panic.
 	///
@@ -1156,6 +1233,8 @@ impl FileEnsemble {
 		let cokernel = cokernel_diagram(&self.metadata, &d_dom_decomp, &d_im_decomp, &d_cok_decomp);
 		let cokernel_representatives = get_representatives
 			.then(|| cokernel_representatives(&cokernel, &d_cok_decomp, &d_cod_decomp));
+		let (relative, relative_representatives) =
+			relative_diagram(&self.metadata, &d_rel_decomp, get_representatives);
 		let mut result = DiagramEnsemble {
 			domain,
 			domain_representatives,
@@ -1172,16 +1251,8 @@ impl FileEnsemble {
 			image_to_codomain: None,
 			domain_to_codomain: None,
 			codomain_to_cokernel: None,
-			relative: {
-				let f = |idx| {
-					self.metadata
-						.dom_first_permutation
-						.inverse_map(idx + self.metadata.sz_domain)
-				};
-				PersistenceDiagram::from_decomposition(&d_rel_decomp)
-					.anti_transpose(self.metadata.sz_codomain - self.metadata.sz_domain)
-					.map_idxs(f)
-			},
+			relative,
+			relative_representatives,
 		};
 		if get_representatives {
 			result.extract_persistence_maps();

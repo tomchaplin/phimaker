@@ -87,18 +87,37 @@ Use `diagram[birth]` to look up a death and `diagram.items()` to iterate over
 intervals. The former `.paired` and `.unpaired` attributes have been removed.
 
 `domain_representatives`, `codomain_representatives`, `image_representatives`,
-`kernel_representatives`, and `cokernel_representatives`
+`kernel_representatives`, `cokernel_representatives`, and `relative_representatives`
 are optional. Python's `sixpack_from_inclusion` and `sixpack` default to
-`get_representatives=False`, which leaves all five attributes as `None` and
+`get_representatives=False`, which leaves all six attributes as `None` and
 skips representative extraction and map solving. Pass `get_representatives=True` to obtain
 maps from each birth index to the generator indices whose sum over F2 gives a cycle.
-Keys and supports use the diagram coordinates. Domain, codomain, image, and cokernel cycles
+Keys and supports use the diagram coordinates. Domain, codomain, image, cokernel, and relative cycles
 have maximum support index equal to the feature's birth. Kernel cycles contain
 only domain generators with indices strictly less than their kernel birth; these
 cycles are boundaries in the codomain throughout their kernel intervals.
 Cokernel representatives are codomain cycles interpreted modulo codomain
 boundaries and domain cycles. A finite representative becomes zero in that
 quotient at its death, without necessarily becoming a codomain boundary.
+Relative representatives contain only generators outside the domain. Their
+codomain boundary lies in the domain, so they are cycles in the quotient even
+when they are not codomain cycles. Their classes are interpreted modulo codomain
+boundaries and domain chains. For example, when the domain consists of both
+vertices of an edge, the edge alone represents an essential relative H1 class:
+
+```python
+from phimaker import sixpack_from_inclusion
+
+diagrams = sixpack_from_inclusion(
+	[[], [], [0, 1]],
+	[0, 0, 1],
+	[0, 1],
+	get_representatives=True,
+)
+assert diagrams.relative == {2: None}
+assert diagrams.relative_representatives == {2: [2]}
+```
+
 Rust stores these as `Option<HashMap<usize, Vec<usize>>>`;
 Python exposes dictionaries of lists or `None`. Each requested map has exactly
 its diagram's birth keys. A requested empty diagram has `Some` of an empty map
@@ -107,7 +126,7 @@ in Rust and `{}` in Python; when extraction is skipped it still has `None`.
 Rust callers supply `get_representatives` immediately after the input matrices
 and map or domain indices in `sixpack` and `sixpack_from_inclusion`, or as the
 argument to `all_diagrams`. Pass `false` for diagrams only or
-`true` for cycles and maps. Nonempty domain, codomain, and image decompositions must
+`true` for cycles and maps. Nonempty domain, codomain, image, and relative decompositions must
 retain V only when requesting representatives; the computation entry points
 retain these matrices automatically. This flag skips representative extraction, map solving,
 and their allocations; it does not change which matrices the reductions retain.
@@ -247,8 +266,12 @@ Their codomain result `d_cod` retains both R and V in original input generator
 coordinates. For a finite codomain feature `(birth, death)`, R column `death`
 gives its representative cycle; for an essential feature, use V column `birth`.
 Both diagram extraction modes read codomain pairs directly in these coordinates.
-The relative decomposition still uses anti-transposed quotient coordinates.
-Retaining codomain V adds memory use and increases the slow-mode file size.
+The relative result `d_rel` retains R and V in local quotient coordinates.
+Translate local index `i` to original codomain indices with
+`metadata.dom_first_permutation.inverse_map(i + metadata.sz_domain)`.
+Relative finite features use R death columns and essential features use V birth
+columns. Both reductions preserve the generator order without anti-transposition.
+Retaining V adds memory use and increases the slow-mode file sizes.
 Python convenience functions expose representative maps on the returned
 `DiagramEnsemble` when called with `get_representatives=True`.
 
