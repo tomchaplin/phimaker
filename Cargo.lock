@@ -252,6 +252,8 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 [[package]]
 name = "lophat"
 version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74456ebe0e1825dde817c3ab0d73ec486722770b1a589b91a21dacc9c23f05fa"
 dependencies = [
  "bit-set",
  "macro_rules_attribute",
