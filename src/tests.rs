@@ -184,14 +184,22 @@ fn image_to_codomain_inclusions_in_both_modes() {
 }
 
 /// Identity and zero general maps both factor through their cylinder image.
-/// Check every cylinder index, including equal-time refinement intervals.
+/// Use the raw inclusion result to check every intermediate cylinder index.
 #[test]
 fn image_to_codomain_cylinder_inclusions_in_both_modes() {
 	let point = vec![(0.0, 0, vec![])];
 	for slow in [false, true] {
 		for mapping in [vec![vec![0]], vec![vec![]]] {
-			let (result, metadata) =
-				crate::sixpack(&point, &point, &mapping, true, 1, slow).unwrap();
+			let (matrix, metadata) = build_cylinder(&point, &point, &mapping);
+			let result = crate::sixpack_from_inclusion(
+				&matrix,
+				&metadata.degrees,
+				&metadata.domain_indices,
+				true,
+				1,
+				slow,
+			)
+			.unwrap();
 			let birth = metadata.domain_indices[0];
 			assert_image_inclusion(
 				&result,
@@ -1525,11 +1533,11 @@ fn rust_general_map_identity_in_both_modes() {
 			&result,
 			[
 				&[(0, Infinity)],
-				&[(0, Infinity), (1, Finite(2))],
+				&[(0, Infinity)],
 				&[(0, Infinity)],
 				&[],
-				&[(1, Finite(2))],
-				&[(1, Finite(2))],
+				&[],
+				&[],
 			],
 		);
 	}

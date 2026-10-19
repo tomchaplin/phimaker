@@ -1,7 +1,7 @@
 """Cokernel cycles form quotient bases modulo boundaries and domain cycles."""
 
 import pytest
-from phimaker import DiagramEnsemble, sixpack, sixpack_from_inclusion
+from phimaker import DiagramEnsemble, sixpack_from_inclusion
 
 
 def binary_rank(columns: list[set[int]]) -> int:
@@ -126,14 +126,13 @@ def test_finite_cycle_is_zero_only_in_quotient_at_death(*, slow: bool) -> None:
 @pytest.mark.parametrize("slow", [False, True])
 @pytest.mark.parametrize("mapping", [[[0]], [[]]], ids=["identity", "zero"])
 def test_cokernel_cycles_in_mapping_cylinders(mapping: list[list[int]], *, slow: bool) -> None:
-	"""Cylinders retain ambient indices and zero-duration quotient features."""
-	point = [(0.0, 0, [])]
-	result, metadata = sixpack(
-		point, point, mapping, get_representatives=True, num_threads=1, slow=slow
-	)
-	birth = metadata.codomain_indices[0]
-	support = [metadata.domain_indices[0], birth] if mapping[0] else [birth]
-	assert result.cokernel_representatives == {birth: support}
-	shift_boundary = [metadata.domain_indices[0], *([birth] if mapping[0] else [])]
+	"""Raw cylinder inclusions retain quotient bases at intermediate indices."""
+	birth = 1
+	shift_boundary = [0, *([birth] if mapping[0] else [])]
 	matrix = [[], [], shift_boundary]
-	assert_cokernel_cycles(result, matrix, metadata.degrees)
+	result = sixpack_from_inclusion(
+		matrix, [0, 0, 1], [0], get_representatives=True, num_threads=1, slow=slow
+	)
+	support = [0, birth] if mapping[0] else [birth]
+	assert result.cokernel_representatives == {birth: support}
+	assert_cokernel_cycles(result, matrix, [0, 0, 1])

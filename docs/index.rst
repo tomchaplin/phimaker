@@ -26,6 +26,8 @@ and a sorted list of target births with coefficient one; an empty list denotes
 zero. An empty source gives an empty dictionary, while skipped extraction gives
 ``None``. Evaluate and compose maps using only intervals alive at the desired
 index. For mapping-cylinder results, use the returned metadata to recover times.
+``sixpack`` omits finite intervals whose birth and death times are equal, along
+with their representative entries and persistence-map rows and columns.
 
 For development setup and source builds, see
 `the README <https://github.com/tomchaplin/phimaker#development-environment-and-source-builds>`_.

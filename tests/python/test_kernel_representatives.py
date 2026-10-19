@@ -30,6 +30,8 @@ def assert_kernel_cycles(
 	matrix: list[list[int]],
 	degrees: list[int],
 	domain: list[int],
+	*,
+	times: list[float] | None = None,
 ) -> None:
 	"""Verify cycles, independence in domain homology, and vanishing in codomain homology."""
 	assert result.kernel_representatives is not None
@@ -46,6 +48,8 @@ def assert_kernel_cycles(
 			boundary.symmetric_difference_update(matrix[idx])
 		assert not boundary
 	for index in range(len(matrix) + 1):
+		if times is not None and index + 1 < len(times) and times[index] == times[index + 1]:
+			continue  # A public sixpack result is evaluated after the whole time block.
 		active = [birth for birth in result.kernel if interval_alive(result.kernel, birth, index)]
 		cycles = [set(representatives[birth]) for birth in active]
 		domain_boundaries = [set(matrix[idx]) for idx in domain if idx <= index]
@@ -111,4 +115,6 @@ def test_kernel_representative_of_zero_map_cylinder(*, slow: bool) -> None:
 	domain_index = metadata.domain_indices[0]
 	assert result.kernel_representatives == {birth: [domain_index]}
 	matrix = [[], [], [domain_index]]
-	assert_kernel_cycles(result, matrix, metadata.degrees, metadata.domain_indices)
+	assert_kernel_cycles(
+		result, matrix, metadata.degrees, metadata.domain_indices, times=metadata.times
+	)

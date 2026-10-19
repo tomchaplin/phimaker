@@ -16,7 +16,6 @@ use crate::{
 		DiagramEnsemble,
 		ExtendedUsize::{Finite, Infinity},
 	},
-	sixpack,
 	sixpack_from_inclusion,
 	tests::binary_rank,
 };
@@ -225,16 +224,23 @@ fn essential_cokernel_uses_codomain_v_without_retaining_cokernel_v() {
 	);
 }
 
-/// General maps retain cylinder coordinates, including finite zero-duration
-/// cokernel features for identity maps and essential cokernel features for zero
-/// maps.
+/// Raw cylinder inclusions retain finite equal-time cokernel features,
+/// allowing quotient cycle bases to be checked at intermediate indices.
 #[test]
 fn cokernel_representatives_in_mapping_cylinders_in_both_modes() {
 	let point = [(0.0, 0, vec![])];
 	for mapping in [vec![vec![0]], vec![vec![]]] {
 		let (matrix, metadata) = build_cylinder(&point, &point, &mapping);
 		for slow in [false, true] {
-			let (result, _) = sixpack(&point, &point, &mapping, true, 1, slow).unwrap();
+			let result = sixpack_from_inclusion(
+				&matrix,
+				&metadata.degrees,
+				&metadata.domain_indices,
+				true,
+				1,
+				slow,
+			)
+			.unwrap();
 			let birth = metadata.codomain_indices[0];
 			let support = if mapping[0].is_empty() {
 				vec![birth]

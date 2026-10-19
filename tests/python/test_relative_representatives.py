@@ -1,7 +1,7 @@
 """Relative cycles form homology bases modulo domain chains and codomain boundaries."""
 
 import pytest
-from phimaker import DiagramEnsemble, sixpack, sixpack_from_inclusion
+from phimaker import DiagramEnsemble, sixpack_from_inclusion
 
 
 def binary_rank(columns: list[set[int]]) -> int:
@@ -137,17 +137,14 @@ def test_relative_cycle_need_not_be_a_codomain_cycle(*, slow: bool) -> None:
 @pytest.mark.parametrize("slow", [False, True])
 @pytest.mark.parametrize("mapping", [[[0]], [[]]], ids=["identity", "zero"])
 def test_relative_cycles_in_mapping_cylinders(mapping: list[list[int]], *, slow: bool) -> None:
-	"""Retain cylinder indices, including the suspended domain feature for a zero map."""
-	point = [(0.0, 0, [])]
-	result, metadata = sixpack(
-		point, point, mapping, get_representatives=True, num_threads=1, slow=slow
+	"""Raw cylinder inclusions retain quotient cycles at intermediate indices."""
+	codomain, shifted = 1, 2
+	matrix = [[], [], [0, *([codomain] if mapping[0] else [])]]
+	result = sixpack_from_inclusion(
+		matrix, [0, 0, 1], [0], get_representatives=True, num_threads=1, slow=slow
 	)
-	codomain = metadata.codomain_indices[0]
-	shifted = metadata.domain_shift[0]
 	expected = {codomain: [codomain]}
 	if not mapping[0]:
 		expected[shifted] = [shifted]
 	assert result.relative_representatives == expected
-	matrix: list[list[int]] = [[] for _ in metadata.times]
-	matrix[shifted] = [metadata.domain_indices[0], *([codomain] if mapping[0] else [])]
-	assert_relative_cycles(result, matrix, metadata.degrees, metadata.domain_indices)
+	assert_relative_cycles(result, matrix, [0, 0, 1], [0])

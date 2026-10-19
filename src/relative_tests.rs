@@ -19,7 +19,6 @@ use crate::{
 		ExtendedUsize::{Finite, Infinity},
 	},
 	ensemble::{FileEnsemble, to_file},
-	sixpack,
 	sixpack_from_inclusion,
 	tests::binary_rank,
 };
@@ -277,15 +276,23 @@ fn relative_extraction_without_v_in_both_modes() {
 	assert!(std::panic::catch_unwind(|| stored.all_diagrams(true)).is_err());
 }
 
-/// General identity and zero maps return relative representatives in cylinder
-/// coordinates, including the shifted domain cycle of a zero map.
+/// Raw cylinder inclusions retain all quotient cycles, including equal-time
+/// intervals and the suspended domain cycle of a zero map.
 #[test]
 fn relative_representatives_in_mapping_cylinders_in_both_modes() {
 	let point = [(0.0, 0, vec![])];
 	for mapping in [vec![vec![0]], vec![vec![]]] {
 		let (matrix, metadata) = build_cylinder(&point, &point, &mapping);
 		for slow in [false, true] {
-			let (result, _) = sixpack(&point, &point, &mapping, true, 1, slow).unwrap();
+			let result = sixpack_from_inclusion(
+				&matrix,
+				&metadata.degrees,
+				&metadata.domain_indices,
+				true,
+				1,
+				slow,
+			)
+			.unwrap();
 			let mut expected = HashMap::from([(
 				metadata.codomain_indices[0],
 				vec![metadata.codomain_indices[0]],

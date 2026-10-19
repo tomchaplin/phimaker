@@ -9,7 +9,10 @@ NAMES = ("domain", "codomain", "image", "kernel", "cokernel", "relative")
 
 
 def timed_bars(result: Any, metadata: Any, name: str) -> list[tuple[int, float, float]]:
-	"""Remove cylinder-only zero-duration bars; retain degree and multiplicity."""
+	"""Translate all returned bars; reject any retained zero-duration interval."""
+	assert all(
+		d is None or metadata.times[b] < metadata.times[d] for b, d in getattr(result, name).items()
+	)
 	return sorted(
 		(
 			metadata.degrees[b] - (name == "kernel"),
@@ -17,7 +20,6 @@ def timed_bars(result: Any, metadata: Any, name: str) -> list[tuple[int, float, 
 			float("inf") if d is None else metadata.times[d],
 		)
 		for b, d in getattr(result, name).items()
-		if d is None or metadata.times[b] != metadata.times[d]
 	)
 
 

@@ -1,7 +1,7 @@
 """Stored morphisms agree with chain representatives and are pointwise exact."""
 
 import pytest
-from phimaker import DiagramEnsemble, sixpack, sixpack_from_inclusion
+from phimaker import DiagramEnsemble, sixpack_from_inclusion
 
 MAPS = (
 	("kernel_to_domain", "kernel", "domain"),
@@ -242,17 +242,13 @@ def test_factorization_requires_interval_lifetimes(*, slow: bool) -> None:
 @pytest.mark.parametrize("slow", [False, True])
 @pytest.mark.parametrize("mapping", [[[0]], [[]]], ids=["identity", "zero"])
 def test_maps_in_mapping_cylinders(mapping: list[list[int]], *, slow: bool) -> None:
-	"""All maps use cylinder coordinates and recover identity/zero after equal-time cells enter."""
-	point = [(0.0, 0, [])]
-	result, metadata = sixpack(
-		point, point, mapping, get_representatives=True, num_threads=1, slow=slow
+	"""Raw cylinder maps are exact at every intermediate cylinder index."""
+	birth, codomain_birth = 0, 1
+	matrix = [[], [], [birth, *([codomain_birth] if mapping[0] else [])]]
+	result = sixpack_from_inclusion(
+		matrix, [0, 0, 1], [birth], get_representatives=True, num_threads=1, slow=slow
 	)
-	birth = metadata.domain_indices[0]
-	codomain_birth = metadata.codomain_indices[0]
-	shift_boundary = [birth, *([codomain_birth] if mapping[0] else [])]
-	matrix = [[], [], shift_boundary]
-	assert_stored_maps(result, matrix, metadata.degrees, metadata.domain_indices)
-	index = len(metadata.times) - 1
+	assert_stored_maps(result, matrix, [0, 0, 1], [birth])
 	assert bool(
-		[end for end in result.domain_to_codomain[birth] if alive(result.codomain, end, index)]
+		[end for end in result.domain_to_codomain[birth] if alive(result.codomain, end, 2)]
 	) == bool(mapping[0])

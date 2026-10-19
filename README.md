@@ -198,11 +198,13 @@ deaths allowed. At an index, evaluate a map using only source and target
 intervals alive there. Compose these evaluated maps; ordinary multiplication of
 complete coefficient tables can retain entries between disjoint intervals.
 For `sixpack`, use `metadata.times` to evaluate at actual filtration times;
-equal-time cylinder intervals are retained in the returned data.
+finite intervals with equal birth and death times are omitted from the returned data.
 
 Maps are computed from the complete diagrams, including intervals of zero
-duration in actual filtration time. Downstream filtering can restrict the
-resulting rows and columns. Neither diagrams nor representative dictionaries
+duration in actual filtration time. Before returning, `sixpack` removes these
+intervals and their representative entries and restricts all map rows and columns
+to the remaining intervals. Interval identifiers and cylinder metadata are not
+renumbered. Neither diagrams nor representative dictionaries
 need to be supplied separately to a map-computation function.
 
 ## References

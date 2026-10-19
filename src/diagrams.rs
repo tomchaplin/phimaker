@@ -35,6 +35,9 @@ use crate::{
 /// metadata provides filtration times and degrees. The degree of a kernel
 /// interval is the birth-generator degree minus one; other interval degrees
 /// equal that degree.
+/// Finite intervals with equal birth and death times are omitted by
+/// [`crate::sixpack`], together with their representative entries and map
+/// rows and columns. Index-only inclusion results retain all intervals.
 ///
 /// The domain, codomain, image, kernel, cokernel, and relative representative
 /// maps associate each birth with the generator indices whose sum is its cycle
@@ -94,6 +97,8 @@ For :py:func:`~phimaker.sixpack_from_inclusion`, endpoints refer to the supplied
 codomain generators. For :py:func:`~phimaker.sixpack`, use the returned metadata
 to recover filtration times and degrees. A kernel interval has the degree of
 its birth generator minus one; other intervals have the birth-generator degree.
+``sixpack`` omits finite equal-time intervals and their representative entries
+and map rows and columns. Index-only inclusion results retain all intervals.
 
 The ``domain_representatives``, ``codomain_representatives``,
 ``image_representatives``, ``kernel_representatives``,
@@ -686,6 +691,67 @@ fn filter_interval_coefficients(
 }
 
 impl DiagramEnsemble {
+	/// Remove intervals that disappear when equal-time cylinder columns are
+	/// grouped into one filtration step. Keep interval identifiers unchanged.
+	///
+	/// Call only after extracting all persistence maps: the sparse solvers need
+	/// the complete cycle bases, including cycles of zero-duration intervals.
+	pub(crate) fn remove_equal_time_intervals(&mut self, times: &[f64]) {
+		fn retain_diagram<T>(
+			diagram: &mut PersistenceDiagram,
+			representatives: &mut Option<HashMap<usize, T>>,
+			times: &[f64],
+		) {
+			diagram.retain(|&birth, death| {
+				match *death {
+					Finite(death) => times[birth] != times[death],
+					Infinity => true,
+				}
+			});
+			if let Some(representatives) = representatives {
+				representatives.retain(|birth, _| diagram.contains_key(birth));
+			}
+		}
+		retain_diagram(&mut self.domain, &mut self.domain_representatives, times);
+		retain_diagram(
+			&mut self.codomain,
+			&mut self.codomain_representatives,
+			times,
+		);
+		retain_diagram(&mut self.image, &mut self.image_representatives, times);
+		retain_diagram(&mut self.kernel, &mut self.kernel_representatives, times);
+		retain_diagram(
+			&mut self.cokernel,
+			&mut self.cokernel_representatives,
+			times,
+		);
+		retain_diagram(
+			&mut self.relative,
+			&mut self.relative_representatives,
+			times,
+		);
+		for (mapping, source, target) in [
+			(&mut self.kernel_to_domain, &self.kernel, &self.domain),
+			(&mut self.domain_to_image, &self.domain, &self.image),
+			(&mut self.image_to_codomain, &self.image, &self.codomain),
+			(&mut self.domain_to_codomain, &self.domain, &self.codomain),
+			(
+				&mut self.codomain_to_cokernel,
+				&self.codomain,
+				&self.cokernel,
+			),
+		] {
+			if let Some(mapping) = mapping {
+				mapping.retain(|birth, coefficients| {
+					coefficients.retain(|target_birth| target.contains_key(target_birth));
+					// Keep empty columns for surviving source intervals: they
+					// represent zero maps, not missing computation results.
+					source.contains_key(birth)
+				});
+			}
+		}
+	}
+
 	// The ensemble is an inclusion in one ambient chain basis, also for a
 	// general map represented by its mapping cylinder. No second generator
 	// mapping is needed. All representatives are extracted before solving.

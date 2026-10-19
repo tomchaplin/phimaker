@@ -5,7 +5,6 @@ use std::collections::HashSet;
 use crate::{
 	cylinder::build_cylinder,
 	diagrams::{DiagramEnsemble, ExtendedUsize::Finite, PersistenceDiagram, PersistenceMap},
-	sixpack,
 	sixpack_from_inclusion,
 	tests::binary_rank,
 };
@@ -389,15 +388,23 @@ fn stored_factorization_requires_interval_lifetimes() {
 	}
 }
 
-/// Evaluate both nontrivial and zero maps at every cylinder index, retaining
-/// zero-duration intervals and the original coordinate convention.
+/// Raw cylinder inclusions retain zero-duration intervals, so their maps can
+/// be checked at every intermediate cylinder index.
 #[test]
 fn stored_maps_in_mapping_cylinders_in_both_modes() {
 	let point = [(0.0, 0, vec![])];
 	for mapping in [vec![vec![0]], vec![vec![]]] {
 		let (matrix, metadata) = build_cylinder(&point, &point, &mapping);
 		for slow in [false, true] {
-			let (result, _) = sixpack(&point, &point, &mapping, true, 1, slow).unwrap();
+			let result = sixpack_from_inclusion(
+				&matrix,
+				&metadata.degrees,
+				&metadata.domain_indices,
+				true,
+				1,
+				slow,
+			)
+			.unwrap();
 			assert_stored_maps(
 				&result,
 				&matrix,

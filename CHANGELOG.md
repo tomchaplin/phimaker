@@ -5,6 +5,15 @@ are listed under Unreleased; released changes are recorded below.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- Omit finite equal-time intervals from all six diagrams returned by
+  `sixpack`. Compute the full representatives and persistence maps first,
+  then remove the intervals, their representative entries, and their map
+  rows and columns. Preserve empty columns for surviving zero maps and leave
+  interval identifiers and metadata unchanged. Index-only inclusion and
+  decomposition entry points continue to return complete diagrams.
+
 ### Changed
 
 - Simplify sparse cycle-coordinate solving and kernel birth detection. Extract

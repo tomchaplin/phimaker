@@ -174,11 +174,12 @@ pub fn sixpack_from_inclusion<UsizeSlice: Deref<Target = [usize]>>(
 ///
 /// Returns diagrams and metadata in mapping-cylinder coordinates. Use
 /// [`CylinderMetadata::times`] to translate endpoints to filtration times and
-/// its index arrays to locate the original generators. Equal-time intervals
-/// are retained. Relative means homology of the mapping cone. Kernel degree is
-/// `metadata.degrees[birth] - 1`; other degrees are `metadata.degrees[birth]`.
-/// Thread counts, `slow`, and `get_representatives` have the same meaning as in
-/// [`sixpack_from_inclusion`].
+/// its index arrays to locate the original generators. Finite intervals with
+/// equal birth and death times are omitted, along with their representatives
+/// and map rows and columns. Relative means homology of the mapping cone.
+/// Kernel degree is `metadata.degrees[birth] - 1`; other degrees are
+/// `metadata.degrees[birth]`. Thread counts, `slow`, and `get_representatives`
+/// have the same meaning as in [`sixpack_from_inclusion`].
 ///
 /// # Errors
 /// Returns [`InclusionError`] for a structurally invalid cylinder inclusion.
@@ -211,7 +212,7 @@ pub fn sixpack<UsizeSlice: Deref<Target = [usize]>>(
 	slow: bool,
 ) -> Result<(DiagramEnsemble, CylinderMetadata), InclusionError> {
 	let (boundary_matrix, metadata) = build_cylinder(domain_matrix, codomain_matrix, map);
-	let diagrams = sixpack_from_inclusion(
+	let mut diagrams = sixpack_from_inclusion(
 		&boundary_matrix,
 		&metadata.degrees,
 		&metadata.domain_indices,
@@ -219,11 +220,18 @@ pub fn sixpack<UsizeSlice: Deref<Target = [usize]>>(
 		num_threads,
 		slow,
 	)?;
+	// Solve in the full cylinder cycle bases before discarding intervals that
+	// vanish in the supplied filtration times. Their cycles can be necessary
+	// for the intermediate chain-coordinate equations.
+	diagrams.remove_equal_time_intervals(&metadata.times);
 	Ok((diagrams, metadata))
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod cylinder_result_tests;
 
 #[cfg(test)]
 mod persistence_map_tests;

@@ -145,7 +145,8 @@ r#"Compute six persistence diagrams for a filtered chain map over F2.
     filtration. Interval endpoints identify mapping-cylinder columns, rather than original
     input columns. Use ``metadata.times[index]`` to recover filtration times.
     ``metadata.domain_indices`` and ``metadata.codomain_indices`` locate the
-    original generators. Intervals with equal birth and death times are retained.
+    original generators. Finite intervals with equal birth and death times are
+    omitted, together with their representatives and map rows and columns.
 
 Both matrices must be ordered by nondecreasing, non-NaN entrance time. Boundary
 and map columns must list sorted, distinct indices. Boundary rows must precede

@@ -76,8 +76,8 @@ classes match the objects returned by the functions.
   both time and degree, retaining multiplicities and essential classes.
 - **Square filling at different times:** verifies every diagram for a
   nontrivial chain map, including H0 kernel multiplicity and H1 kernel `[2, 10)`.
-  Zero-duration cylinder intervals are removed only in these time-based
-  comparisons, not in the inclusion tests that compare exact indices.
+  The general-map API removes equal-time intervals after solving maps. Raw
+  cylinder inclusion tests retain them and check intermediate cylinder indices.
 - **Rust helpers:** direct cylinder boundaries, degree shifts, tie ordering,
   strict upper triangularity and boundary squared zero; domain/image/relative
   coordinate conventions; permutation inversion; finite/infinite endpoints;
