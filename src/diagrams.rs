@@ -24,6 +24,11 @@ use crate::{
 	sparse::{sum_many_mod2, sum_mod2},
 };
 
+/// A representative of the relative diagram of a morphism f:A -> B maps an
+/// interval (keyed by its birth index) to a pair of chains (x, y) such that x
+/// in A, y in B, dx = 0, and dy = f(x).
+type RelativeRepresentatives = HashMap<usize, (Vec<usize>, Vec<usize>)>;
+
 /// Six persistence diagrams for an inclusion or filtered chain map over F2.
 ///
 /// Each diagram maps birth indices to death indices or
@@ -473,7 +478,7 @@ Example::
     ... )
     >>> assert result.relative_representatives == {2: ([0, 1], [2])}"#
     )]
-	pub relative_representatives: Option<HashMap<usize, (Vec<usize>, Vec<usize>)>>,
+	pub relative_representatives: Option<RelativeRepresentatives>,
 }
 
 // Solve A x = b over F2 for a sparse basis with distinct pivots.
@@ -1023,10 +1028,7 @@ fn relative_diagram<Decomp: Decomposition<C>, C: Column>(
 	d_rel_decomp: &Decomp,
 	d_cod_decomp: &Decomp,
 	get_representatives: bool,
-) -> (
-	PersistenceDiagram,
-	Option<HashMap<usize, (Vec<usize>, Vec<usize>)>>,
-) {
+) -> (PersistenceDiagram, Option<RelativeRepresentatives>) {
 	let (diagram, maybe_reps) = decomposition_diagram(d_rel_decomp, get_representatives);
 	let unpermute = |idx| {
 		metadata
