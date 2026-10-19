@@ -82,7 +82,10 @@ classes match the objects returned by the functions.
   strict upper triangularity and boundary squared zero; domain/image/relative
   coordinate conventions; permutation inversion; finite/infinite endpoints;
   anti-transpose recovery; forward codomain coordinates and retained V;
-  stable display; serialization and explicit rewind. A pair of parallel edges
+  stable display; serialization and explicit rewind. Sparse pairwise and
+  batched sums are checked against bitwise XOR for every combination of small
+  vectors, with additional cases for empty inputs and parity cancellation of
+  unsorted repeated indices. A pair of parallel edges
   checks a nontrivial essential cycle, a finite H0 representative, and R = D V
   against the original boundary, including the serialized slow-mode result.
   Relative tests verify both components of `(a, b)`, with `a = boundary(b)`,

@@ -38,6 +38,7 @@ mod documentation;
 pub mod ensemble;
 pub mod errors;
 pub mod indexing;
+mod sparse;
 pub mod utils; // TODO: we can remove this module if we impl the right traits
 
 use std::ops::Deref;

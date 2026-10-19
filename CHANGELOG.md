@@ -29,6 +29,10 @@ are listed under Unreleased; released changes are recorded below.
 
 ### Changed
 
+- Sum generator images and basis expansions with a shared vector-based F2
+  helper that sorts and cancels once per complete sum. Replace hash-set
+  accumulation in cylinder projection and repeated pairwise sums during map
+  extraction; keep pivot-dependent reductions incremental.
 - Simplify sparse cycle-coordinate solving and kernel birth detection. Extract
   finite image representatives directly from reduced death columns, avoiding
   extraction of an unused image representative dictionary. Image diagram

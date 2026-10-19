@@ -21,6 +21,7 @@ use crate::{
 	ensemble::{DecompositionEnsemble, EnsembleMetadata, FileEnsemble},
 	errors::PersistenceMapError,
 	indexing::Permutation,
+	sparse::{sum_many_mod2, sum_mod2},
 };
 
 /// Six persistence diagrams for an inclusion or filtered chain map over F2.
@@ -476,35 +477,6 @@ Example::
 	pub relative_representatives: Option<HashMap<usize, (Vec<usize>, Vec<usize>)>>,
 }
 
-// Sum of two vectors over F2.
-// `left` and `right` specify the supports of the two vectors
-// i.e., the indices of non-zero coordinate entries.
-// This is identical to taking the symmetric difference of
-// the set of supports of the two vectors.
-fn sum_mod2(left: &[usize], right: &[usize]) -> Vec<usize> {
-	let mut out = Vec::with_capacity(left.len() + right.len());
-	let (mut i, mut j) = (0, 0);
-	while i < left.len() && j < right.len() {
-		match left[i].cmp(&right[j]) {
-			std::cmp::Ordering::Less => {
-				out.push(left[i]);
-				i += 1;
-			},
-			std::cmp::Ordering::Greater => {
-				out.push(right[j]);
-				j += 1;
-			},
-			std::cmp::Ordering::Equal => {
-				i += 1;
-				j += 1;
-			},
-		}
-	}
-	out.extend_from_slice(&left[i..]);
-	out.extend_from_slice(&right[j..]);
-	out
-}
-
 // Solve A x = b over F2 for a sparse basis with distinct pivots.
 // Each column of A and the vector b are specified by their support (indices of
 // non-zero entries). A must be supplied as a mapping 'pivot index -> support
@@ -652,12 +624,11 @@ pub(crate) fn get_persistence_map(
 		.iter()
 		.map(|(&birth, cycle)| {
 			// Get the image of the source cycle
-			let image_of_cycle = cycle
-				.iter()
-				.filter_map(|generator| chain_map.get(generator))
-				.fold(Vec::new(), |acc, img_of_generator| {
-					sum_mod2(&acc, img_of_generator)
-				});
+			let image_of_cycle = sum_many_mod2(
+				cycle
+					.iter()
+					.filter_map(|generator| chain_map.get(generator)),
+			);
 
 			// Solve in the new target basis.
 			let coefficients =
@@ -685,15 +656,13 @@ fn expand_in_basis(
 	new_to_old_map: &HashMap<usize, Vec<usize>>,
 	birth: usize,
 ) -> Result<Vec<usize>, PersistenceMapError> {
-	Ok(solve(new_basis, support)
-		.ok_or(PersistenceMapError::Unsolvable {
-			target: "target",
-			birth,
-		})?
-		.iter()
-		.fold(Vec::new(), |coeffs, x| {
-			sum_mod2(&coeffs, &new_to_old_map[x])
-		}))
+	let coefficients = solve(new_basis, support).ok_or(PersistenceMapError::Unsolvable {
+		target: "target",
+		birth,
+	})?;
+	Ok(sum_many_mod2(
+		coefficients.iter().map(|x| &new_to_old_map[x]),
+	))
 }
 
 // Given a matrix indexed by intervals, zero out the entries indexed by disjoint

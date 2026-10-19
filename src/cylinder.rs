@@ -1,6 +1,6 @@
 //! Mapping-cylinder construction for filtered chain maps over F2.
 
-use std::{cmp::Ordering, collections::HashSet, ops::Deref};
+use std::{cmp::Ordering, ops::Deref};
 
 use itertools::Itertools;
 use log::debug;
@@ -9,7 +9,7 @@ use pyo3::prelude::*;
 
 #[cfg(all(feature = "python-module", not(any(doc, rust_analyzer))))]
 use crate::documentation::{macro_rules_apply, strip_rust_docs};
-use crate::{diagrams::DiagramEnsemble, documentation::python_doc};
+use crate::{diagrams::DiagramEnsemble, documentation::python_doc, sparse::sum_many_mod2};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum CylinderColType {
@@ -151,25 +151,16 @@ pub(crate) fn convert_representative_coordinates<UsizeSlice: Deref<Target = [usi
 		// For C_n = A_n + B_n + shifted(A_{n-1}), the chain projection is
 		// p(alpha, beta, shifted(gamma)) = f(alpha) + beta. Distinct terms can
 		// have overlapping images, so sum by parity rather than deduplicating.
-		let mut chain = HashSet::new();
-		for &idx in support {
+		sum_many_mod2(support.iter().map(|&idx| {
 			if let Some(domain) = domain_indices[idx] {
-				for &target in chain_map[domain].iter() {
-					if !chain.insert(target) {
-						chain.remove(&target);
-					}
-				}
-			} else if let Some(codomain) = codomain_indices[idx] {
-				if !chain.insert(codomain) {
-					chain.remove(&codomain);
-				}
+				chain_map[domain].deref()
+			} else {
+				// An unshifted codomain generator contributes a singleton.
+				// Shifted domain generators have no codomain index and
+				// contribute the empty support instead.
+				codomain_indices[idx].as_slice()
 			}
-			// The remaining generators are shifted domain generators; p is
-			// zero on that summand.
-		}
-		let mut chain: Vec<_> = chain.into_iter().collect();
-		chain.sort_unstable();
-		chain
+		}))
 	};
 	for representatives in [
 		&mut diagrams.domain_representatives,
