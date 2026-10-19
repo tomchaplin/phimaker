@@ -211,9 +211,9 @@ skipped."#
 
 Sum the listed generators over the field with two elements to obtain a cycle.
 For ``sixpack``, supports use original domain indices. For an inclusion they
-use original codomain indices restricted to the domain. Keys identify intervals. When requested, an empty domain
-diagram has an empty dictionary. ``None`` means representative extraction was
-skipped."#
+use original codomain indices restricted to the domain. Keys identify intervals.
+When requested, an empty domain diagram has an empty dictionary. ``None`` means
+representative extraction was skipped."#
     )]
 	pub domain_representatives: Option<HashMap<usize, Vec<usize>>>,
 
@@ -234,9 +234,8 @@ skipped."#
 Sum the listed generators over the field with two elements to obtain a cycle.
 Supports use original codomain indices. For an inclusion they use only selected
 domain generators; for ``sixpack`` they are their images under the input chain map.
-Keys identify intervals. When requested,
-an empty image diagram has an empty dictionary. ``None`` means representative
-extraction was skipped."#
+Keys identify intervals. When requested, an empty image diagram has an empty dictionary.
+``None`` means representative extraction was skipped."#
     )]
 	pub image_representatives: Option<HashMap<usize, Vec<usize>>>,
 
@@ -261,8 +260,9 @@ The degree of an interval is the degree of its birth generator minus one."#
 Sum the listed generators over the field with two elements to obtain a domain
 cycle that is zero in codomain homology. For ``sixpack``, supports use original
 domain indices. For an inclusion, they use selected codomain indices strictly
-less than the kernel birth. Keys identify intervals. When requested, an empty kernel diagram has an empty dictionary.
-``None`` means representative extraction was skipped."#
+less than the kernel birth. Keys identify intervals. When requested, an empty
+kernel diagram has an empty dictionary. ``None`` means representative extraction
+was skipped."#
     )]
 	pub kernel_representatives: Option<HashMap<usize, Vec<usize>>>,
 
@@ -459,12 +459,11 @@ and ``boundary(b) = f(a)`` for the input chain map. The pair represents a mappin
 cone cycle and becomes a cone boundary at a finite death. Either list may be empty.
 
 For ``sixpack``, ``a`` uses original domain indices and ``b`` uses original codomain
-indices. Keys remain cylinder interval identifiers. For an inclusion, both lists
+indices. Keys remain cylinder interval birth indices. For an inclusion, both lists
 use codomain indices, ``a = boundary(b)``, and ``b`` uses only generators outside
 the domain. In that case the maximum index in ``b`` equals birth, and ``a`` uses
-strictly earlier domain generators.
-When requested, an empty relative diagram has an empty dictionary.
-``None`` means representative extraction was skipped.
+strictly earlier domain generators. When requested, an empty relative diagram has
+an empty dictionary. ``None`` means representative extraction was skipped.
 
 Example::
 

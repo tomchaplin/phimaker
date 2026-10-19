@@ -249,7 +249,7 @@ fn interval_composition_discards_dead_final_target() {
 	assert_eq!(second, HashMap::from([(1, vec![0])]));
 	assert_eq!(direct, HashMap::from([(2, vec![])]));
 	for index in 0..=4 {
-		if index < 2 || index >= 4 {
+		if !(2..4).contains(&index) {
 			continue;
 		}
 		let mut composed = HashSet::new();
