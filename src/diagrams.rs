@@ -1,10 +1,6 @@
 //! Birth-to-death dictionaries and extraction from reduced matrices.
 
-use std::{
-	collections::{HashMap, HashSet},
-	fs::File,
-	io::BufReader,
-};
+use std::{collections::HashMap, fs::File, io::BufReader};
 
 use ExtendedUsize::{Finite, Infinity};
 use bincode::deserialize_from;
@@ -536,11 +532,11 @@ fn prepare_representatives(
 // Given an ordered set of linearly independent representative cycles as columns
 // of an upper-triangular matrix M, run left-to-right column operations on M so
 // that the map taking a column to its pivot is injective. This gives a new set
-// of representatives. Returns both the new set of representative cycles, and
-// the expansion of each new representative cycle in terms of the original set.
-// This does NOT compute an automorphism of a persistence module; it only
-// computes an automorphism of the cycle space.
-fn prepare_target_basis(
+// of cycles spanning the same cycle space. Individual homology classes may
+// change. Returns both the new cycles and their expansions in the original
+// basis, so coefficients can be restored before applying interval lifetimes.
+// This does NOT compute an automorphism of a persistence module.
+fn make_basis_with_unique_pivots(
 	representatives: &HashMap<usize, Vec<usize>>,
 ) -> Result<(PersistenceRepresentatives, PersistenceRepresentatives), PersistenceMapError> {
 	let mut ordered: Vec<_> = representatives.iter().collect();
@@ -570,10 +566,19 @@ fn prepare_target_basis(
 // Source birth indices mapped to target births with coefficient one over F2.
 pub(crate) type PersistenceMap = HashMap<usize, Vec<usize>>;
 
-// Expand mapped cycles exactly in the complete target cycle basis, restore the
-// original feature labels, then discard targets dead at each source birth.
-// The supplied representatives must span the mapped cycles as chain vectors;
-// this does not solve modulo an independently supplied boundary space.
+// Helper to compute a map of persistent homology modules from the chain map
+// that induces the map on persistent homology.
+//
+// The function accepts source and target persistent homology modules, each with
+// cycle representatives, as well as a map of generators that induces the map on
+// persistent homology. For each interval in the source, it (1) expands the
+// image of the corresponding source cycle in the cycle basis of the target, and
+// (2) discards basis elements in the expansion that correspond to target
+// intervals that die before the source interval is born.
+//
+// This function does not account for boundaries in the target. Therefore, the
+// supplied target representative cycles must span the image of the source
+// cycles directly.
 pub(crate) fn get_persistence_map(
 	source: &PersistenceDiagram,
 	source_representatives: &HashMap<usize, Vec<usize>>,
@@ -584,15 +589,15 @@ pub(crate) fn get_persistence_map(
 	if source.is_empty() {
 		return Ok(HashMap::new());
 	}
+	// Validation and cleaning
 	let source_reps = prepare_representatives(source, source_representatives, "source")?;
 	let target_reps = prepare_representatives(target, target_representatives, "target")?;
-	let (basis, features) = prepare_target_basis(&target_reps)?;
 	// Normalize the map of generators by sorting and de-duplicating the
 	// supports.
-	let mut columns = HashMap::new();
+	let mut chain_map = HashMap::new();
 	for &generator in source_reps.values().flatten() {
 		if let Some(image) = generator_map.get(&generator) {
-			columns.entry(generator).or_insert_with(|| {
+			chain_map.entry(generator).or_insert_with(|| {
 				let mut image = image.clone();
 				image.sort_unstable();
 				image.dedup();
@@ -600,48 +605,68 @@ pub(crate) fn get_persistence_map(
 			});
 		}
 	}
+
+	// Expanding the image of a source cycle in the target basis is done through
+	// a sparse linear solver:
+	//
+	// <target basis> * [expansion coefficients] = [image of source cycle].
+	//
+	// The solver requires the target basis matrix to be specified as a mapping
+	// from pivots to column indices. So we need to convert the target basis
+	// into one where distinct basis elements have distinct pivots.
+	let (new_basis, new_to_old_map) = make_basis_with_unique_pivots(&target_reps)?;
+
 	source_reps
 		.iter()
-		.map(|(&birth, support)| {
-			let mut mapped = HashSet::new();
-			for generator in support {
-				if let Some(image) = columns.get(generator) {
-					for &index in image {
-						if !mapped.insert(index) {
-							mapped.remove(&index);
-						}
-					}
-				}
-			}
-			let mut mapped: Vec<_> = mapped.into_iter().collect();
-			mapped.sort_unstable();
-			let coefficients = cycle_coordinates(&basis, &features, &mapped, birth)?;
-			let coefficients = interval_coefficients(source, birth, target, coefficients)?;
+		.map(|(&birth, cycle)| {
+			// Get the image of the source cycle
+			let image_of_cycle = cycle
+				.iter()
+				.filter_map(|generator| chain_map.get(generator))
+				.fold(Vec::new(), |acc, img_of_generator| {
+					sum_mod2(&acc, img_of_generator)
+				});
+
+			// Solve in the new target basis.
+			let coefficients =
+				expand_in_basis(&image_of_cycle, &new_basis, &new_to_old_map, birth)?;
+			// Filter out incompatible intervals.
+			let coefficients = filter_interval_coefficients(source, birth, target, coefficients)?;
 			Ok((birth, coefficients))
 		})
 		.collect()
 }
 
-// Recover coefficients in the original basis before applying any interval or
-// quotient projection. The auxiliary reduced columns have no interval labels.
-fn cycle_coordinates(
-	basis: &PersistenceRepresentatives,
-	features: &PersistenceRepresentatives,
+// Helper function around [`solve`]. Expresses a sparse column vector in terms
+// of a given basis using `solve`.
+//
+// The function [`solve`] requires a basis of column vectors where each element
+// has a unique pivot. For an arbitrary basis, use
+// [`make_basis_with_unique_pivots`] to get a basis with unique pivots and its
+// transition matrix. Pass that basis and its transition matrix to this function
+// in the arguments `new_basis` and `new_to_old_mapping`.
+// The argument `birth` is used for error messages to indicate which birth index
+// gave an error during solving.
+fn expand_in_basis(
 	support: &[usize],
+	new_basis: &HashMap<usize, Vec<usize>>,
+	new_to_old_map: &HashMap<usize, Vec<usize>>,
 	birth: usize,
 ) -> Result<Vec<usize>, PersistenceMapError> {
-	let pivots = solve(basis, support).ok_or(PersistenceMapError::Unsolvable {
-		target: "target",
-		birth,
-	})?;
-	let mut coefficients = Vec::new();
-	for pivot in pivots {
-		coefficients = sum_mod2(&coefficients, &features[&pivot]);
-	}
-	Ok(coefficients)
+	Ok(solve(new_basis, support)
+		.ok_or(PersistenceMapError::Unsolvable {
+			target: "target",
+			birth,
+		})?
+		.iter()
+		.fold(Vec::new(), |coeffs, x| {
+			sum_mod2(&coeffs, &new_to_old_map[x])
+		}))
 }
 
-fn interval_coefficients(
+// Given a matrix indexed by intervals, zero out the entries indexed by disjoint
+// intervals.
+fn filter_interval_coefficients(
 	source: &PersistenceDiagram,
 	birth: usize,
 	target: &PersistenceDiagram,
@@ -746,14 +771,19 @@ impl DiagramEnsemble {
 				return Err(PersistenceMapError::InconsistentData { diagram: "target" });
 			}
 		}
-		let (basis, features) = prepare_target_basis(&combined)?;
+		let (new_basis, new_to_old_map) = make_basis_with_unique_pivots(&combined)?;
 		source_reps
 			.iter()
 			.map(|(&birth, support)| {
-				let mut coefficients = cycle_coordinates(&basis, &features, support, birth)?;
+				let mut coefficients =
+					expand_in_basis(support, &new_basis, &new_to_old_map, birth)?;
 				coefficients.retain(|target_birth| self.cokernel.contains_key(target_birth));
-				let coefficients =
-					interval_coefficients(&self.codomain, birth, &self.cokernel, coefficients)?;
+				let coefficients = filter_interval_coefficients(
+					&self.codomain,
+					birth,
+					&self.cokernel,
+					coefficients,
+				)?;
 				Ok((birth, coefficients))
 			})
 			.collect()
@@ -769,16 +799,13 @@ fn is_kernel_birth<Decomp: Decomposition<C>, C: Column>(
 	if in_dom {
 		return false;
 	}
-	// Zero/nonzero column status agrees with the codomain reduction.
-	let negative_in_cod = d_im_decomp.get_r_col(idx).is_boundary();
-	if !negative_in_cod {
-		return false;
+	if let Some(low_idx) = d_im_decomp.get_r_col(idx).pivot() {
+		let low_idx_in_dom = low_idx < metadata.sz_domain;
+		if low_idx_in_dom {
+			return true;
+		}
 	}
-	let low_idx_in_dom = d_im_decomp.get_r_col(idx).pivot().unwrap() < metadata.sz_domain;
-	if !low_idx_in_dom {
-		return false;
-	}
-	true
+	false
 }
 
 fn is_kernel_death<Decomp: Decomposition<C>, C: Column>(
@@ -850,7 +877,7 @@ fn boundary_of_chain<Decomp: Decomposition<C>, C: Column>(
 fn kernel_representatives<Decomp: Decomposition<C>, C: Column>(
 	metadata: &EnsembleMetadata,
 	diagram: &PersistenceDiagram,
-	ker: &Decomp,
+	d_ker_decomp: &Decomp,
 	d_dom_decomp: &Decomp,
 	d_im_decomp: &Decomp,
 ) -> HashMap<usize, Vec<usize>> {
@@ -867,7 +894,7 @@ fn kernel_representatives<Decomp: Decomposition<C>, C: Column>(
 					// bounds in the domain at death. Using the death column
 					// preserves the kernel interval basis.
 					let ker_idx = metadata.kernel_mapping[&death];
-					let domain_part = ker
+					let domain_part = d_ker_decomp
 						.get_r_col(ker_idx)
 						.entries()
 						.filter(|&idx| idx < metadata.sz_domain)
@@ -912,10 +939,10 @@ fn domain_diagram<Decomp: Decomposition<C>, C: Column>(
 	d_dom_decomp: &Decomp,
 	get_representatives: bool,
 ) -> (PersistenceDiagram, Option<HashMap<usize, Vec<usize>>>) {
-	let (diagram, representatives) = decomposition_diagram(d_dom_decomp, get_representatives);
+	let (diagram, maybe_reps) = decomposition_diagram(d_dom_decomp, get_representatives);
 	let unpermute = |idx| metadata.dom_first_permutation.inverse_map(idx);
-	let representatives = representatives.map(|r| {
-		r.into_iter()
+	let representatives = maybe_reps.map(|reps| {
+		reps.into_iter()
 			.map(|(birth, support)| {
 				(
 					unpermute(birth),
@@ -935,14 +962,14 @@ fn relative_diagram<Decomp: Decomposition<C>, C: Column>(
 	d_rel_decomp: &Decomp,
 	get_representatives: bool,
 ) -> (PersistenceDiagram, Option<HashMap<usize, Vec<usize>>>) {
-	let (diagram, representatives) = decomposition_diagram(d_rel_decomp, get_representatives);
+	let (diagram, maybe_reps) = decomposition_diagram(d_rel_decomp, get_representatives);
 	let unpermute = |idx| {
 		metadata
 			.dom_first_permutation
 			.inverse_map(idx + metadata.sz_domain)
 	};
-	let representatives = representatives.map(|r| {
-		r.into_iter()
+	let representatives = maybe_reps.map(|reps| {
+		reps.into_iter()
 			.map(|(birth, support)| {
 				(
 					unpermute(birth),
@@ -963,9 +990,9 @@ fn image_diagram<Decomp: Decomposition<C>, C: Column>(
 	let mut im_dgm = PersistenceDiagram::default();
 	(0..metadata.sz_codomain).for_each(|idx| {
 		if let Some(low_idx) = d_im_decomp.get_r_col(idx).pivot() {
-			let birth_idx = metadata.dom_first_permutation.inverse_map(low_idx);
 			let low_idx_in_dom = low_idx < metadata.sz_domain;
 			if low_idx_in_dom {
+				let birth_idx = metadata.dom_first_permutation.inverse_map(low_idx);
 				im_dgm.insert(birth_idx, Finite(idx));
 			}
 		} else {
@@ -980,15 +1007,15 @@ fn image_diagram<Decomp: Decomposition<C>, C: Column>(
 	// Image R has domain-first rows and original columns. Only its finite
 	// representatives are usable here: image V may include non-domain cells.
 	let representatives = domain_representatives.as_ref().map(|dom_reprs| {
-		let (_, reps) = decomposition_with_reps(d_im_decomp);
 		im_dgm
 			.iter()
 			.map(|(&birth, &death)| {
 				let support = match death {
-					Finite(_) => {
-						reps[&metadata.dom_first_permutation.map(birth)]
-							.iter()
-							.map(|&idx| metadata.dom_first_permutation.inverse_map(idx))
+					Finite(d) => {
+						d_im_decomp
+							.get_r_col(d)
+							.entries()
+							.map(|idx| metadata.dom_first_permutation.inverse_map(idx))
 							.collect()
 					},
 					Infinity => dom_reprs[&birth].clone(),
@@ -1074,7 +1101,7 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 	///
 	/// # Panics
 	/// Panics if representatives are requested and a nonempty domain, codomain,
-	/// image, or relative decomposition did not retain V. The computation entry
+	/// or relative decomposition did not retain V. The computation entry
 	/// points retain these matrices. Violated algebraic decomposition
 	/// invariants can also cause map extraction to panic.
 	///
@@ -1188,7 +1215,7 @@ impl FileEnsemble {
 	///
 	/// # Panics
 	/// Panics on read errors or incompatible or corrupt serialized data, or if
-	/// representatives are requested from a nonempty domain, codomain, image,
+	/// representatives are requested from a nonempty domain, codomain,
 	/// or relative decomposition that did not retain V.
 	/// The computation entry points retain these matrices. Violated algebraic
 	/// decomposition invariants can also cause map extraction to panic.

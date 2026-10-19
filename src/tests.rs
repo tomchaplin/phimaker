@@ -895,13 +895,12 @@ fn representatives_unavailable_without_v_in_both_modes() {
 		.add_cols([VecColumn::from((0, vec![]))].into_iter())
 		.decompose()
 	};
-	for missing in ["domain", "codomain", "image"] {
+	for missing in ["domain", "codomain"] {
 		let mut ensemble =
 			all_decompositions::<SerialAlgorithm<_>, _>(&[vec![]], &[0], &[0], 1).unwrap();
 		match missing {
 			"domain" => ensemble.d_dom = without_v(),
 			"codomain" => ensemble.d_cod = without_v(),
-			"image" => ensemble.d_im = without_v(),
 			_ => unreachable!(),
 		}
 		let diagrams = ensemble.all_diagrams(false);
@@ -942,6 +941,54 @@ fn representatives_unavailable_without_v_in_both_modes() {
 		}
 		assert!(std::panic::catch_unwind(|| stored.all_diagrams(true)).is_err());
 	}
+}
+
+/// Image extraction uses R death columns and domain essential cycles. Once
+/// the kernel matrix has been built, the image V matrix is no longer needed,
+/// including for a finite image interval and a finite kernel interval.
+#[test]
+fn image_representatives_do_not_require_image_v() {
+	let matrix = [vec![], vec![], vec![], vec![0, 1], vec![0, 2], vec![1, 2]];
+	let degrees = [0, 0, 0, 1, 1, 1];
+	let mut ensemble =
+		all_decompositions::<SerialAlgorithm<_>, _>(&matrix, &degrees, &[1, 2, 5], 1).unwrap();
+	let columns = matrix
+		.iter()
+		.zip(degrees)
+		.map(|(support, degree)| VecColumn::from((degree, support.clone())))
+		.collect::<Vec<_>>();
+	ensemble.d_im = SerialAlgorithm::init(Some(lophat::options::LoPhatOptions {
+		maintain_v: false,
+		clearing: false,
+		..Default::default()
+	}))
+	.add_cols(build_d_im(
+		&columns,
+		&ensemble.metadata.dom_first_permutation,
+	))
+	.decompose();
+	let assert_image = |diagrams: DiagramEnsemble| {
+		assert_eq!(
+			diagrams.image,
+			[(1, Infinity), (2, Finite(4))].into_iter().collect()
+		);
+		assert_eq!(
+			diagrams.image_representatives.unwrap(),
+			HashMap::from([(1, vec![1]), (2, vec![1, 2])])
+		);
+		assert_eq!(diagrams.kernel, [(4, Finite(5))].into_iter().collect());
+	};
+	assert_image(ensemble.all_diagrams(true));
+	let stored = FileEnsemble {
+		d_cod: to_file(ensemble.d_cod),
+		d_dom: to_file(ensemble.d_dom),
+		d_im: to_file(ensemble.d_im),
+		d_cok: to_file(ensemble.d_cok),
+		d_ker: to_file(ensemble.d_ker),
+		d_rel: to_file(ensemble.d_rel),
+		metadata: ensemble.metadata,
+	};
+	assert_image(stored.all_diagrams(true));
 }
 
 /// The flag changes only representative availability, including empty inputs

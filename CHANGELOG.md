@@ -1,12 +1,22 @@
 # Changelog
 
-This changelog records user-facing changes and development changes. Version
-0.4.0 is being prepared and has not yet been released; it records changes
-since `v0.3.0`.
+This changelog records user-facing changes and development changes. New changes
+are listed under Unreleased; released changes are recorded below.
 
 ## [Unreleased]
 
-## [0.4.0] - Unreleased
+### Changed
+
+- Simplify sparse cycle-coordinate solving and kernel birth detection. Extract
+  finite image representatives directly from reduced death columns, avoiding
+  extraction of an unused image representative dictionary. Image diagram
+  extraction no longer requires retained image V once the kernel matrix has
+  been built; cover finite image and kernel intervals in both extraction modes.
+- Run Cargo builds, tests, and lockfile generation from the corresponding
+  Makefile targets. Update libc to 0.2.191 and refresh the Python lockfile export
+  without changing its package versions.
+
+## [0.4.0]
 
 ### Breaking changes
 

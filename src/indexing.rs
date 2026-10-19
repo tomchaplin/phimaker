@@ -1,5 +1,4 @@
-//! Index permutations between original and domain-first coordinates.
-
+//! Indexing utilities, including permutations.
 use itertools::Itertools;
 
 /// A bijection on a finite index set, with its inverse.
