@@ -1,4 +1,4 @@
-"""Representative supports use diagram coordinates and coefficients in F2."""
+"""Optional representative supports follow their entry point's coordinate contract."""
 
 from typing import Any
 
@@ -41,12 +41,6 @@ def test_optional_representatives(*, slow: bool, case: str) -> None:
 		representatives = getattr(requested, f"{name}_representatives")
 		assert isinstance(representatives, dict)
 		assert representatives.keys() == getattr(requested, name).keys()
-		for birth, representative in representatives.items():
-			support = representative[1] if name == "relative" else representative
-			if name == "kernel":
-				assert max(support) < birth
-			else:
-				assert max(support) == birth
 
 	assert_optional_maps(default, skipped, requested)
 

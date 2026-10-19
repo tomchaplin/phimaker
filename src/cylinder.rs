@@ -1,15 +1,15 @@
 //! Mapping-cylinder construction for filtered chain maps over F2.
 
-use std::{cmp::Ordering, ops::Deref};
+use std::{cmp::Ordering, collections::HashSet, ops::Deref};
 
 use itertools::Itertools;
 use log::debug;
 #[cfg(feature = "python-module")]
 use pyo3::prelude::*;
 
-use crate::documentation::python_doc;
 #[cfg(all(feature = "python-module", not(any(doc, rust_analyzer))))]
 use crate::documentation::{macro_rules_apply, strip_rust_docs};
+use crate::{diagrams::DiagramEnsemble, documentation::python_doc};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum CylinderColType {
@@ -40,7 +40,9 @@ impl Ord for CylinderColType {
 /// Use the index arrays to find the cylinder column corresponding to an
 /// original input generator. Index [`Self::times`] and [`Self::degrees`] by
 /// cylinder column, including the endpoints of diagrams returned by
-/// [`crate::sixpack`].
+/// [`crate::sixpack`]. Representative supports returned by that function
+/// already use original input indices; these arrays locate the inputs in the
+/// cylinder and do not need to be applied to returned supports.
 ///
 /// # Example
 ///
@@ -62,7 +64,9 @@ and ``degrees[index]`` to recover the entrance time and degree of a column of th
 boundary matrix of the mapping cylinder. ``domain_indices[i]`` is the mapping
 cylinder index of generator `i` in the domain, and ``codomain_indices[i]`` is the
 cylinder index of generator `i` in the codomain. ``domain_shift[i]`` is the cylinder
-index of degree-one-higher copy of domain generator ``i``.
+index of degree-one-higher copy of domain generator ``i``. Representative
+supports returned by ``sixpack`` already use original input indices; these
+arrays locate the inputs in the cylinder and are not applied to those supports.
 
 Attributes are read-only and return independent lists. Editing a returned list
 does not change subsequent accesses.
@@ -108,6 +112,97 @@ pub struct CylinderMetadata {
 the degree at its birth index."#
     )]
 	pub degrees: Vec<usize>,
+}
+
+/// Convert representative supports from this cylinder to the original inputs.
+/// Interval identifiers and persistence-map coefficients are left unchanged.
+///
+/// Call after solving all maps and removing equal-time intervals. The solvers
+/// need a common cylinder chain basis; these conversions give the returned
+/// chains their domain or codomain meaning instead.
+pub(crate) fn convert_representative_coordinates<UsizeSlice: Deref<Target = [usize]>>(
+	diagrams: &mut DiagramEnsemble,
+	metadata: &CylinderMetadata,
+	chain_map: &[UsizeSlice],
+) {
+	// Metadata maps original indices into the cylinder. Invert the two
+	// unshifted inclusions once, since every returned chain needs these
+	// lookups.
+	let mut domain_indices = vec![None; metadata.times.len()];
+	let mut codomain_indices = vec![None; metadata.times.len()];
+	for (original, &cylinder) in metadata.domain_indices.iter().enumerate() {
+		domain_indices[cylinder] = Some(original);
+	}
+	for (original, &cylinder) in metadata.codomain_indices.iter().enumerate() {
+		codomain_indices[cylinder] = Some(original);
+	}
+	let pullback = |support: &[usize]| {
+		let mut chain: Vec<_> = support
+			.iter()
+			.map(|&idx| {
+				domain_indices[idx]
+					.expect("Pulled-back chains use only unshifted domain generators")
+			})
+			.collect();
+		chain.sort_unstable();
+		chain
+	};
+	let project = |support: &[usize]| {
+		// For C_n = A_n + B_n + shifted(A_{n-1}), the chain projection is
+		// p(alpha, beta, shifted(gamma)) = f(alpha) + beta. Distinct terms can
+		// have overlapping images, so sum by parity rather than deduplicating.
+		let mut chain = HashSet::new();
+		for &idx in support {
+			if let Some(domain) = domain_indices[idx] {
+				for &target in chain_map[domain].iter() {
+					if !chain.insert(target) {
+						chain.remove(&target);
+					}
+				}
+			} else if let Some(codomain) = codomain_indices[idx] {
+				if !chain.insert(codomain) {
+					chain.remove(&codomain);
+				}
+			}
+			// The remaining generators are shifted domain generators; p is
+			// zero on that summand.
+		}
+		let mut chain: Vec<_> = chain.into_iter().collect();
+		chain.sort_unstable();
+		chain
+	};
+	for representatives in [
+		&mut diagrams.domain_representatives,
+		&mut diagrams.kernel_representatives,
+	]
+	.into_iter()
+	.flatten()
+	{
+		for support in representatives.values_mut() {
+			*support = pullback(support);
+		}
+	}
+	for representatives in [
+		&mut diagrams.codomain_representatives,
+		&mut diagrams.image_representatives,
+		&mut diagrams.cokernel_representatives,
+	]
+	.into_iter()
+	.flatten()
+	{
+		for support in representatives.values_mut() {
+			*support = project(support);
+		}
+	}
+	if let Some(representatives) = &mut diagrams.relative_representatives {
+		for (domain_cycle, cylinder_chain) in representatives.values_mut() {
+			// A quotient lift is (0, b, shifted(a)); its cylinder boundary is
+			// the embedded domain cycle a. Pulling that boundary back and
+			// projecting the lift gives the cone pair (a, b), with d b = f(a).
+			*domain_cycle = pullback(domain_cycle);
+			*cylinder_chain = project(cylinder_chain);
+		}
+	}
 }
 
 /// Build the filtered mapping cylinder of a chain map A to B over F2.

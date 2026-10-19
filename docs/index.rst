@@ -9,16 +9,21 @@ Representative cycles are optional. The computation functions default to
 ``get_representatives=False``, returning ``None`` for the six representative
 attributes. Pass ``get_representatives=True`` when cycles are needed. A requested
 empty diagram has an empty representative dictionary.
-Domain, codomain, image, and cokernel cycles have maximum generator index equal to birth.
-Kernel cycles use only domain generators preceding their birth and are boundaries
-in the codomain. Cokernel representatives are codomain cycles considered modulo
-codomain boundaries and domain cycles; finite features become zero in that
-quotient at their deaths.
-Relative representatives are pairs ``(a, b)`` satisfying ``a = boundary(b)``.
-The domain cycle ``a`` has degree one less than the feature; the codomain chain
-``b`` uses only generators outside the domain and has maximum index equal to
-birth. It represents a quotient cycle, modulo codomain boundaries and domain
-chains. Either component may be empty.
+For ``sixpack_from_inclusion``, all supports use original codomain indices.
+Domain, codomain, image, and cokernel cycles have maximum index equal to birth;
+kernel cycles use earlier domain generators. Image cycles use domain generators.
+Cokernel cycles are interpreted modulo codomain boundaries and images of domain cycles.
+
+For ``sixpack``, interval keys still identify cylinder columns, but domain and
+kernel supports use original domain indices, while image, codomain, and cokernel
+supports use original codomain indices. Use metadata for interval times and
+degrees, not for translating these already converted supports.
+
+Relative entries are pairs ``(a, b)`` of a domain cycle of degree one less than
+the feature and a codomain chain of its degree. They satisfy ``boundary(a) = 0``
+and ``boundary(b) = f(a)``. For ``sixpack`` each list uses its original input's
+indices. For an inclusion both use codomain indices, ``a = boundary(b)``, and
+``b`` has maximum index equal to birth. Either component may be empty.
 
 The same flag computes ``kernel_to_domain``, ``domain_to_image``,
 ``image_to_codomain``, ``domain_to_codomain``, and ``codomain_to_cokernel`` in the

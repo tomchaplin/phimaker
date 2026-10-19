@@ -7,6 +7,14 @@ are listed under Unreleased; released changes are recorded below.
 
 ### Breaking changes
 
+- Convert `sixpack` representative supports to original input coordinates
+  after map extraction and equal-time filtering. Domain and kernel cycles use
+  domain indices; image, codomain, and cokernel cycles use codomain indices.
+  Relative pairs use domain indices in their first component and codomain
+  indices in their second, satisfying `boundary(b) = f(a)`. Implement the
+  pullback and F2 chain projection in `cylinder.rs`. Keep interval identifiers,
+  metadata, and surviving map coefficients unchanged. Verify bases and maps
+  against the original complexes and their algebraic cones in both modes.
 - Return relative representatives as `(a, b)` pairs of domain cycles and
   codomain chains, with `a = boundary(b)` in inclusion coordinates. Keep both
   supports in original ambient indices and retain the optional extraction

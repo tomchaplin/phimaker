@@ -92,19 +92,27 @@ are optional. Python's `sixpack_from_inclusion` and `sixpack` default to
 `get_representatives=False`, which leaves all six attributes as `None` and
 skips representative extraction and map solving. Pass `get_representatives=True` to obtain
 maps from each birth index to a cycle support, or a relative chain pair.
-Keys and supports use the diagram coordinates. Domain, codomain, image, and cokernel cycles
-have maximum support index equal to the feature's birth. Kernel cycles contain
-only domain generators with indices strictly less than their kernel birth; these
-cycles are boundaries in the codomain throughout their kernel intervals.
-Cokernel representatives are codomain cycles interpreted modulo codomain
-boundaries and domain cycles. A finite representative becomes zero in that
-quotient at its death, without necessarily becoming a codomain boundary.
-Relative representatives are pairs `(a, b)` with `a = boundary(b)`. The chain
-`b` uses only generators outside the domain and represents a cycle in the
-quotient; `a` is its domain boundary, a cycle of degree one less. Both use ambient
-codomain indices, and either component may be empty. The maximum index in `b`
-equals the feature's birth. Classes are taken modulo codomain boundaries and
-domain chains. For the edge relative to its endpoints:
+Dictionary keys identify intervals. For `sixpack_from_inclusion`, all generator
+supports use the original codomain indices; domain, kernel, and image cycles
+use only selected domain generators. Ordinary non-kernel representatives have
+maximum support index equal to birth, as does the second relative component.
+Kernel cycles and first relative components use strictly earlier domain indices.
+
+For `sixpack`, keys and diagram endpoints remain cylinder interval identifiers,
+but supports refer to the original input complexes:
+
+| Representatives | Support coordinates |
+| --- | --- |
+| Domain and kernel | Original domain indices |
+| Image, codomain, and cokernel | Original codomain indices |
+| Relative pair `(a, b)` | Original domain indices in `a`, original codomain indices in `b` |
+
+Image cycles are mapped into the codomain using the input chain map. Cokernel
+cycles are interpreted modulo codomain boundaries and images of domain cycles.
+Relative pairs satisfy `boundary(a) = 0` and `boundary(b) = f(a)`; their degrees
+are one less than, and equal to, the feature's degree. Either component may be
+empty, and `b` need not be a codomain cycle. For an inclusion, `a = boundary(b)`,
+and `b` uses only generators outside the domain. For the edge relative to its endpoints:
 
 ```python
 from phimaker import sixpack_from_inclusion
@@ -193,8 +201,8 @@ assert diagrams.domain_to_codomain == {1: [0, 1]}
 assert diagrams.codomain_to_cokernel == {0: [0], 1: [0]}
 ```
 
-Coefficients use the stored representative bases and the same indices as the
-diagrams. Every nonzero coefficient satisfies
+Coefficients use the stored representative bases and identify intervals in
+the diagrams, rather than the generator indices in their supports. Every nonzero coefficient satisfies
 `target_birth <= source_birth < target_death <= source_death`, with infinite
 deaths allowed. At an index, evaluate a map using only source and target
 intervals alive there. Compose these evaluated maps; ordinary multiplication of

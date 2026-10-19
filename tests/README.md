@@ -86,7 +86,11 @@ classes match the objects returned by the functions.
   checks a nontrivial essential cycle, a finite H0 representative, and R = D V
   against the original boundary, including the serialized slow-mode result.
   Relative tests verify both components of `(a, b)`, with `a = boundary(b)`,
-  including nonzero domain cycles and empty components. Representative tests also cover a domain with gaps and unsorted indices,
+  including nonzero domain cycles and empty components. General-map tests check input-coordinate cycle bases and all five map actions
+  and ranks at every supplied time, independently using the original complexes.
+  Cone rank oracles cover empty codomains, non-injective maps, finite kernel
+  intervals, mixed relative pairs, and F2 cancellation of overlapping images.
+  Representative tests also cover a domain with gaps and unsorted indices,
   essential domain cycles killed in the image, essential image cycles supported
   only in the domain, cycle boundaries, maximum support indices equal to births,
   requested empty representative maps, and the requirement to retain V for
@@ -141,9 +145,12 @@ classes match the objects returned by the functions.
   differing bases, empty/identity inclusions, finite/essential classes, cylinder
   identity/zero maps, optional extraction, and independent Python getter copies.
 - **Relative representatives:** finite R death columns and essential V birth
-  columns lift to chains supported outside the domain, with boundary contained
-  in the domain and maximum support index equal to birth. An edge relative to
-  its two endpoints detects representatives that are not codomain cycles.
+  columns give inclusion pairs `(a, b)` with `a = boundary(b)`. Their second
+  components use only generators outside the domain and have maximum index
+  equal to birth. An edge relative to its endpoints detects a noncycle second
+  component. General maps return original input coordinates and satisfy
+  `boundary(a) = 0` and `boundary(b) = f(a)`, including an empty second component
+  when the original codomain is empty.
   Independent rank checks in each degree and at every index verify quotient
   basis independence and completeness, and that finite representatives vanish
   at their deaths. Both modes cover empty and identity inclusions, an empty

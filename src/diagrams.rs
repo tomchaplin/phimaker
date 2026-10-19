@@ -30,30 +30,36 @@ use crate::{
 /// the map; iteration order is unspecified. Essential classes persist beyond
 /// the supplied filtration.
 ///
-/// Results from [`crate::sixpack_from_inclusion`] use original codomain
-/// indices. Results from [`crate::sixpack`] use mapping-cylinder indices; its
-/// metadata provides filtration times and degrees. The degree of a kernel
-/// interval is the birth-generator degree minus one; other interval degrees
-/// equal that degree.
-/// Finite intervals with equal birth and death times are omitted by
-/// [`crate::sixpack`], together with their representative entries and map
-/// rows and columns. Index-only inclusion results retain all intervals.
+/// Diagram endpoints and representative keys from
+/// [`crate::sixpack_from_inclusion`] use original codomain indices. Those from
+/// [`crate::sixpack`] use cylinder interval identifiers; its metadata gives
+/// their times and degrees. Kernel degree is the birth-generator degree minus
+/// one; other degrees equal it. `sixpack` omits finite intervals with equal
+/// birth and death times, together with their representative entries and map
+/// rows and columns.
 ///
-/// The domain, codomain, image, kernel, and cokernel representative
-/// maps associate each birth with the generator indices whose sum is its cycle
-/// over F2 when requested. They are `None` when `get_representatives` is false.
-/// Their keys and entries use the same coordinates as the diagrams. Domain,
-/// codomain, image, and cokernel representatives have maximum index
-/// equal to their birth. Kernel representatives contain only domain generators
-/// with indices strictly less than their kernel birth. Cokernel cycles are
-/// interpreted modulo codomain boundaries and domain cycles. Relative entries
-/// are pairs `(a, b)`: a domain cycle and a codomain chain with `boundary(b) =
-/// a`. The second component uses only generators outside the domain and has
-/// maximum index equal to birth. The first uses strictly earlier domain
-/// generators. Representatives are not necessarily minimal or unique, and
-/// support order is unspecified. Each representative map has exactly its
-/// diagram's birth keys; a requested empty diagram has `Some` of an empty map.
-/// Skipping extraction still returns `None` for empty diagrams.
+/// When requested, ordinary representatives are lists of generators with
+/// coefficient one over F2. For `sixpack`, domain and kernel supports use
+/// original domain indices; image, codomain, and cokernel supports use original
+/// codomain indices. These support coordinates differ from interval
+/// identifiers. For an inclusion, every support uses original codomain indices,
+/// with domain, kernel, and image cycles supported in the domain. Cokernel
+/// cycles are taken modulo codomain boundaries and images of domain cycles.
+///
+/// Relative entries are pairs `(a, b)` of domain and codomain chains satisfying
+/// `boundary(a) = 0` and `boundary(b) = f(a)` for the input chain map f. Their
+/// degrees are one less than, and equal to, the feature's degree, respectively.
+/// For an inclusion, both components use codomain indices and `a =
+/// boundary(b)`. For `sixpack`, each component uses its original input's
+/// generator indices.
+///
+/// In index-only inclusion results, domain, codomain, image, and cokernel
+/// representatives have maximum index equal to birth. This also holds for the
+/// second relative component. Kernel cycles and first relative components use
+/// strictly earlier domain generators. Supports need not be minimal or unique.
+/// Each representative map has exactly its diagram's birth keys. All six are
+/// `None` when extraction is disabled, or `Some` of an empty map for a
+/// requested empty diagram.
 ///
 /// The optional maps [`Self::kernel_to_domain`], [`Self::domain_to_image`],
 /// [`Self::image_to_codomain`], [`Self::domain_to_codomain`], and
@@ -101,24 +107,29 @@ its birth generator minus one; other intervals have the birth-generator degree.
 ``sixpack`` omits finite equal-time intervals and their representative entries
 and map rows and columns. Index-only inclusion results retain all intervals.
 
-The ``domain_representatives``, ``codomain_representatives``,
-``image_representatives``, ``kernel_representatives``,
-``cokernel_representatives``, and ``relative_representatives`` attributes are ``None`` unless
-``get_representatives=True`` was requested. When requested, they map birth
-indices to lists of generator indices, except relative entries, which are pairs
-of lists ``(a, b)``. Summing an ordinary representative over the
-field with two elements gives a representative cycle. Keys and entries use the
-same coordinates as the diagrams.
-For domain, codomain, image, and cokernel features, the maximum index in a representative
-equals the feature's birth. Kernel representatives use only domain generators,
-with indices strictly less than the kernel birth. Cokernel cycles are interpreted
-modulo codomain boundaries and domain cycles. Relative pairs ``(a, b)`` satisfy
-``boundary(b) = a``: ``a`` is a domain cycle, while ``b`` uses only generators
-outside the domain and need not be a codomain cycle. The maximum index in ``b``
-equals birth; ``a`` uses strictly earlier domain generators. Representatives need not be minimal or
-unique. Each representative dictionary has exactly its diagram's birth keys.
-A requested empty diagram has an empty representative dictionary. If extraction
-was skipped, its representative attribute is still ``None``.
+The six representative attributes are ``None`` unless ``get_representatives=True``
+was requested. Ordinary entries are lists of generators whose sum over the field
+with two elements is a cycle. For ``sixpack``, domain and kernel lists use original
+domain indices; image, codomain, and cokernel lists use original codomain indices.
+Dictionary keys remain cylinder interval identifiers. For ``sixpack_from_inclusion``,
+all generator indices refer to the supplied codomain; domain, kernel, and image
+cycles use only its selected domain generators. Cokernel cycles are taken modulo
+codomain boundaries and images of domain cycles.
+
+Relative entries are pairs ``(a, b)``: a domain cycle of degree one less than the
+feature and a codomain chain of the feature's degree. They satisfy
+``boundary(a) = 0`` and ``boundary(b) = f(a)``. Each component uses its original
+input's coordinates for ``sixpack``. For an inclusion both lists use codomain
+indices and satisfy ``a = boundary(b)``.
+
+For index-only inclusion results, ordinary non-kernel cycles have maximum index
+equal to birth, as does the second relative component. Kernel cycles and first
+relative components use strictly earlier domain generators. These index comparisons
+do not apply between input supports and cylinder interval identifiers in ``sixpack``.
+Representatives need not be minimal or unique. Each representative dictionary has
+exactly its diagram's birth keys. A requested empty diagram has an empty dictionary;
+if extraction was skipped, the attribute is still ``None``. Getters return independent
+copies, including nested lists.
 
 The ``kernel_to_domain``, ``domain_to_image``, ``image_to_codomain``,
 ``domain_to_codomain``, and ``codomain_to_cokernel`` attributes are also ``None``
@@ -167,15 +178,16 @@ pub struct DiagramEnsemble {
     )]
 	pub codomain: PersistenceDiagram,
 
-	/// Codomain birth indices mapped to cycle supports in diagram coordinates.
-	/// Each listed generator has coefficient one over F2. An empty codomain
-	/// diagram has `Some` of an empty map when requested, or `None` when
-	/// representative extraction is disabled.
+	/// Codomain interval identifiers mapped to cycle supports in original
+	/// codomain indices. Each listed generator has coefficient one over F2.
+	/// An empty codomain diagram has `Some` of an empty map when requested,
+	/// or `None` when representative extraction is disabled.
 	#[doc = python_doc!(
     r#"Codomain representatives, as a dictionary from birth indices to generator lists.
 
 Sum the listed generators over the field with two elements to obtain a cycle.
-Indices use the codomain diagram's coordinates. When requested, an empty codomain
+Support indices refer to the original codomain. Keys identify intervals; for
+``sixpack`` they remain cylinder indices. When requested, an empty codomain
 diagram has an empty dictionary. ``None`` means representative extraction was
 skipped."#
     )]
@@ -187,7 +199,9 @@ skipped."#
     )]
 	pub domain: PersistenceDiagram,
 
-	/// Domain birth indices mapped to cycle supports in diagram coordinates.
+	/// Domain interval identifiers mapped to domain cycle supports. For
+	/// `sixpack`, supports use original domain indices; for an inclusion
+	/// they use the selected generators' original codomain indices.
 	/// Each listed generator has coefficient one over F2. An empty domain
 	/// diagram has `Some` of an empty map when requested, or `None` when
 	/// representative extraction is disabled.
@@ -195,7 +209,8 @@ skipped."#
     r#"Domain representatives, as a dictionary from birth indices to generator lists.
 
 Sum the listed generators over the field with two elements to obtain a cycle.
-Indices use the domain diagram's coordinates. When requested, an empty domain
+For ``sixpack``, supports use original domain indices. For an inclusion they
+use original codomain indices restricted to the domain. Keys identify intervals. When requested, an empty domain
 diagram has an empty dictionary. ``None`` means representative extraction was
 skipped."#
     )]
@@ -207,15 +222,18 @@ skipped."#
     )]
 	pub image: PersistenceDiagram,
 
-	/// Image birth indices mapped to cycle supports in diagram coordinates.
-	/// Supports contain only domain generators, each with coefficient one over
-	/// F2. A requested empty image diagram has `Some` of an empty map;
-	/// `None` means representative extraction was disabled.
+	/// Image interval identifiers mapped to cycles in original codomain
+	/// indices. For an inclusion these use only domain generators; for
+	/// `sixpack` they are the projected cycles in the original codomain.
+	/// Coefficients are over F2. A requested empty image diagram has `Some` of
+	/// an empty map; `None` means representative extraction was disabled.
 	#[doc = python_doc!(
     r#"Image representatives, as a dictionary from birth indices to generator lists.
 
 Sum the listed generators over the field with two elements to obtain a cycle.
-Only domain generators occur, in the image diagram's coordinates. When requested,
+Supports use original codomain indices. For an inclusion they use only selected
+domain generators; for ``sixpack`` they are their images under the input chain map.
+Keys identify intervals. When requested,
 an empty image diagram has an empty dictionary. ``None`` means representative
 extraction was skipped."#
     )]
@@ -231,17 +249,18 @@ The degree of an interval is the degree of its birth generator minus one."#
 	pub kernel: PersistenceDiagram,
 
 	/// Kernel birth indices mapped to cycles supported in the domain.
-	/// Supports use the diagram's ambient generator coordinates and contain
-	/// only indices strictly less than the kernel birth. Each listed generator
-	/// has coefficient one over F2. A requested empty kernel diagram has `Some`
-	/// of an empty map; `None` means representative extraction was disabled.
+	/// For `sixpack`, supports use original domain indices. For an inclusion,
+	/// they use selected codomain indices strictly less than the kernel birth.
+	/// Each listed generator has coefficient one over F2. A requested empty
+	/// kernel diagram has `Some` of an empty map; `None` means
+	/// representative extraction was disabled.
 	#[doc = python_doc!(
     r#"Kernel representatives, as a dictionary from birth indices to generator lists.
 
 Sum the listed generators over the field with two elements to obtain a domain
-cycle that is zero in codomain homology. Supports use the diagram's ambient
-coordinates and contain only domain generators, with indices strictly less than
-the kernel birth. When requested, an empty kernel diagram has an empty dictionary.
+cycle that is zero in codomain homology. For ``sixpack``, supports use original
+domain indices. For an inclusion, they use selected codomain indices strictly
+less than the kernel birth. Keys identify intervals. When requested, an empty kernel diagram has an empty dictionary.
 ``None`` means representative extraction was skipped."#
     )]
 	pub kernel_representatives: Option<HashMap<usize, Vec<usize>>>,
@@ -253,10 +272,10 @@ the kernel birth. When requested, an empty kernel diagram has an empty dictionar
 	pub cokernel: PersistenceDiagram,
 
 	/// Cokernel birth indices mapped to codomain cycle supports.
-	/// Each listed generator has coefficient one over F2, in diagram
-	/// coordinates. The maximum support index equals the feature birth.
+	/// Each listed generator has coefficient one over F2, in original codomain
+	/// coordinates. For an inclusion the maximum support index equals birth.
 	/// During its interval, the cycle is nonzero modulo codomain boundaries
-	/// and domain cycles; at a finite death it becomes zero in that
+	/// and images of domain cycles; at a finite death it becomes zero in that
 	/// quotient. A requested empty diagram has `Some` of an empty map;
 	/// `None` means extraction was disabled.
 	///
@@ -281,9 +300,10 @@ the kernel birth. When requested, an empty kernel diagram has an empty dictionar
     r#"Cokernel representatives, as a dictionary from birth indices to generator lists.
 
 Sum the listed generators over the field with two elements to obtain a codomain
-cycle. Supports use the diagram's coordinates, with maximum index equal to birth.
+cycle. Supports use original codomain indices; keys identify intervals. For an
+inclusion the maximum support index equals birth.
 During the feature's interval, the cycle is nonzero modulo codomain boundaries
-and domain cycles. At a finite death it becomes zero in this quotient, without
+and images of domain cycles. At a finite death it becomes zero in this quotient, without
 necessarily becoming a codomain boundary. When requested, an empty cokernel
 diagram has an empty dictionary. ``None`` means representative extraction was skipped.
 
@@ -302,7 +322,7 @@ Example::
 	/// The kernel-to-domain inclusion in the computed cycle bases.
 	/// Source births map to sorted target birth indices with coefficient one
 	/// over F2. Every source birth is a key; an empty vector denotes zero.
-	/// At a filtration index, use only source and target intervals alive there.
+	/// At a filtration step, use only source and target intervals alive there.
 	/// `None` means extraction was skipped; an empty source has `Some` of an
 	/// empty map when requested. Coordinates match the diagrams.
 	#[doc = python_doc!(
@@ -311,7 +331,7 @@ Example::
 Each kernel birth maps to a sorted list of domain births with coefficient
 one over the field with two elements, in the stored representative bases.
 Every kernel birth is a key; an empty list denotes zero. At a filtration
-index, use only source and target intervals alive there. Indices use the
+step, use only source and target intervals alive there. Indices use the
 diagrams' coordinates. An empty source has an empty dictionary when requested.
 ``None`` means representative and map extraction was skipped."#
     )]
@@ -320,7 +340,7 @@ diagrams' coordinates. An empty source has an empty dictionary when requested.
 	/// The domain-to-image surjection in the computed cycle bases.
 	/// Source births map to sorted target birth indices with coefficient one
 	/// over F2. Every source birth is a key; an empty vector denotes zero.
-	/// At a filtration index, use only source and target intervals alive there.
+	/// At a filtration step, use only source and target intervals alive there.
 	/// `None` means extraction was skipped; an empty source has `Some` of an
 	/// empty map when requested. Coordinates match the diagrams.
 	#[doc = python_doc!(
@@ -329,7 +349,7 @@ diagrams' coordinates. An empty source has an empty dictionary when requested.
 Each domain birth maps to a sorted list of image births with coefficient
 one over the field with two elements, in the stored representative bases.
 Every domain birth is a key; an empty list denotes zero. At a filtration
-index, use only source and target intervals alive there. Indices use the
+step, use only source and target intervals alive there. Indices use the
 diagrams' coordinates. An empty source has an empty dictionary when requested.
 ``None`` means representative and map extraction was skipped."#
     )]
@@ -338,7 +358,7 @@ diagrams' coordinates. An empty source has an empty dictionary when requested.
 	/// The image-to-codomain inclusion in the computed cycle bases.
 	/// Source births map to sorted target birth indices with coefficient one
 	/// over F2. Every source birth is a key; an empty vector denotes zero.
-	/// At a filtration index, use only source and target intervals alive there.
+	/// At a filtration step, use only source and target intervals alive there.
 	/// `None` means extraction was skipped; an empty source has `Some` of an
 	/// empty map when requested. Coordinates match the diagrams.
 	#[doc = python_doc!(
@@ -347,7 +367,7 @@ diagrams' coordinates. An empty source has an empty dictionary when requested.
 Each image birth maps to a sorted list of codomain births with coefficient
 one over the field with two elements, in the stored representative bases.
 Every image birth is a key; an empty list denotes zero. At a filtration
-index, use only source and target intervals alive there. Indices use the
+step, use only source and target intervals alive there. Indices use the
 diagrams' coordinates. An empty source has an empty dictionary when requested.
 ``None`` means representative and map extraction was skipped."#
     )]
@@ -356,7 +376,7 @@ diagrams' coordinates. An empty source has an empty dictionary when requested.
 	/// The domain-to-codomain induced map in the computed cycle bases.
 	/// Source births map to sorted target birth indices with coefficient one
 	/// over F2. Every source birth is a key; an empty vector denotes zero.
-	/// At a filtration index, use only source and target intervals alive there.
+	/// At a filtration step, use only source and target intervals alive there.
 	/// `None` means extraction was skipped; an empty source has `Some` of an
 	/// empty map when requested. Coordinates match the diagrams.
 	#[doc = python_doc!(
@@ -365,7 +385,7 @@ diagrams' coordinates. An empty source has an empty dictionary when requested.
 Each domain birth maps to a sorted list of codomain births with coefficient
 one over the field with two elements, in the stored representative bases.
 Every domain birth is a key; an empty list denotes zero. At a filtration
-index, use only source and target intervals alive there. Indices use the
+step, use only source and target intervals alive there. Indices use the
 diagrams' coordinates. An empty source has an empty dictionary when requested.
 ``None`` means representative and map extraction was skipped."#
     )]
@@ -374,7 +394,7 @@ diagrams' coordinates. An empty source has an empty dictionary when requested.
 	/// The codomain-to-cokernel quotient map in the computed cycle bases.
 	/// Source births map to sorted target birth indices with coefficient one
 	/// over F2. Every source birth is a key; an empty vector denotes zero.
-	/// At a filtration index, use only source and target intervals alive there.
+	/// At a filtration step, use only source and target intervals alive there.
 	/// `None` means extraction was skipped; an empty source has `Some` of an
 	/// empty map when requested. Coordinates match the diagrams.
 	#[doc = python_doc!(
@@ -383,7 +403,7 @@ diagrams' coordinates. An empty source has an empty dictionary when requested.
 Each codomain birth maps to a sorted list of cokernel births with coefficient
 one over the field with two elements, in the stored representative bases.
 Every codomain birth is a key; an empty list denotes zero. At a filtration
-index, use only source and target intervals alive there. Indices use the
+step, use only source and target intervals alive there. Indices use the
 diagrams' coordinates. An empty source has an empty dictionary when requested.
 ``None`` means representative and map extraction was skipped."#
     )]
@@ -399,16 +419,17 @@ mapping cone."#
     )]
 	pub relative: PersistenceDiagram,
 
-	/// Relative birth indices mapped to pairs `(a, b)` of domain and codomain
-	/// chains. For a degree-n feature, a has degree n-1, b has degree n,
-	/// and `a = boundary(b)`. Both use original ambient generator indices;
-	/// a uses only domain generators and b uses only generators outside the
-	/// domain. Thus a is a domain cycle, while b need not be a codomain
-	/// cycle. The maximum index in b equals the birth; a uses strictly
-	/// earlier indices. Either component may be empty. The class of b is
-	/// taken modulo codomain boundaries and domain chains, and vanishes at
-	/// a finite interval's death. A requested empty diagram has `Some` of
-	/// an empty map; `None` means representative extraction was disabled.
+	/// Relative interval identifiers mapped to domain–codomain chain pairs `(a,
+	/// b)`. For a degree-n feature, a has degree n-1, b has degree n, and
+	/// `boundary(a) = 0`, `boundary(b) = f(a)` for the input map f. The pair is
+	/// a cycle in its mapping cone and becomes a cone boundary at finite death.
+	/// For `sixpack`, a uses original domain indices and b uses original
+	/// codomain indices. For an inclusion, both use codomain indices, `a =
+	/// boundary(b)`, and b uses only generators outside the domain. In that
+	/// case b has maximum index equal to birth, and a uses strictly earlier
+	/// domain indices. Either component may be empty. A requested empty
+	/// diagram has `Some` of an empty map; `None` means representative
+	/// extraction was disabled.
 	///
 	/// # Example
 	///
@@ -432,12 +453,15 @@ mapping cone."#
     r#"Relative representatives, as a dictionary from birth indices to pairs of lists.
 
 Each value is ``(a, b)``: a domain cycle of degree one less than the feature,
-and a codomain chain of the feature's degree. Both use the diagram's ambient
-coordinates and satisfy ``a = boundary(b)``. The list ``a`` uses only domain
-generators; ``b`` uses only generators outside the domain and need not be a
-codomain cycle. The maximum index in ``b`` equals birth, and ``a`` uses earlier
-indices. Either list may be empty. The relative class of ``b`` is taken modulo
-codomain boundaries and domain chains and vanishes at a finite death.
+and a codomain chain of the feature's degree. They satisfy ``boundary(a) = 0``
+and ``boundary(b) = f(a)`` for the input chain map. The pair represents a mapping
+cone cycle and becomes a cone boundary at a finite death. Either list may be empty.
+
+For ``sixpack``, ``a`` uses original domain indices and ``b`` uses original codomain
+indices. Keys remain cylinder interval identifiers. For an inclusion, both lists
+use codomain indices, ``a = boundary(b)``, and ``b`` uses only generators outside
+the domain. In that case the maximum index in ``b`` equals birth, and ``a`` uses
+strictly earlier domain generators.
 When requested, an empty relative diagram has an empty dictionary.
 ``None`` means representative extraction was skipped.
 

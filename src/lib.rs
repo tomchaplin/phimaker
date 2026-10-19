@@ -42,7 +42,7 @@ pub mod utils; // TODO: we can remove this module if we impl the right traits
 
 use std::ops::Deref;
 
-use cylinder::{CylinderMetadata, build_cylinder};
+use cylinder::{CylinderMetadata, build_cylinder, convert_representative_coordinates};
 use diagrams::DiagramEnsemble;
 pub use ensemble::{all_decompositions, all_decompositions_slow};
 use errors::InclusionError;
@@ -69,9 +69,9 @@ use lophat::algorithms::LockFreeAlgorithm;
 /// supported.
 ///
 /// Set `get_representatives` to true to extract domain, codomain, image,
-/// kernel, cokernel, and relative cycles and the five maps between the first
-/// five modules. When false, all representative and morphism fields are
-/// `None`, and extraction and map solving are skipped.
+/// kernel, and cokernel cycles, relative chain pairs, and the five maps between
+/// the first five modules. When false, all representative and morphism fields
+/// are `None`, and extraction and map solving are skipped.
 /// Relative representatives are pairs `(a, b)`: a domain cycle and a codomain
 /// chain with `a = boundary(b)`. Both use original codomain indices; b uses
 /// only generators outside A and need not be a cycle in B.
@@ -80,8 +80,8 @@ use lophat::algorithms::LockFreeAlgorithm;
 /// empty vectors denote zero. Reductions still retain the matrices used by
 /// the six-diagram algorithm.
 ///
-/// When representatives are requested, each domain, codomain, image, cokernel,
-/// feature with birth index `b` has maximum representative
+/// When representatives are requested, each domain, codomain, image, or
+/// cokernel feature with birth index `b` has maximum representative
 /// generator index equal to `b`: generator `b` occurs and no later generator
 /// occurs. For a relative pair, this applies to its second component; its first
 /// component uses only earlier domain generators. This guarantee holds for
@@ -175,14 +175,27 @@ pub fn sixpack_from_inclusion<UsizeSlice: Deref<Target = [usize]>>(
 /// boundary, and send each generator to generators entering no later than it.
 /// Map columns must have sorted, distinct indices.
 ///
-/// Returns diagrams and metadata in mapping-cylinder coordinates. Use
-/// [`CylinderMetadata::times`] to translate endpoints to filtration times and
-/// its index arrays to locate the original generators. Finite intervals with
-/// equal birth and death times are omitted, along with their representatives
-/// and map rows and columns. Relative means homology of the mapping cone.
-/// Kernel degree is `metadata.degrees[birth] - 1`; other degrees are
-/// `metadata.degrees[birth]`. Thread counts, `slow`, and `get_representatives`
-/// have the same meaning as in [`sixpack_from_inclusion`].
+/// Diagram endpoints and representative keys identify mapping-cylinder columns.
+/// Use [`CylinderMetadata::times`] to translate endpoints to filtration times
+/// and its index arrays to locate the original generators in the cylinder.
+/// Finite intervals with equal birth and death times are omitted, along with
+/// their representatives and map rows and columns. Relative means homology of
+/// the mapping cone. Kernel degree is `metadata.degrees[birth] - 1`; other
+/// degrees are `metadata.degrees[birth]`. Thread counts, `slow`, and
+/// `get_representatives` have the same meaning as in
+/// [`sixpack_from_inclusion`].
+///
+/// Representative supports use original input coordinates: domain and kernel
+/// cycles use domain indices; image, codomain, and cokernel cycles use codomain
+/// indices. The input map is applied to image cycles. Relative representatives
+/// are pairs `(a, b)` with original domain indices in a and original codomain
+/// indices in b. For a degree-n feature, a has degree n-1 and b has degree n;
+/// they satisfy `boundary(a) = 0` and `boundary(b) = map(a)`. Either component
+/// may be empty. Persistence-map entries still identify intervals, not chain
+/// generators; evaluate them using the intervals alive at the supplied times.
+/// Representatives and maps are computed before filtering and converting
+/// supports. Index comparisons between support entries and cylinder births
+/// are not meaningful after conversion.
 ///
 /// # Errors
 /// Returns [`InclusionError`] for a structurally invalid cylinder inclusion.
@@ -206,6 +219,21 @@ pub fn sixpack_from_inclusion<UsizeSlice: Deref<Target = [usize]>>(
 /// assert_eq!(metadata.times[birth], 0.0);
 /// # Ok::<(), phimaker::errors::InclusionError>(())
 /// ```
+///
+/// A zero map to the empty codomain retains a domain component in its relative
+/// representative, even though the codomain component is empty:
+///
+/// ```
+/// use phimaker::sixpack;
+/// let point = vec![(0.0, 0, vec![])];
+/// let (diagrams, metadata) = sixpack(&point, &[], &[vec![]], true, 1, false)?;
+/// let birth = metadata.domain_shift[0];
+/// assert_eq!(
+/// 	diagrams.relative_representatives.as_ref().unwrap()[&birth],
+/// 	(vec![0], vec![])
+/// );
+/// # Ok::<(), phimaker::errors::InclusionError>(())
+/// ```
 pub fn sixpack<UsizeSlice: Deref<Target = [usize]>>(
 	domain_matrix: &[(f64, usize, UsizeSlice)],
 	codomain_matrix: &[(f64, usize, UsizeSlice)],
@@ -227,6 +255,9 @@ pub fn sixpack<UsizeSlice: Deref<Target = [usize]>>(
 	// vanish in the supplied filtration times. Their cycles can be necessary
 	// for the intermediate chain-coordinate equations.
 	diagrams.remove_equal_time_intervals(&metadata.times);
+	if get_representatives {
+		convert_representative_coordinates(&mut diagrams, &metadata, map);
+	}
 	Ok((diagrams, metadata))
 }
 
@@ -235,6 +266,9 @@ mod tests;
 
 #[cfg(test)]
 mod cylinder_result_tests;
+
+#[cfg(test)]
+mod input_coordinate_tests;
 
 #[cfg(test)]
 mod persistence_map_tests;

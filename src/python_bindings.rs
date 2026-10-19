@@ -163,6 +163,17 @@ preserving each input order. Kernel interval degree is
 ``metadata.degrees[birth] - 1``; other degrees are ``metadata.degrees[birth]``.
 Relative means homology of the mapping cone.
 
+Representative supports use original input coordinates. Domain and kernel lists
+use domain indices; image, codomain, and cokernel lists use codomain indices.
+The input chain map is applied to image cycles. Relative entries are pairs
+``(a, b)`` with original domain indices in ``a`` and original codomain indices
+in ``b``. They have degrees one less than, and equal to, the relative feature's
+degree and satisfy ``boundary(a) = 0`` and ``boundary(b) = map(a)``. Either list
+may be empty. Dictionary keys and persistence-map coefficients still identify
+cylinder intervals. Evaluate maps at supplied filtration times. Generator indices
+in representative lists cannot be compared directly with those interval identifiers.
+
+
 The input lists are not modified. Result dictionaries and metadata lists are
 independent copies on each access. Empty inputs are supported in both modes.
 The call blocks until results are ready; other Python threads can run meanwhile.
@@ -187,7 +198,14 @@ Example::
     >>> diagrams, metadata = sixpack(point, point, [[0]])
     >>> birth = metadata.domain_indices[0]
     >>> assert diagrams.domain[birth] is None
-    >>> assert metadata.times[birth] == 2.0"#
+    >>> assert metadata.times[birth] == 2.0
+
+A zero map to an empty codomain retains a domain component in its relative pair::
+
+    >>> diagrams, metadata = sixpack(point, [], [[]], get_representatives=True, num_threads=1)
+    >>> birth = metadata.domain_shift[0]
+    >>> assert diagrams.relative_representatives == {birth: ([0], [])}
+    >>> assert diagrams.kernel_representatives == {birth: [0]}"#
 )]
 #[pyfunction(name = "sixpack")]
 #[pyo3(signature = (domain_matrix, codomain_matrix, map, get_representatives=false, num_threads=0, slow=false))]
