@@ -3,7 +3,7 @@
 This changelog records user-facing changes and development changes. New changes
 are listed under Unreleased; released changes are recorded below.
 
-## [Unreleased]
+## [v0.5.0]
 
 ### Breaking changes
 
@@ -29,6 +29,10 @@ are listed under Unreleased; released changes are recorded below.
 
 ### Changed
 
+- Upgrade bincode from 1.3.3 to 2.0.1 using its Serde streaming API, with
+  only the `std` and `serde` features enabled. Keep the legacy encoding for
+  compatibility with existing decomposition files and verify it against bytes
+  produced before the upgrade.
 - Sum generator images and basis expansions with a shared vector-based F2
   helper that sorts and cancels once per complete sum. Replace hash-set
   accumulation in cylinder projection and repeated pairwise sums during map

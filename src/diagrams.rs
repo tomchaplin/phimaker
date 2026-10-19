@@ -3,7 +3,7 @@
 use std::{collections::HashMap, fs::File, io::BufReader};
 
 use ExtendedUsize::{Finite, Infinity};
-use bincode::deserialize_from;
+use bincode::{config::legacy, serde::decode_from_std_read};
 /// Shared birth-to-death diagrams and extended indices from LoPhat.
 pub use lophat::utils::{ExtendedUsize, PersistenceDiagram};
 use lophat::{
@@ -1253,7 +1253,8 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 ///
 /// Use a file produced by [`crate::ensemble::to_file`] for a compatible
 /// decomposition. Reading advances the shared file cursor; seek back before
-/// reading again.
+/// reading again. The legacy bincode encoding is used, so compatible
+/// decompositions written with bincode 1.3 remain readable.
 ///
 /// # Panics
 /// Panics on I/O errors or incompatible or corrupt serialized data.
@@ -1274,9 +1275,8 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 /// assert_eq!(from_file(&file).n_cols(), 1);
 /// ```
 pub fn from_file(file: &File) -> DecompositionFileFormat {
-	let buf = BufReader::new(file);
-	deserialize_from(buf).expect("Can't deserialize from file")
-	//from_reader(file).expect("JSON deserializes")
+	let mut buf = BufReader::new(file);
+	decode_from_std_read(&mut buf, legacy()).expect("Can't deserialize from file")
 }
 
 impl FileEnsemble {

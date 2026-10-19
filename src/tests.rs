@@ -2,7 +2,7 @@
 
 use std::{
 	collections::{HashMap, HashSet},
-	io::{Seek, SeekFrom},
+	io::{Read, Seek, SeekFrom},
 };
 
 use lophat::{
@@ -1280,6 +1280,41 @@ fn serialization_roundtrip() {
 			[(0, Finite(1))].into_iter().collect()
 		);
 	}
+}
+
+/// Preserve the exact bincode 1.3.3 representation of a nonempty decomposition
+/// with V, and recover both matrices using the upgraded reader.
+#[test]
+fn serialization_matches_bincode_1() {
+	use lophat::{options::LoPhatOptions, utils::clone_to_file_format};
+
+	// Generated with bincode 1.3.3 before upgrading. The third column reduces
+	// to zero and has V support [1, 2], exercising a nontrivial cycle basis.
+	let legacy_bytes: &[u8] = &[
+		3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+		0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+		0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+		0, 0, 0,
+	];
+	let reduction = SerialAlgorithm::<VecColumn>::init(Some(LoPhatOptions {
+		maintain_v: true,
+		..Default::default()
+	}))
+	.add_cols(
+		[(0, vec![]), (1, vec![0]), (1, vec![0])]
+			.into_iter()
+			.map(VecColumn::from),
+	)
+	.decompose();
+	let expected = clone_to_file_format(&reduction);
+	let mut file = to_file(reduction);
+	let mut bytes = Vec::new();
+	file.read_to_end(&mut bytes).unwrap();
+	assert_eq!(bytes, legacy_bytes);
+	file.rewind().unwrap();
+	assert_eq!(from_file(&file), expected);
 }
 
 /// Check the cylinder differential itself, including the shifted boundary term

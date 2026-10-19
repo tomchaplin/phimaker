@@ -82,7 +82,9 @@ classes match the objects returned by the functions.
   strict upper triangularity and boundary squared zero; domain/image/relative
   coordinate conventions; permutation inversion; finite/infinite endpoints;
   anti-transpose recovery; forward codomain coordinates and retained V;
-  stable display; serialization and explicit rewind. Sparse pairwise and
+  stable display; serialization and explicit rewind. A bincode 1.3.3 fixture
+  checks byte-for-byte encoding compatibility and restoration of both R and V
+  after the bincode 2 upgrade. Sparse pairwise and
   batched sums are checked against bitwise XOR for every combination of small
   vectors, with additional cases for empty inputs and parity cancellation of
   unsorted repeated indices. A pair of parallel edges

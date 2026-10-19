@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, fs::File, io::BufWriter, marker::PhantomData, ops::Deref, thread};
 
-use bincode::serialize_into;
+use bincode::{config::legacy, serde::encode_into_std_write};
 use log::debug;
 use lophat::{
 	algorithms::DecompositionAlgo,
@@ -456,7 +456,9 @@ where
 /// Serialize a value with bincode and return a temporary-file read handle.
 ///
 /// The value is consumed. The handle starts at byte zero and keeps its data
-/// alive until it is closed. Read with a matching bincode type; for
+/// alive until it is closed. Read with bincode's Serde API, a matching type,
+/// and [`bincode::config::legacy`]; this preserves the little-endian,
+/// fixed-width integer encoding used before the bincode 2 upgrade. For
 /// decompositions use [`crate::diagrams::from_file`]. Rewind before reading a
 /// second time.
 ///
@@ -468,8 +470,9 @@ where
 /// ```
 /// use phimaker::ensemble::to_file;
 ///
-/// let file = to_file(vec![1usize, 2]);
-/// let restored: Vec<usize> = bincode::deserialize_from(&file)?;
+/// let mut file = to_file(vec![1usize, 2]);
+/// let restored: Vec<usize> =
+/// 	bincode::serde::decode_from_std_read(&mut file, bincode::config::legacy())?;
 /// assert_eq!(restored, vec![1, 2]);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -480,7 +483,7 @@ pub fn to_file<Algo: Serialize>(algo: Algo) -> File {
 	let file_read = file_write.reopen().expect("Can't reopen tempfile");
 	{
 		let mut buf = BufWriter::new(&mut file_write);
-		serialize_into(&mut buf, &algo).expect("Can't serialize to file");
+		encode_into_std_write(&algo, &mut buf, legacy()).expect("Can't serialize to file");
 	}
 	// Explicitly release memory
 	drop(algo);
