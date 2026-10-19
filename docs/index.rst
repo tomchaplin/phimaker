@@ -9,15 +9,16 @@ Representative cycles are optional. The computation functions default to
 ``get_representatives=False``, returning ``None`` for the six representative
 attributes. Pass ``get_representatives=True`` when cycles are needed. A requested
 empty diagram has an empty representative dictionary.
-Domain, codomain, image, cokernel, and relative cycles have maximum generator index equal to birth.
+Domain, codomain, image, and cokernel cycles have maximum generator index equal to birth.
 Kernel cycles use only domain generators preceding their birth and are boundaries
 in the codomain. Cokernel representatives are codomain cycles considered modulo
 codomain boundaries and domain cycles; finite features become zero in that
 quotient at their deaths.
-Relative representatives use only generators outside the domain. Their boundary
-lies in the domain, so they are cycles in the quotient without necessarily being
-codomain cycles. Their classes are interpreted modulo codomain boundaries and
-domain chains.
+Relative representatives are pairs ``(a, b)`` satisfying ``a = boundary(b)``.
+The domain cycle ``a`` has degree one less than the feature; the codomain chain
+``b`` uses only generators outside the domain and has maximum index equal to
+birth. It represents a quotient cycle, modulo codomain boundaries and domain
+chains. Either component may be empty.
 
 The same flag computes ``kernel_to_domain``, ``domain_to_image``,
 ``image_to_codomain``, ``domain_to_codomain``, and ``codomain_to_cokernel`` in the

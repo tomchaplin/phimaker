@@ -39,20 +39,21 @@ use crate::{
 /// [`crate::sixpack`], together with their representative entries and map
 /// rows and columns. Index-only inclusion results retain all intervals.
 ///
-/// The domain, codomain, image, kernel, cokernel, and relative representative
+/// The domain, codomain, image, kernel, and cokernel representative
 /// maps associate each birth with the generator indices whose sum is its cycle
 /// over F2 when requested. They are `None` when `get_representatives` is false.
 /// Their keys and entries use the same coordinates as the diagrams. Domain,
-/// codomain, image, cokernel, and relative representatives have maximum index
+/// codomain, image, and cokernel representatives have maximum index
 /// equal to their birth. Kernel representatives contain only domain generators
 /// with indices strictly less than their kernel birth. Cokernel cycles are
-/// interpreted modulo codomain boundaries and domain cycles. Relative cycles
-/// use only generators outside the domain; their codomain boundary lies in
-/// the domain, so they need not be cycles in the codomain itself.
-/// Representatives are not necessarily minimal or unique, and support order is
-/// unspecified. Each representative map has exactly its diagram's birth keys; a
-/// requested empty diagram has `Some` of an empty map. Skipping extraction
-/// still returns `None` for empty diagrams.
+/// interpreted modulo codomain boundaries and domain cycles. Relative entries
+/// are pairs `(a, b)`: a domain cycle and a codomain chain with `boundary(b) =
+/// a`. The second component uses only generators outside the domain and has
+/// maximum index equal to birth. The first uses strictly earlier domain
+/// generators. Representatives are not necessarily minimal or unique, and
+/// support order is unspecified. Each representative map has exactly its
+/// diagram's birth keys; a requested empty diagram has `Some` of an empty map.
+/// Skipping extraction still returns `None` for empty diagrams.
 ///
 /// The optional maps [`Self::kernel_to_domain`], [`Self::domain_to_image`],
 /// [`Self::image_to_codomain`], [`Self::domain_to_codomain`], and
@@ -104,15 +105,17 @@ The ``domain_representatives``, ``codomain_representatives``,
 ``image_representatives``, ``kernel_representatives``,
 ``cokernel_representatives``, and ``relative_representatives`` attributes are ``None`` unless
 ``get_representatives=True`` was requested. When requested, they map birth
-indices to lists of generator indices. Summing the listed generators over the
+indices to lists of generator indices, except relative entries, which are pairs
+of lists ``(a, b)``. Summing an ordinary representative over the
 field with two elements gives a representative cycle. Keys and entries use the
 same coordinates as the diagrams.
-For domain, codomain, image, cokernel, and relative features, the maximum index in a representative
+For domain, codomain, image, and cokernel features, the maximum index in a representative
 equals the feature's birth. Kernel representatives use only domain generators,
 with indices strictly less than the kernel birth. Cokernel cycles are interpreted
-modulo codomain boundaries and domain cycles. Relative cycles use only generators
-outside the domain. Their boundary lies in the domain, so they need not be cycles
-in the codomain itself. Representatives need not be minimal or
+modulo codomain boundaries and domain cycles. Relative pairs ``(a, b)`` satisfy
+``boundary(b) = a``: ``a`` is a domain cycle, while ``b`` uses only generators
+outside the domain and need not be a codomain cycle. The maximum index in ``b``
+equals birth; ``a`` uses strictly earlier domain generators. Representatives need not be minimal or
 unique. Each representative dictionary has exactly its diagram's birth keys.
 A requested empty diagram has an empty representative dictionary. If extraction
 was skipped, its representative attribute is still ``None``.
@@ -396,20 +399,21 @@ mapping cone."#
     )]
 	pub relative: PersistenceDiagram,
 
-	/// Relative birth indices mapped to cycle supports in the quotient complex.
-	/// Each listed generator has coefficient one over F2, in diagram
-	/// coordinates. Supports contain only generators outside the domain, with
-	/// maximum index equal to birth. Their codomain boundary lies in the
-	/// domain, so the represented chain need not be a codomain cycle.
-	/// During its interval the class is nonzero modulo codomain boundaries
-	/// and domain chains; at a finite death it becomes zero in that
-	/// quotient. A requested empty diagram has `Some` of an empty map;
-	/// `None` means representative extraction was disabled.
+	/// Relative birth indices mapped to pairs `(a, b)` of domain and codomain
+	/// chains. For a degree-n feature, a has degree n-1, b has degree n,
+	/// and `a = boundary(b)`. Both use original ambient generator indices;
+	/// a uses only domain generators and b uses only generators outside the
+	/// domain. Thus a is a domain cycle, while b need not be a codomain
+	/// cycle. The maximum index in b equals the birth; a uses strictly
+	/// earlier indices. Either component may be empty. The class of b is
+	/// taken modulo codomain boundaries and domain chains, and vanishes at
+	/// a finite interval's death. A requested empty diagram has `Some` of
+	/// an empty map; `None` means representative extraction was disabled.
 	///
 	/// # Example
 	///
 	/// ```
-	/// use phimaker::{diagrams::ExtendedUsize::Infinity, sixpack_from_inclusion};
+	/// use phimaker::sixpack_from_inclusion;
 	/// let result = sixpack_from_inclusion(
 	/// 	&[vec![], vec![], vec![0, 1]],
 	/// 	&[0, 0, 1],
@@ -418,22 +422,22 @@ mapping cone."#
 	/// 	1,
 	/// 	false,
 	/// )?;
-	/// assert_eq!(result.relative[&2], Infinity);
 	/// assert_eq!(
 	/// 	result.relative_representatives.as_ref().unwrap()[&2],
-	/// 	vec![2]
+	/// 	(vec![0, 1], vec![2])
 	/// );
 	/// # Ok::<(), phimaker::errors::InclusionError>(())
 	/// ```
 	#[doc = python_doc!(
-    r#"Relative representatives, as a dictionary from birth indices to generator lists.
+    r#"Relative representatives, as a dictionary from birth indices to pairs of lists.
 
-Sum the listed generators over the field with two elements to obtain a cycle in
-the quotient complex. Supports use the diagram's coordinates, contain only
-generators outside the domain, and have maximum index equal to birth. The chain's
-boundary lies in the domain; it need not be a cycle in the codomain itself.
-During the feature's interval, its class is nonzero modulo codomain boundaries
-and domain chains. At a finite death it becomes zero in this quotient.
+Each value is ``(a, b)``: a domain cycle of degree one less than the feature,
+and a codomain chain of the feature's degree. Both use the diagram's ambient
+coordinates and satisfy ``a = boundary(b)``. The list ``a`` uses only domain
+generators; ``b`` uses only generators outside the domain and need not be a
+codomain cycle. The maximum index in ``b`` equals birth, and ``a`` uses earlier
+indices. Either list may be empty. The relative class of ``b`` is taken modulo
+codomain boundaries and domain chains and vanishes at a finite death.
 When requested, an empty relative diagram has an empty dictionary.
 ``None`` means representative extraction was skipped.
 
@@ -443,10 +447,9 @@ Example::
     >>> result = sixpack_from_inclusion(
     ...     [[], [], [0, 1]], [0, 0, 1], [0, 1], get_representatives=True,
     ... )
-    >>> assert result.relative == {2: None}
-    >>> assert result.relative_representatives == {2: [2]}"#
+    >>> assert result.relative_representatives == {2: ([0, 1], [2])}"#
     )]
-	pub relative_representatives: Option<HashMap<usize, Vec<usize>>>,
+	pub relative_representatives: Option<HashMap<usize, (Vec<usize>, Vec<usize>)>>,
 }
 
 // Sum of two vectors over F2.
@@ -920,8 +923,8 @@ fn kernel_diagram<Decomp: Decomposition<C>, C: Column>(
 	dgm
 }
 
-// Apply the original domain boundary using D = R V^{-1}, without rebuilding D
-// or computing an inverse. V is upper triangular with diagonal entries one.
+// Apply a boundary in its decomposition coordinates using D = R V^{-1},
+// without rebuilding D or computing an inverse. V is unit upper triangular.
 fn boundary_of_chain<Decomp: Decomposition<C>, C: Column>(
 	decomposition: &Decomp,
 	mut support: Vec<usize>,
@@ -930,7 +933,7 @@ fn boundary_of_chain<Decomp: Decomposition<C>, C: Column>(
 	while let Some(&pivot) = support.last() {
 		let v = decomposition
 			.get_v_col(pivot)
-			.expect("Kernel representative extraction requires retained domain V");
+			.expect("Boundary application requires retained V");
 		support = sum_mod2(&support, &v.entries().collect::<Vec<_>>());
 		boundary = sum_mod2(
 			&boundary,
@@ -1020,14 +1023,18 @@ fn domain_diagram<Decomp: Decomposition<C>, C: Column>(
 	(diagram.map_idxs(unpermute), representatives)
 }
 
-// Quotient generators enumerate the complement of the domain in input order.
-// Lift each quotient cycle using this complement, so its codomain boundary is
-// allowed to lie in the domain rather than vanish in the codomain itself.
+// Lift quotient cycles using generators outside the domain. The boundary of
+// such a lift is a domain cycle, so retaining both chains describes a cycle in
+// the mapping cone of the inclusion, including when the lift is not a cycle.
 fn relative_diagram<Decomp: Decomposition<C>, C: Column>(
 	metadata: &EnsembleMetadata,
 	d_rel_decomp: &Decomp,
+	d_cod_decomp: &Decomp,
 	get_representatives: bool,
-) -> (PersistenceDiagram, Option<HashMap<usize, Vec<usize>>>) {
+) -> (
+	PersistenceDiagram,
+	Option<HashMap<usize, (Vec<usize>, Vec<usize>)>>,
+) {
 	let (diagram, maybe_reps) = decomposition_diagram(d_rel_decomp, get_representatives);
 	let unpermute = |idx| {
 		metadata
@@ -1037,10 +1044,18 @@ fn relative_diagram<Decomp: Decomposition<C>, C: Column>(
 	let representatives = maybe_reps.map(|reps| {
 		reps.into_iter()
 			.map(|(birth, support)| {
-				(
-					unpermute(birth),
-					support.into_iter().map(unpermute).collect(),
-				)
+				let codomain_chain = support.into_iter().map(unpermute).collect::<Vec<_>>();
+				// The quotient boundary vanishes, so the original boundary is
+				// supported in the domain. Use the retained codomain R and V;
+				// the original boundary matrix need not be kept during
+				// extraction.
+				let domain_cycle = boundary_of_chain(d_cod_decomp, codomain_chain.clone());
+				debug_assert!(
+					domain_cycle.iter().all(|&idx| {
+						metadata.dom_first_permutation.map(idx) < metadata.sz_domain
+					})
+				);
+				(unpermute(birth), (domain_cycle, codomain_chain))
 			})
 			.collect()
 	});
@@ -1208,8 +1223,12 @@ impl<C: Column, Algo: DecompositionAlgo<C>> DecompositionEnsemble<C, Algo> {
 		let cokernel = cokernel_diagram(&self.metadata, &self.d_dom, &self.d_im, &self.d_cok);
 		let cokernel_representatives = get_representatives
 			.then(|| cokernel_representatives(&cokernel, &self.d_cok, &self.d_cod));
-		let (relative, relative_representatives) =
-			relative_diagram(&self.metadata, &self.d_rel, get_representatives);
+		let (relative, relative_representatives) = relative_diagram(
+			&self.metadata,
+			&self.d_rel,
+			&self.d_cod,
+			get_representatives,
+		);
 		let mut result = DiagramEnsemble {
 			domain,
 			domain_representatives,
@@ -1326,8 +1345,12 @@ impl FileEnsemble {
 		let cokernel = cokernel_diagram(&self.metadata, &d_dom_decomp, &d_im_decomp, &d_cok_decomp);
 		let cokernel_representatives = get_representatives
 			.then(|| cokernel_representatives(&cokernel, &d_cok_decomp, &d_cod_decomp));
-		let (relative, relative_representatives) =
-			relative_diagram(&self.metadata, &d_rel_decomp, get_representatives);
+		let (relative, relative_representatives) = relative_diagram(
+			&self.metadata,
+			&d_rel_decomp,
+			&d_cod_decomp,
+			get_representatives,
+		);
 		let mut result = DiagramEnsemble {
 			domain,
 			domain_representatives,

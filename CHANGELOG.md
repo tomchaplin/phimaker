@@ -7,6 +7,11 @@ are listed under Unreleased; released changes are recorded below.
 
 ### Breaking changes
 
+- Return relative representatives as `(a, b)` pairs of domain cycles and
+  codomain chains, with `a = boundary(b)` in inclusion coordinates. Keep both
+  supports in original ambient indices and retain the optional extraction
+  contract. Compute the boundary from the retained codomain decomposition in
+  normal and serialized modes. Update Python getter types and wheel checks.
 - Omit finite equal-time intervals from all six diagrams returned by
   `sixpack`. Compute the full representatives and persistence maps first,
   then remove the intervals, their representative entries, and their map

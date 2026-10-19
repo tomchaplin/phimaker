@@ -72,17 +72,20 @@ use lophat::algorithms::LockFreeAlgorithm;
 /// kernel, cokernel, and relative cycles and the five maps between the first
 /// five modules. When false, all representative and morphism fields are
 /// `None`, and extraction and map solving are skipped.
-/// Relative representatives use only generators outside A;
-/// their boundary lies in A, so they need not be cycles in B.
+/// Relative representatives are pairs `(a, b)`: a domain cycle and a codomain
+/// chain with `a = boundary(b)`. Both use original codomain indices; b uses
+/// only generators outside A and need not be a cycle in B.
 /// Requested empty diagrams have `Some` of
 /// an empty map. Each morphism has exactly its source diagram's birth keys;
 /// empty vectors denote zero. Reductions still retain the matrices used by
 /// the six-diagram algorithm.
 ///
 /// When representatives are requested, each domain, codomain, image, cokernel,
-/// or relative feature with birth index `b` has maximum representative
+/// feature with birth index `b` has maximum representative
 /// generator index equal to `b`: generator `b` occurs and no later generator
-/// occurs. This guarantee holds for every thread count. If you associate
+/// occurs. For a relative pair, this applies to its second component; its first
+/// component uses only earlier domain generators. This guarantee holds for
+/// every thread count. If you associate
 /// nondecreasing filtration values with the input generator order, the
 /// interval's birth value is therefore the maximum filtration value of a
 /// generator in its representative, including when values are equal.

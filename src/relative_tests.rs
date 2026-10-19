@@ -23,6 +23,17 @@ use crate::{
 	tests::binary_rank,
 };
 
+// Expected quotient lifts remain independent of how their boundary is applied.
+fn relative_lifts(result: &DiagramEnsemble) -> HashMap<usize, Vec<usize>> {
+	result
+		.relative_representatives
+		.as_ref()
+		.unwrap()
+		.iter()
+		.map(|(&birth, (_, support))| (birth, support.clone()))
+		.collect()
+}
+
 // Project input boundaries by deleting domain rows, retaining ambient labels.
 // This oracle does not use the quotient builder or any computed
 // representatives.
@@ -57,7 +68,7 @@ fn assert_relative_cycles(
 	let domain: HashSet<_> = domain.iter().copied().collect();
 	let representatives = result.relative_representatives.as_ref().unwrap();
 	assert_eq!(representatives.len(), result.relative.len());
-	for (&birth, support) in representatives {
+	for (&birth, (domain_cycle, support)) in representatives {
 		assert!(result.relative.contains_key(&birth));
 		assert_eq!(support.iter().max(), Some(&birth));
 		assert_eq!(
@@ -75,6 +86,25 @@ fn assert_relative_cycles(
 			}
 		}
 		assert!(boundary.is_subset(&domain), "Relative cycle at {birth}");
+		assert_eq!(
+			domain_cycle.iter().copied().collect::<HashSet<_>>(),
+			boundary
+		);
+		assert_eq!(domain_cycle.len(), boundary.len());
+		assert!(
+			domain_cycle
+				.iter()
+				.all(|&idx| idx < birth && degrees[idx] + 1 == degrees[birth])
+		);
+		let mut second_boundary = HashSet::new();
+		for &idx in domain_cycle {
+			for &row in &matrix[idx] {
+				if !second_boundary.insert(row) {
+					second_boundary.remove(&row);
+				}
+			}
+		}
+		assert!(second_boundary.is_empty());
 		if let Finite(death) = result.relative[&birth] {
 			let mut relations =
 				quotient_boundaries(matrix, degrees, &domain, death, degrees[birth] + 1);
@@ -103,7 +133,7 @@ fn assert_relative_cycles(
 						&& degrees[birth] == degree
 						&& Finite(index) < result.relative[&birth]
 				})
-				.map(|(_, support)| support.iter().copied().collect())
+				.map(|(_, (_, support))| support.iter().copied().collect())
 				.collect();
 			assert_eq!(
 				binary_rank(relations.into_iter().chain(active.iter().cloned())),
@@ -175,7 +205,7 @@ fn relative_cycles_form_quotient_bases_in_both_modes() {
 	for (matrix, degrees, domain, expected) in cases {
 		for slow in [false, true] {
 			let result = sixpack_from_inclusion(&matrix, &degrees, &domain, true, 1, slow).unwrap();
-			assert_eq!(result.relative_representatives.as_ref().unwrap(), &expected);
+			assert_eq!(relative_lifts(&result), expected);
 			assert_relative_cycles(&result, &matrix, &degrees, &domain);
 		}
 	}
@@ -196,7 +226,10 @@ fn relative_cycle_need_not_be_a_codomain_cycle() {
 		)
 		.unwrap();
 		assert_eq!(result.relative[&2], Infinity);
-		assert_eq!(result.relative_representatives.unwrap()[&2], vec![2]);
+		assert_eq!(
+			result.relative_representatives.unwrap()[&2],
+			(vec![0, 1], vec![2])
+		);
 	}
 }
 
@@ -300,7 +333,7 @@ fn relative_representatives_in_mapping_cylinders_in_both_modes() {
 			if mapping[0].is_empty() {
 				expected.insert(metadata.domain_shift[0], vec![metadata.domain_shift[0]]);
 			}
-			assert_eq!(result.relative_representatives.as_ref().unwrap(), &expected);
+			assert_eq!(relative_lifts(&result), expected);
 			assert_relative_cycles(
 				&result,
 				&matrix,

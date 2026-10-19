@@ -18,7 +18,7 @@ r#"Compute six persistence diagrams for an inclusion of filtered chain complexes
 :param degrees: Nonnegative degree of each codomain generator, one per column.
 :param cols_in_domain: Indices selecting the domain generators in the codomain.
     Any order is accepted; repeated indices are ignored.
-:param get_representatives: Whether to extract cycles for all six diagrams.
+:param get_representatives: Whether to extract cycles and relative chain pairs.
     Also compute ``kernel_to_domain``, ``domain_to_image``, ``image_to_codomain``,
     ``domain_to_codomain``, and ``codomain_to_cokernel`` in these cycle bases.
     Defaults to ``False``, which skips cycle extraction and map solving and
@@ -41,13 +41,16 @@ and the degree-list length are checked. The boundary must also square to zero;
 this is not checked, and violations can give incorrect diagrams even if the
 call succeeds. Kernel interval degree is ``degrees[birth] - 1``; other interval
 degrees are ``degrees[birth]``. Relative means homology of the quotient complex.
-Relative representatives contain only generators outside the domain. Their
-boundary lies in the domain, so they need not be cycles in the codomain itself.
+Relative representatives are pairs ``(a, b)`` satisfying ``a = boundary(b)``.
+Both use original codomain indices: ``a`` is a domain cycle of degree one less
+than the feature, and ``b`` is a chain of the feature's degree using only
+generators outside the domain. Either component may be empty.
 
-When ``get_representatives=True``, each domain, codomain, image, cokernel, or
-relative feature with birth index ``b`` has maximum representative generator
+When ``get_representatives=True``, each domain, codomain, image, or cokernel
+feature with birth index ``b`` has maximum representative generator
 index equal to ``b``: generator ``b`` occurs and no later generator occurs.
-This guarantee holds for every thread count. If you associate nondecreasing
+For a relative pair, this applies to its second component; its first component
+uses only earlier domain generators. This guarantee holds for every thread count. If you associate nondecreasing
 filtration values with the input generator order, the interval's birth value
 is therefore the maximum filtration value of a generator in its representative,
 including when values are equal.
@@ -128,7 +131,7 @@ r#"Compute six persistence diagrams for a filtered chain map over F2.
 :param map: Column ``i`` lists the codomain generators with coefficient one
     in the image of domain generator ``i``. Supply at least one column per domain
     generator; additional map columns are ignored.
-:param get_representatives: Whether to extract cycles for all six diagrams.
+:param get_representatives: Whether to extract cycles and relative chain pairs.
     Also compute ``kernel_to_domain``, ``domain_to_image``, ``image_to_codomain``,
     ``domain_to_codomain``, and ``codomain_to_cokernel`` in these cycle bases.
     Defaults to ``False``, which skips cycle extraction and map solving and

@@ -41,7 +41,8 @@ def test_optional_representatives(*, slow: bool, case: str) -> None:
 		representatives = getattr(requested, f"{name}_representatives")
 		assert isinstance(representatives, dict)
 		assert representatives.keys() == getattr(requested, name).keys()
-		for birth, support in representatives.items():
+		for birth, representative in representatives.items():
+			support = representative[1] if name == "relative" else representative
 			if name == "kernel":
 				assert max(support) < birth
 			else:
@@ -79,7 +80,8 @@ def assert_representatives(result: Any, matrix: list[list[int]], domain: list[in
 		representatives = getattr(result, f"{name}_representatives")
 		assert isinstance(representatives, dict)
 		assert representatives.keys() == diagram.keys()
-		for birth, support in representatives.items():
+		for birth, representative in representatives.items():
+			support = representative[1] if name == "relative" else representative
 			assert len(support) == len(set(support))
 			if name == "kernel":
 				assert max(support) < birth
@@ -91,6 +93,7 @@ def assert_representatives(result: Any, matrix: list[list[int]], domain: list[in
 			if name == "relative":
 				assert not set(support) & set(domain)
 				assert boundary <= set(domain)
+				assert set(representative[0]) == boundary
 			else:
 				assert not boundary
 
@@ -142,7 +145,7 @@ def test_empty_representative_maps(*, slow: bool) -> None:
 	assert result.image_representatives == {}
 	assert result.kernel_representatives == {}
 	assert result.cokernel_representatives == {0: [0]}
-	assert result.relative_representatives == {0: [0]}
+	assert result.relative_representatives == {0: ([], [0])}
 
 
 def test_representative_getters_return_independent_lists() -> None:
@@ -164,7 +167,9 @@ def test_representative_getters_return_independent_lists() -> None:
 	):
 		expected = getattr(result, name)
 		representatives = getattr(result, name)
-		representatives[next(iter(representatives))].append(99)
+		value = representatives[next(iter(representatives))]
+		for support in value if name == "relative_representatives" else (value,):
+			support.append(99)
 		representatives.clear()
 		assert getattr(result, name) == expected
 

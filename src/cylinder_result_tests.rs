@@ -6,35 +6,57 @@ use crate::{
 	diagrams::{
 		DiagramEnsemble,
 		ExtendedUsize::{Finite, Infinity},
+		PersistenceDiagram,
 	},
 	sixpack,
 	sixpack_from_inclusion,
 };
 
 fn assert_result_keys(result: &DiagramEnsemble, times: &[f64], requested: bool) {
-	for (diagram, representatives) in [
-		(&result.domain, &result.domain_representatives),
-		(&result.codomain, &result.codomain_representatives),
-		(&result.image, &result.image_representatives),
-		(&result.kernel, &result.kernel_representatives),
-		(&result.cokernel, &result.cokernel_representatives),
-		(&result.relative, &result.relative_representatives),
+	fn assert_keys<T>(
+		diagram: &PersistenceDiagram,
+		reps: &Option<HashMap<usize, T>>,
+		requested: bool,
+	) {
+		assert_eq!(reps.is_some(), requested);
+		if let Some(reps) = reps {
+			assert_eq!(reps.len(), diagram.len());
+			assert!(reps.keys().all(|birth| diagram.contains_key(birth)));
+		}
+	}
+	for diagram in [
+		&result.domain,
+		&result.codomain,
+		&result.image,
+		&result.kernel,
+		&result.cokernel,
+		&result.relative,
 	] {
 		for (&birth, &death) in diagram.iter() {
 			if let Finite(death) = death {
 				assert!(times[birth] < times[death]);
 			}
 		}
-		assert_eq!(representatives.is_some(), requested);
-		if let Some(representatives) = representatives {
-			assert_eq!(representatives.len(), diagram.len());
-			assert!(
-				representatives
-					.keys()
-					.all(|birth| diagram.contains_key(birth))
-			);
-		}
 	}
+	assert_keys(&result.domain, &result.domain_representatives, requested);
+	assert_keys(
+		&result.codomain,
+		&result.codomain_representatives,
+		requested,
+	);
+	assert_keys(&result.image, &result.image_representatives, requested);
+	assert_keys(&result.kernel, &result.kernel_representatives, requested);
+	assert_keys(
+		&result.cokernel,
+		&result.cokernel_representatives,
+		requested,
+	);
+	assert_keys(
+		&result.relative,
+		&result.relative_representatives,
+		requested,
+	);
+
 	for (mapping, source, target) in [
 		(&result.kernel_to_domain, &result.kernel, &result.domain),
 		(&result.domain_to_image, &result.domain, &result.image),

@@ -85,7 +85,8 @@ classes match the objects returned by the functions.
   stable display; serialization and explicit rewind. A pair of parallel edges
   checks a nontrivial essential cycle, a finite H0 representative, and R = D V
   against the original boundary, including the serialized slow-mode result.
-  Representative tests also cover a domain with gaps and unsorted indices,
+  Relative tests verify both components of `(a, b)`, with `a = boundary(b)`,
+  including nonzero domain cycles and empty components. Representative tests also cover a domain with gaps and unsorted indices,
   essential domain cycles killed in the image, essential image cycles supported
   only in the domain, cycle boundaries, maximum support indices equal to births,
   requested empty representative maps, and the requirement to retain V for

@@ -91,19 +91,20 @@ intervals. The former `.paired` and `.unpaired` attributes have been removed.
 are optional. Python's `sixpack_from_inclusion` and `sixpack` default to
 `get_representatives=False`, which leaves all six attributes as `None` and
 skips representative extraction and map solving. Pass `get_representatives=True` to obtain
-maps from each birth index to the generator indices whose sum over F2 gives a cycle.
-Keys and supports use the diagram coordinates. Domain, codomain, image, cokernel, and relative cycles
+maps from each birth index to a cycle support, or a relative chain pair.
+Keys and supports use the diagram coordinates. Domain, codomain, image, and cokernel cycles
 have maximum support index equal to the feature's birth. Kernel cycles contain
 only domain generators with indices strictly less than their kernel birth; these
 cycles are boundaries in the codomain throughout their kernel intervals.
 Cokernel representatives are codomain cycles interpreted modulo codomain
 boundaries and domain cycles. A finite representative becomes zero in that
 quotient at its death, without necessarily becoming a codomain boundary.
-Relative representatives contain only generators outside the domain. Their
-codomain boundary lies in the domain, so they are cycles in the quotient even
-when they are not codomain cycles. Their classes are interpreted modulo codomain
-boundaries and domain chains. For example, when the domain consists of both
-vertices of an edge, the edge alone represents an essential relative H1 class:
+Relative representatives are pairs `(a, b)` with `a = boundary(b)`. The chain
+`b` uses only generators outside the domain and represents a cycle in the
+quotient; `a` is its domain boundary, a cycle of degree one less. Both use ambient
+codomain indices, and either component may be empty. The maximum index in `b`
+equals the feature's birth. Classes are taken modulo codomain boundaries and
+domain chains. For the edge relative to its endpoints:
 
 ```python
 from phimaker import sixpack_from_inclusion
@@ -115,18 +116,19 @@ diagrams = sixpack_from_inclusion(
 	get_representatives=True,
 )
 assert diagrams.relative == {2: None}
-assert diagrams.relative_representatives == {2: [2]}
+assert diagrams.relative_representatives == {2: ([0, 1], [2])}
 ```
 
-Rust stores these as `Option<HashMap<usize, Vec<usize>>>`;
-Python exposes dictionaries of lists or `None`. Each requested map has exactly
+Rust stores ordinary representatives as `Option<HashMap<usize, Vec<usize>>>`
+and relative pairs as `Option<HashMap<usize, (Vec<usize>, Vec<usize>)>>`. Python
+exposes dictionaries of lists or tuples of two lists, or `None`. Each requested map has exactly
 its diagram's birth keys. A requested empty diagram has `Some` of an empty map
 in Rust and `{}` in Python; when extraction is skipped it still has `None`.
 
 Rust callers supply `get_representatives` immediately after the input matrices
 and map or domain indices in `sixpack` and `sixpack_from_inclusion`, or as the
 argument to `all_diagrams`. Pass `false` for diagrams only or
-`true` for cycles and maps. Nonempty domain, codomain, image, and relative decompositions must
+`true` for cycles, relative pairs, and maps. Nonempty domain, codomain, and relative decompositions must
 retain V only when requesting representatives; the computation entry points
 retain these matrices automatically. This flag skips representative extraction, map solving,
 and their allocations; it does not change which matrices the reductions retain.

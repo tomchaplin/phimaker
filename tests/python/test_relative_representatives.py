@@ -38,7 +38,7 @@ def assert_relative_cycles(
 	assert result.relative_representatives is not None
 	representatives = result.relative_representatives
 	assert representatives.keys() == result.relative.keys()
-	for birth, support in representatives.items():
+	for birth, (domain_cycle, support) in representatives.items():
 		assert max(support) == birth
 		assert len(support) == len(set(support))
 		assert not set(support) & domain
@@ -47,6 +47,13 @@ def assert_relative_cycles(
 		for generator in support:
 			boundary.symmetric_difference_update(matrix[generator])
 		assert boundary <= domain
+		assert set(domain_cycle) == boundary
+		assert len(domain_cycle) == len(boundary)
+		assert all(idx < birth and degrees[idx] + 1 == degrees[birth] for idx in domain_cycle)
+		second_boundary: set[int] = set()
+		for generator in domain_cycle:
+			second_boundary.symmetric_difference_update(matrix[generator])
+		assert not second_boundary
 		death = result.relative[birth]
 		if death is not None:
 			relations = quotient_boundaries(matrix, degrees, domain, death, degrees[birth] + 1)
@@ -63,7 +70,7 @@ def assert_relative_cycles(
 			cycle_dimension = n_chains - binary_rank(outgoing)
 			active = [
 				set(support)
-				for birth, support in representatives.items()
+				for birth, (_, support) in representatives.items()
 				if birth <= index
 				and degrees[birth] == degree
 				and (result.relative[birth] is None or index < result.relative[birth])
@@ -118,7 +125,7 @@ def test_relative_cycles_form_quotient_bases(
 	result = sixpack_from_inclusion(
 		matrix, degrees, domain, get_representatives=True, num_threads=1, slow=slow
 	)
-	assert result.relative_representatives == expected
+	assert {birth: b for birth, (_, b) in result.relative_representatives.items()} == expected
 	assert_relative_cycles(result, matrix, degrees, domain)
 
 
@@ -130,7 +137,7 @@ def test_relative_cycle_need_not_be_a_codomain_cycle(*, slow: bool) -> None:
 		matrix, [0, 0, 1], [0, 1], get_representatives=True, num_threads=1, slow=slow
 	)
 	assert result.relative == {2: None}
-	assert result.relative_representatives == {2: [2]}
+	assert result.relative_representatives == {2: ([0, 1], [2])}
 	assert matrix[2] == [0, 1]
 
 
@@ -146,5 +153,5 @@ def test_relative_cycles_in_mapping_cylinders(mapping: list[list[int]], *, slow:
 	expected = {codomain: [codomain]}
 	if not mapping[0]:
 		expected[shifted] = [shifted]
-	assert result.relative_representatives == expected
+	assert {birth: b for birth, (_, b) in result.relative_representatives.items()} == expected
 	assert_relative_cycles(result, matrix, [0, 0, 1], [0])

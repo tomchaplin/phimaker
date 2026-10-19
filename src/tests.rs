@@ -498,10 +498,6 @@ fn assert_diagrams(actual: &DiagramEnsemble, expected: [&[(usize, ExtendedUsize)
 			&actual.cokernel,
 			actual.cokernel_representatives.as_ref().unwrap(),
 		),
-		(
-			&actual.relative,
-			actual.relative_representatives.as_ref().unwrap(),
-		),
 	] {
 		assert_eq!(representatives.len(), diagram.len());
 		for (&birth, support) in representatives {
@@ -512,6 +508,13 @@ fn assert_diagrams(actual: &DiagramEnsemble, expected: [&[(usize, ExtendedUsize)
 				assert_eq!(support.iter().max(), Some(&birth));
 			}
 		}
+	}
+	let relative = actual.relative_representatives.as_ref().unwrap();
+	assert_eq!(relative.len(), actual.relative.len());
+	for (&birth, (domain_cycle, codomain_chain)) in relative {
+		assert!(actual.relative.contains_key(&birth));
+		assert_eq!(codomain_chain.iter().max(), Some(&birth));
+		assert!(domain_cycle.iter().max() < Some(&birth));
 	}
 	let (to_codomain, to_image) = persistence_maps(actual).unwrap();
 	for (mapping, target) in [(&to_codomain, &actual.codomain), (&to_image, &actual.image)] {
@@ -886,7 +889,7 @@ fn empty_representative_maps_in_both_modes() {
 		);
 		assert_eq!(
 			result.relative_representatives,
-			Some(HashMap::from([(0, vec![0])]))
+			Some(HashMap::from([(0, (vec![], vec![0]))]))
 		);
 	}
 }
@@ -1041,10 +1044,13 @@ fn optional_representatives_preserve_all_diagrams() {
 				(&with_reps.image, &with_reps.image_representatives),
 				(&with_reps.kernel, &with_reps.kernel_representatives),
 				(&with_reps.cokernel, &with_reps.cokernel_representatives),
-				(&with_reps.relative, &with_reps.relative_representatives),
 			] {
 				assert_eq!(representatives.as_ref().unwrap().len(), diagram.len());
 			}
+			assert_eq!(
+				with_reps.relative_representatives.as_ref().unwrap().len(),
+				with_reps.relative.len()
+			);
 		}
 	}
 }
